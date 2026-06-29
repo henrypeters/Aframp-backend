@@ -103,6 +103,9 @@ pub mod sanctions;
 pub mod compliance;
 
 #[cfg(feature = "database")]
+pub mod compliance_effectiveness;
+
+#[cfg(feature = "database")]
 pub mod risk;
 
 // ── API layer ─────────────────────────────────────────────────────────────────
@@ -247,49 +250,77 @@ impl EscrowContract {
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::FeeRate, &fee_rate);
-        env.storage().instance().set(&DataKey::FeeTreasury, &fee_treasury);
-        env.storage().instance().set(&DataKey::DisputeResolver, &dispute_resolver);
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeTreasury, &fee_treasury);
+        env.storage()
+            .instance()
+            .set(&DataKey::DisputeResolver, &dispute_resolver);
         env.storage().instance().set(&DataKey::IsPaused, &false);
         env.storage().instance().set(&DataKey::OrderCount, &0u64);
         Ok(())
     }
 
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), Error> {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         Ok(())
     }
 
     pub fn set_fee_rate(env: Env, new_fee_rate: u32) -> Result<(), Error> {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
         admin.require_auth();
         if new_fee_rate > 1000 {
             return Err(Error::InvalidFeeRate);
         }
-        env.storage().instance().set(&DataKey::FeeRate, &new_fee_rate);
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeRate, &new_fee_rate);
         Ok(())
     }
 
     pub fn pause(env: Env) -> Result<(), Error> {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::IsPaused, &true);
         Ok(())
     }
 
     pub fn unpause(env: Env) -> Result<(), Error> {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::IsPaused, &false);
         Ok(())
     }
 
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::IsPaused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::IsPaused)
+            .unwrap_or(false)
     }
 
     pub fn get_admin(env: Env) -> Result<Address, Error> {
-        env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)
     }
 }

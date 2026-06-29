@@ -2,10 +2,8 @@
 ///
 /// Maintains a pool of channel accounts, each with independent sequence number
 /// tracking. Handles rotation, circuit breaking, and load balancing across channels.
-
 use crate::stellar::error::{SubmissionError, SubmissionResult};
-use crate::stellar::models::{SubmissionChannel, ChannelHandle, CircuitBreakerState};
-use crate::stellar::sequence_coordinator::SequenceCoordinator;
+use crate::stellar::models::{ChannelHandle, CircuitBreakerState, SubmissionChannel};
 use chrono::Utc;
 use sqlx::PgPool;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
@@ -48,7 +46,7 @@ impl ChannelPool {
     pub async fn reload_from_database(&self) -> SubmissionResult<()> {
         let db_channels: Vec<SubmissionChannel> = sqlx::query_as(
             r#"
-            SELECT 
+            SELECT
                 id, issuer_id, environment, channel_account_id, channel_index,
                 current_sequence, reserved_sequence, balance_xlm, min_balance_threshold,
                 is_active, in_rotation, total_submitted, total_successful, total_failed,
@@ -130,14 +128,39 @@ impl ChannelPool {
     pub async fn reserve_sequence(&self) -> SubmissionResult<(ChannelHandle, i64)> {
         let channel = self.select_channel().await?;
 
-        // Create sequence coordinator if not exists
-        let current_seq = channel.sequence_counter.load(Ordering::SeqCst);
-        let coordinator = SequenceCoordinator::new(current_seq, self.max_in_flight_per_channel);
+        let current = channel.sequence_counter.load(Ordering::SeqCst);
+        let reserved_now = channel.reserved_counter.load(Ordering::SeqCst);
+        let in_flight = reserved_now - current;
 
-        let reserved = coordinator.reserve_next()?;
+        if in_flight >= self.max_in_flight_per_channel as i64 {
+            return Err(SubmissionError::ChannelExhausted(format!(
+                "channel {} exhausted: {} in-flight (max {})",
+                channel.index, in_flight, self.max_in_flight_per_channel
+            )));
+        }
 
-        // Update in-memory counter
-        channel.reserved_counter.store(reserved, Ordering::SeqCst);
+        // Atomically reserve next sequence for this channel.
+        let reserved = channel
+            .reserved_counter
+            .fetch_add(1, Ordering::SeqCst)
+            .saturating_add(1);
+
+        // Persist reserved sequence opportunistically.
+        let _ = sqlx::query(
+            r#"
+            UPDATE stellar_submission_channels
+            SET reserved_sequence = GREATEST(reserved_sequence, $1), total_submitted = total_submitted + 1, updated_at = NOW()
+            WHERE id = $2
+            "#,
+        )
+        .bind(reserved)
+        .bind(channel.db_id)
+        .execute(&self.pool)
+        .await;
+
+        channel
+            .submission_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         Ok((channel, reserved))
     }
@@ -205,7 +228,7 @@ impl ChannelPool {
                 sqlx::query(
                     r#"
                     UPDATE stellar_submission_channels
-                    SET consecutive_failures = 0
+                    SET consecutive_failures = 0, updated_at = NOW()
                     WHERE id = $1
                     "#,
                 )
@@ -217,6 +240,52 @@ impl ChannelPool {
             }
         }
 
+        Ok(())
+    }
+
+    /// Mark sequence confirmed for channel to eliminate sequence contention.
+    pub async fn mark_channel_confirmed_sequence(
+        &self,
+        channel_id: Uuid,
+        confirmed_sequence: i64,
+    ) -> SubmissionResult<()> {
+        let channels = self.channels.read().await;
+        for channel in channels.iter() {
+            if channel.db_id == channel_id {
+                let mut current = channel.sequence_counter.load(Ordering::SeqCst);
+                while confirmed_sequence > current {
+                    match channel.sequence_counter.compare_exchange(
+                        current,
+                        confirmed_sequence,
+                        Ordering::SeqCst,
+                        Ordering::SeqCst,
+                    ) {
+                        Ok(_) => break,
+                        Err(actual) => {
+                            current = actual;
+                            if confirmed_sequence <= current {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                sqlx::query(
+                    r#"
+                    UPDATE stellar_submission_channels
+                    SET current_sequence = GREATEST(current_sequence, $1),
+                        total_successful = total_successful + 1,
+                        updated_at = NOW()
+                    WHERE id = $2
+                    "#,
+                )
+                .bind(confirmed_sequence)
+                .bind(channel_id)
+                .execute(&self.pool)
+                .await?;
+                break;
+            }
+        }
         Ok(())
     }
 
@@ -254,7 +323,7 @@ impl ChannelPool {
     /// Check channel pool capacity
     pub async fn get_pool_capacity_percent(&self) -> SubmissionResult<f64> {
         let stats = self.get_channel_stats().await?;
-        
+
         if stats.is_empty() {
             return Ok(100.0);
         }

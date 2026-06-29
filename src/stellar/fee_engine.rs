@@ -1,12 +1,11 @@
 /// Dynamic fee adjustment engine for Stellar surge pricing
-/// 
+///
 /// Queries Horizon's /fee_stats endpoint to determine network congestion levels
 /// and dynamically adjusts transaction submission fees to guarantee inclusion
 /// within the immediate next ledger.
-
 use crate::stellar::error::{SubmissionError, SubmissionResult};
 use crate::stellar::models::{FeeConfiguration, FeeStats};
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -25,10 +24,7 @@ struct FeeCache {
 
 impl DynamicFeeEngine {
     /// Create a new dynamic fee engine
-    pub fn new(
-        config: FeeConfiguration,
-        horizon_url: String,
-    ) -> Self {
+    pub fn new(config: FeeConfiguration, horizon_url: String) -> Self {
         Self {
             config,
             cache: Arc::new(RwLock::new(FeeCache {
@@ -63,12 +59,9 @@ impl DynamicFeeEngine {
             .await
             .map_err(|e| SubmissionError::HorizonApi(format!("fee_stats request failed: {}", e)))?;
 
-        let stats: FeeStats = response
-            .json()
-            .await
-            .map_err(|e| {
-                SubmissionError::HorizonApi(format!("failed to parse fee_stats response: {}", e))
-            })?;
+        let stats: FeeStats = response.json().await.map_err(|e| {
+            SubmissionError::HorizonApi(format!("failed to parse fee_stats response: {}", e))
+        })?;
 
         // Update cache
         {
@@ -79,29 +72,34 @@ impl DynamicFeeEngine {
         Ok(stats)
     }
 
-    /// Calculate optimal submission fee based on current network conditions
+    /// Calculate optimal submission fee based on current network conditions.
+    ///
+    /// Uses accepted fee percentiles to reduce overpayment under normal conditions,
+    /// while still escalating during surge windows.
     pub async fn calculate_fee(&self, operation_count: i32) -> SubmissionResult<i64> {
         let fee_stats = self.get_fee_stats().await?;
-        let base_fee = fee_stats.last_ledger_base_fee;
+        let base_fee = fee_stats.last_ledger_base_fee.max(self.config.min_fee);
 
         // Check network capacity
-        let capacity_usage: f64 = fee_stats
-            .network_capacity_usage
-            .parse()
-            .unwrap_or(0.5);
+        let capacity_usage: f64 = fee_stats.network_capacity_usage.parse().unwrap_or(0.5);
+
+        let percentile_fee = if capacity_usage > self.config.surge_threshold {
+            fee_stats.percentile_90_accepted_fee
+        } else {
+            fee_stats.percentile_50_accepted_fee
+        }
+        .max(base_fee);
 
         let per_op_fee = if capacity_usage > self.config.surge_threshold {
-            // Network is congested - use surge pricing
-            let surge_fee = (base_fee as f64 * self.config.surge_multiplier) as i64;
-            surge_fee.min(self.config.max_fee).max(self.config.min_fee)
+            ((percentile_fee as f64) * self.config.surge_multiplier) as i64
         } else {
-            // Normal capacity - use base fee
-            base_fee.min(self.config.max_fee).max(self.config.min_fee)
-        };
+            percentile_fee
+        }
+        .clamp(self.config.min_fee, self.config.max_fee);
 
-        // Total fee = per-operation fee × operation count
-        let total_fee = per_op_fee * operation_count as i64;
-        Ok(total_fee.min(self.config.max_fee).max(self.config.min_fee))
+        // max_fee is interpreted as max fee per operation.
+        let ops = operation_count.max(1) as i64;
+        Ok(per_op_fee * ops)
     }
 
     /// Calculate fee with explicit surge multiplier (for testing)
@@ -120,10 +118,7 @@ impl DynamicFeeEngine {
     /// Get the surge fee percentage (100 = no surge, 150 = 50% surge)
     pub async fn get_surge_percent(&self) -> SubmissionResult<Decimal> {
         let fee_stats = self.get_fee_stats().await?;
-        let capacity_usage: f64 = fee_stats
-            .network_capacity_usage
-            .parse()
-            .unwrap_or(0.5);
+        let capacity_usage: f64 = fee_stats.network_capacity_usage.parse().unwrap_or(0.5);
 
         let multiplier = if capacity_usage > self.config.surge_threshold {
             self.config.surge_multiplier
@@ -133,6 +128,21 @@ impl DynamicFeeEngine {
 
         let percent = (multiplier * 100.0) as i64;
         Ok(sqlx::types::Decimal::from(percent))
+    }
+
+    /// Estimate dynamic-fee savings vs using static configured base fee.
+    /// Returns percent saved (0-100).
+    pub async fn estimate_savings_percent(&self, operation_count: i32) -> SubmissionResult<f64> {
+        let dynamic = self.calculate_fee(operation_count).await? as f64;
+        let static_fee =
+            (self.config.base_fee.max(self.config.min_fee) * operation_count.max(1) as i64) as f64;
+
+        if static_fee <= 0.0 {
+            return Ok(0.0);
+        }
+
+        let savings = ((static_fee - dynamic) / static_fee) * 100.0;
+        Ok(savings.max(0.0))
     }
 
     /// Get current capacity usage percentage

@@ -1,9 +1,9 @@
+use chrono::{DateTime, Utc};
 /// Data models for Stellar submission engine
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
 use std::sync::atomic::{AtomicI64, AtomicU64};
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Submission channel account in the pool
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,11 +35,11 @@ pub struct ChannelHandle {
     pub db_id: Uuid,
     pub account_id: String,
     pub index: i32,
-    pub sequence_counter: Arc<AtomicI64>,  // current_sequence
-    pub reserved_counter: Arc<AtomicI64>,  // reserved_sequence
-    pub submission_count: Arc<AtomicU64>,  // lifetime submissions
-    pub success_count: Arc<AtomicU64>,     // lifetime successes
-    pub failure_count: Arc<AtomicU64>,     // lifetime failures
+    pub sequence_counter: Arc<AtomicI64>, // current_sequence
+    pub reserved_counter: Arc<AtomicI64>, // reserved_sequence
+    pub submission_count: Arc<AtomicU64>, // lifetime submissions
+    pub success_count: Arc<AtomicU64>,    // lifetime successes
+    pub failure_count: Arc<AtomicU64>,    // lifetime failures
     pub circuit_breaker_state: Arc<tokio::sync::Mutex<CircuitBreakerState>>,
 }
 
@@ -100,12 +100,12 @@ pub struct FeeStats {
 /// Dynamic fee configuration
 #[derive(Debug, Clone)]
 pub struct FeeConfiguration {
-    pub base_fee: i64,           // stroops
-    pub min_fee: i64,            // stroops
-    pub max_fee: i64,            // stroops (cap)
-    pub surge_threshold: f64,    // 0.8 = 80% ledger usage
-    pub surge_multiplier: f64,   // 1.5 = 150% of recommended
-    pub low_capacity_fee: i64,   // stroops during high usage
+    pub base_fee: i64,         // stroops
+    pub min_fee: i64,          // stroops
+    pub max_fee: i64,          // stroops (cap)
+    pub surge_threshold: f64,  // 0.8 = 80% ledger usage
+    pub surge_multiplier: f64, // 1.5 = 150% of recommended
+    pub low_capacity_fee: i64, // stroops during high usage
 }
 
 impl Default for FeeConfiguration {
@@ -172,6 +172,59 @@ impl Default for RetryPolicy {
             backoff_multiplier: 2.0,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchEnvelopeRequest {
+    pub tx_envelope_xdr: String,
+    pub operation_count: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchSubmissionResult {
+    pub accepted: usize,
+    pub rejected: usize,
+    pub queued_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SubmissionQueueStatus {
+    Pending,
+    Submitted,
+    Confirmed,
+    Failed,
+    Retrying,
+}
+
+impl SubmissionQueueStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SubmissionQueueStatus::Pending => "PENDING",
+            SubmissionQueueStatus::Submitted => "SUBMITTED",
+            SubmissionQueueStatus::Confirmed => "CONFIRMED",
+            SubmissionQueueStatus::Failed => "FAILED",
+            SubmissionQueueStatus::Retrying => "RETRYING",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct SubmissionQueueItem {
+    pub id: Uuid,
+    pub issuer_id: Uuid,
+    pub channel_id: Option<Uuid>,
+    pub tx_envelope_hash: String,
+    pub tx_envelope_xdr: String,
+    pub operation_count: i32,
+    pub queue_status: String,
+    pub submission_attempt: i32,
+    pub last_error_code: Option<String>,
+    pub last_error_reason: Option<String>,
+    pub next_attempt_at: Option<DateTime<Utc>>,
+    pub submitted_at: Option<DateTime<Utc>>,
+    pub confirmed_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 // Re-export commonly used types

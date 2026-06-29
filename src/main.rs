@@ -71,6 +71,12 @@ mod banking;
 // Regulatory Examination Support & Evidence Package
 // REMOVED: mod regulatory_evidence;
 
+// AML Programme Effectiveness Reporting & Metrics
+mod compliance_effectiveness;
+
+// Stellar Transaction Throughput Optimization (Issue #401)
+mod stellar;
+
 // Imports
 use std::sync::Arc;
 use crate::config::AppConfig;
@@ -626,7 +632,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         info!("Mint audit verifier disabled (MINT_AUDIT_VERIFICATION_ENABLED=false)");
     }
-    
+
     // Start Transaction Monitor Worker
     let monitor_enabled = std::env::var("TX_MONITOR_ENABLED")
         .unwrap_or_else(|_| "true".to_string())
@@ -880,7 +886,7 @@ async fn main() -> anyhow::Result<()> {
             let asset_issuer = std::env::var("CNGN_ISSUER_ADDRESS")
                 .or_else(|_| std::env::var("CNGN_ISSUER_MAINNET"))
                 .unwrap_or_default();
-            
+
             if asset_issuer.is_empty() {
                 warn!("CNGN_ISSUER_ADDRESS not set — skipping supply monitor worker");
             } else {
@@ -905,7 +911,7 @@ async fn main() -> anyhow::Result<()> {
             let asset_issuer = std::env::var("CNGN_ISSUER_ADDRESS")
                 .or_else(|_| std::env::var("CNGN_ISSUER_MAINNET"))
                 .unwrap_or_default();
-            
+
             if asset_issuer.is_empty() {
                 warn!("CNGN_ISSUER_ADDRESS not set — skipping reconciliation worker");
             } else {
@@ -1262,7 +1268,7 @@ async fn main() -> anyhow::Result<()> {
                 error!("Failed to initialize payment provider factory for onramp status: {}", e);
                 panic!("Cannot start without payment providers");
             }));
-        
+
         let stellar_client_arc = std::sync::Arc::new(client);
 
         let status_service = std::sync::Arc::new(api::onramp::OnrampStatusService::new(
@@ -1361,34 +1367,34 @@ async fn main() -> anyhow::Result<()> {
     let wallet_routes = if let (Some(client), Some(cache)) = (stellar_client.clone(), redis_cache.clone()) {
         let cngn_issuer = std::env::var("CNGN_ISSUER_ADDRESS")
             .unwrap_or_else(|_| "GXXXXDEFAULTISSUERXXXX".to_string());
-        
+
         let balance_service = std::sync::Arc::new(services::balance::BalanceService::new(
             client,
             cache,
             cngn_issuer,
         ));
-        
+
         let wallet_state = api::wallet::WalletState { balance_service };
-        
+
         Router::new()
             .route("/api/wallet/balance", get(api::wallet::get_balance))
             .with_state(wallet_state)
     } else {
         Router::new()
     };
-    
+
     // Setup rates API routes with exchange rate service
     let rates_routes = if let Some(pool) = db_pool.clone() {
         use database::exchange_rate_repository::ExchangeRateRepository;
         use services::exchange_rate::{ExchangeRateService, ExchangeRateServiceConfig};
-        
+
         let repository = ExchangeRateRepository::new(pool.clone());
         let config = ExchangeRateServiceConfig::default();
         let mut exchange_rate_service = ExchangeRateService::new(repository, config)
             .add_provider(std::sync::Arc::new(
                 services::rate_providers::FixedRateProvider::new(),
             ));
-        
+
         // Add cache to exchange rate service if available
         if let Some(ref cache) = redis_cache {
             exchange_rate_service = exchange_rate_service.with_cache(cache.clone());
@@ -1426,12 +1432,12 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
         }
-        
+
         let rates_state = api::rates::RatesState {
             exchange_rate_service: std::sync::Arc::new(exchange_rate_service),
             cache: redis_cache.clone().map(std::sync::Arc::new),
         };
-        
+
         Router::new()
             .route("/api/rates", get(api::rates::get_rates).options(api::rates::options_rates))
             // Apply CDN middleware: body-hash ETag + 304 + Cache-Control: public, max-age=90
@@ -1551,18 +1557,18 @@ async fn main() -> anyhow::Result<()> {
         info!("⏭️  Skipping offramp routes (missing database or cache)");
         Router::new()
     };
-    
+
     // Setup fees API routes with fee calculation service
     let fees_routes = if let Some(pool) = db_pool.clone() {
         use services::fee_calculation::FeeCalculationService;
-        
+
         let fee_service = std::sync::Arc::new(FeeCalculationService::new(pool.clone()));
-        
+
         let fees_state = api::fees::FeesState {
             fee_service,
             cache: redis_cache.clone(),
         };
-        
+
         Router::new()
             .route("/api/fees", get(api::fees::get_fees))
             .layer(axum::middleware::from_fn(cache::cdn_cache_middleware))
@@ -1600,7 +1606,7 @@ async fn main() -> anyhow::Result<()> {
         info!("⏭️  Skipping auth routes (missing cache)");
         Router::new()
     };
-    
+
     // Setup auth routes
     let auth_routes = {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
@@ -2126,6 +2132,81 @@ async fn main() -> anyhow::Result<()> {
     } else {
         info!("⏭️  Skipping compliance effectiveness routes (no database)");
         Router::new()
+    };
+
+    // ── Stellar Throughput Submission Engine (Issue #401) ────────────────────
+    // Initialises the high-TPS channel-pool / fee-engine / async queue pipeline.
+    // Requires STELLAR_THROUGHPUT_ISSUER_ID (UUID) and optionally STELLAR_HORIZON_URL.
+    let stellar_throughput_routes: Router = {
+        let maybe_routes: Option<Router> = (|| async {
+            let pool = db_pool.as_ref()?;
+            let issuer_str = std::env::var("STELLAR_THROUGHPUT_ISSUER_ID").ok()?;
+            let issuer_id = uuid::Uuid::parse_str(&issuer_str)
+                .map_err(|e| error!(error = %e, "Invalid STELLAR_THROUGHPUT_ISSUER_ID"))
+                .ok()?;
+            let horizon_url = std::env::var("STELLAR_HORIZON_URL")
+                .unwrap_or_else(|_| "https://horizon.stellar.org".to_string());
+
+            // Optional comma-separated list of additional RPC/Horizon nodes for
+            // round-robin load balancing (Validator Interaction Tuning — Issue #401).
+            let rpc_endpoints: Vec<String> = std::env::var("STELLAR_HORIZON_URLS")
+                .unwrap_or_default()
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect();
+
+            if !rpc_endpoints.is_empty() {
+                info!(
+                    node_count = rpc_endpoints.len() + 1,
+                    "Stellar throughput engine using load-balanced RPC cluster"
+                );
+            }
+
+            // Isolated Prometheus registry so metrics don't collide with the
+            // default registry used by the rest of the application.
+            let registry = std::sync::Arc::new(prometheus::Registry::new());
+            let metrics = stellar::metrics::StellarMetrics::new(registry)
+                .map_err(|e| error!(error = %e, "Failed to create Stellar throughput metrics"))
+                .ok()?;
+            let metrics = std::sync::Arc::new(metrics);
+
+            let engine = stellar::submission::StellarSubmissionEngine::new(
+                pool.clone(),
+                issuer_id,
+                horizon_url,
+                rpc_endpoints,
+                stellar::models::FeeConfiguration::default(),
+                stellar::models::RetryPolicy::default(),
+                metrics,
+            )
+            .await
+            .map_err(|e| error!(error = %e, "Failed to initialise Stellar submission engine"))
+            .ok()?;
+
+            let engine = std::sync::Arc::new(engine);
+
+            // Spawn the async background worker: drains PENDING/RETRYING queue
+            // every 5 s in batches of 100 envelopes.
+            std::sync::Arc::clone(&engine).start_background_queue_worker(
+                100,
+                std::time::Duration::from_secs(5),
+            );
+            info!("✅ Stellar throughput submission engine started (background worker active)");
+
+            let state = stellar::admin::StellarAdminState {
+                pool: pool.clone(),
+                submission_engine: engine,
+            };
+            Some(stellar::admin::stellar_admin_routes(state))
+        })()
+        .await;
+
+        if maybe_routes.is_none() {
+            info!("⏭️  Skipping Stellar throughput routes (STELLAR_THROUGHPUT_ISSUER_ID not set or initialisation failed)");
+        }
+        maybe_routes.unwrap_or_else(Router::new)
     };
 
     // ── Travel Rule API routes — reuse the already-initialised shared service ──
@@ -2903,6 +2984,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(sar_routes)
         .merge(regulatory_evidence_routes)
         .merge(compliance_effectiveness_routes)
+        .merge(stellar_throughput_routes)
         .merge(kyb_routes)
         .merge(key_rotation_routes)
         .merge(analytics_routes)

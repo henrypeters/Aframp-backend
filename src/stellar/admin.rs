@@ -1,20 +1,20 @@
 /// Admin endpoints for Stellar submission channel management
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use sqlx::PgPool;
+use uuid::Uuid;
 
+use crate::stellar::models::{BatchEnvelopeRequest, BatchSubmissionResult, SubmissionMetrics};
 use crate::stellar::submission::StellarSubmissionEngine;
-use crate::stellar::error::SubmissionResult;
-use crate::admin::auth::AdminAuthLayer;
 
 /// Admin state for stellar routes
+#[derive(Clone)]
 pub struct StellarAdminState {
     pub pool: PgPool,
     pub submission_engine: std::sync::Arc<StellarSubmissionEngine>,
@@ -54,6 +54,29 @@ pub struct AdminResponse<T> {
     pub error: Option<String>,
 }
 
+/// Forensics query parameters
+#[derive(Debug, Deserialize)]
+pub struct ForensicsQuery {
+    pub limit: Option<i64>,
+    pub error_code: Option<String>,
+}
+
+/// Forensic failure row returned from the DB
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct ForensicFailureRow {
+    pub id: Uuid,
+    pub queue_id: Option<Uuid>,
+    pub tx_log_id: Option<Uuid>,
+    pub issuer_id: Option<Uuid>,
+    pub channel_id: Option<Uuid>,
+    pub error_code: Option<String>,
+    pub error_reason: Option<String>,
+    pub horizon_status: Option<String>,
+    pub retryable: Option<bool>,
+    pub occurred_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 /// Get all submission channels status
 async fn get_channels(
     State(state): State<StellarAdminState>,
@@ -63,9 +86,7 @@ async fn get_channels(
     let channels: Vec<ChannelStatusResponse> = stats
         .iter()
         .map(|stat| {
-            let balance = stat["balance_xlm"]
-                .as_f64()
-                .unwrap_or(0.0);
+            let balance = stat["balance_xlm"].as_f64().unwrap_or(0.0);
             let status = if stat["is_circuit_broken"].as_bool().unwrap_or(false) {
                 "circuit_broken".to_string()
             } else if stat["in_flight"].as_i64().unwrap_or(0) > 900 {
@@ -75,15 +96,9 @@ async fn get_channels(
             };
 
             ChannelStatusResponse {
-                channel_id: stat["channel_id"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string(),
+                channel_id: stat["channel_id"].as_str().unwrap_or("").to_string(),
                 index: stat["index"].as_i64().unwrap_or(0) as i32,
-                account_id: stat["account_id"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string(),
+                account_id: stat["account_id"].as_str().unwrap_or("").to_string(),
                 balance_xlm: sqlx::types::Decimal::from_f64_retain(balance).unwrap_or_default(),
                 current_sequence: stat["current_sequence"].as_i64().unwrap_or(0),
                 reserved_sequence: stat["reserved_sequence"].as_i64().unwrap_or(0),
@@ -118,9 +133,7 @@ async fn queue_channel_topup(
     .bind(channel_index)
     .fetch_one(&state.pool)
     .await
-    .map_err(|_| {
-        AdminError::NotFound(format!("Channel {} not found", channel_index))
-    })?;
+    .map_err(|_| AdminError::NotFound(format!("Channel {} not found", channel_index)))?;
 
     // Queue the top-up operation
     let operation_id = Uuid::new_v4();
@@ -151,6 +164,16 @@ async fn queue_channel_topup(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct QueueTickQuery {
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct QueueTickResponse {
+    pub processed: usize,
+}
+
 #[derive(Debug, Serialize)]
 pub struct TopUpQueueResponse {
     pub operation_id: String,
@@ -174,9 +197,7 @@ impl IntoResponse for AdminError {
             AdminError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AdminError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             AdminError::InternalError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
-            AdminError::Unauthorized => {
-                (StatusCode::UNAUTHORIZED, "Unauthorized".to_string())
-            }
+            AdminError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized".to_string()),
         };
 
         (
@@ -197,23 +218,117 @@ impl From<sqlx::Error> for AdminError {
     }
 }
 
-impl<T> From<crate::stellar::error::SubmissionError> for AdminError {
+impl From<crate::stellar::error::SubmissionError> for AdminError {
     fn from(err: crate::stellar::error::SubmissionError) -> Self {
         AdminError::InternalError(err.to_string())
     }
 }
 
-/// Create admin routes for Stellar management
-pub fn stellar_admin_routes() -> Router<StellarAdminState> {
-    Router::new()
-        .route(
-            "/channels",
-            get(get_channels),
+async fn enqueue_batch_submissions(
+    State(state): State<StellarAdminState>,
+    Json(payload): Json<Vec<BatchEnvelopeRequest>>,
+) -> Result<Json<AdminResponse<BatchSubmissionResult>>, AdminError> {
+    let result = state.submission_engine.enqueue_batch(payload).await?;
+    Ok(Json(AdminResponse {
+        success: true,
+        data: Some(result),
+        error: None,
+    }))
+}
+
+async fn process_queue_tick(
+    State(state): State<StellarAdminState>,
+    Query(q): Query<QueueTickQuery>,
+) -> Result<Json<AdminResponse<QueueTickResponse>>, AdminError> {
+    let processed = state
+        .submission_engine
+        .process_submission_queue_tick(q.limit.unwrap_or(100))
+        .await?;
+
+    Ok(Json(AdminResponse {
+        success: true,
+        data: Some(QueueTickResponse { processed }),
+        error: None,
+    }))
+}
+
+/// Get a snapshot of submission engine metrics
+async fn get_submission_metrics(
+    State(state): State<StellarAdminState>,
+) -> Result<Json<AdminResponse<SubmissionMetrics>>, AdminError> {
+    let metrics = state.submission_engine.get_metrics_snapshot().await?;
+    Ok(Json(AdminResponse {
+        success: true,
+        data: Some(metrics),
+        error: None,
+    }))
+}
+
+/// Query forensic failure records from `stellar_tx_forensic_failures`
+async fn get_forensic_failures(
+    State(state): State<StellarAdminState>,
+    Query(q): Query<ForensicsQuery>,
+) -> Result<Json<AdminResponse<Vec<ForensicFailureRow>>>, AdminError> {
+    let limit = q.limit.unwrap_or(100);
+
+    let rows = if let Some(error_code) = q.error_code {
+        sqlx::query_as::<_, ForensicFailureRow>(
+            r#"
+            SELECT id, queue_id, tx_log_id, issuer_id, channel_id,
+                   error_code, error_reason, horizon_status, retryable,
+                   occurred_at, created_at
+            FROM stellar_tx_forensic_failures
+            WHERE error_code = $1
+            ORDER BY occurred_at DESC
+            LIMIT $2
+            "#,
         )
+        .bind(error_code)
+        .bind(limit)
+        .fetch_all(&state.pool)
+        .await?
+    } else {
+        sqlx::query_as::<_, ForensicFailureRow>(
+            r#"
+            SELECT id, queue_id, tx_log_id, issuer_id, channel_id,
+                   error_code, error_reason, horizon_status, retryable,
+                   occurred_at, created_at
+            FROM stellar_tx_forensic_failures
+            ORDER BY occurred_at DESC
+            LIMIT $1
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(&state.pool)
+        .await?
+    };
+
+    Ok(Json(AdminResponse {
+        success: true,
+        data: Some(rows),
+        error: None,
+    }))
+}
+
+/// Create admin routes for Stellar management
+pub fn stellar_admin_routes(state: StellarAdminState) -> Router {
+    Router::new()
+        .route("/api/admin/stellar/channels", get(get_channels))
         .route(
-            "/channels/:index/top-up",
+            "/api/admin/stellar/channels/:index/top-up",
             post(queue_channel_topup),
         )
+        .route(
+            "/api/admin/stellar/submission/batch",
+            post(enqueue_batch_submissions),
+        )
+        .route(
+            "/api/admin/stellar/submission/queue/process",
+            post(process_queue_tick),
+        )
+        .route("/api/admin/stellar/metrics", get(get_submission_metrics))
+        .route("/api/admin/stellar/forensics", get(get_forensic_failures))
+        .with_state(state)
 }
 
 use sqlx::types::Decimal;

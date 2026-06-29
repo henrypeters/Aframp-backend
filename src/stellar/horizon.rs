@@ -1,5 +1,5 @@
 /// Horizon API client for transaction submission and confirmation polling
-use crate::stellar::error::{SubmissionError, SubmissionResult, HorizonErrorCode};
+use crate::stellar::error::{HorizonErrorCode, SubmissionError, SubmissionResult};
 use crate::stellar::models::HorizonTransaction;
 use serde::Deserialize;
 use std::time::Duration;
@@ -7,6 +7,8 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct HorizonClient {
     base_url: String,
+    rpc_endpoints: std::sync::Arc<Vec<String>>,
+    rr_index: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     client: reqwest::Client,
     request_timeout: Duration,
 }
@@ -28,11 +30,34 @@ pub struct TransactionsResponse {
 
 impl HorizonClient {
     pub fn new(base_url: String) -> Self {
+        let endpoints = vec![base_url.clone()];
         Self {
             base_url,
+            rpc_endpoints: std::sync::Arc::new(endpoints),
+            rr_index: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             client: reqwest::Client::new(),
             request_timeout: Duration::from_secs(15),
         }
+    }
+
+    pub fn with_rpc_endpoints(mut self, endpoints: Vec<String>) -> Self {
+        if !endpoints.is_empty() {
+            self.base_url = endpoints[0].clone();
+            self.rpc_endpoints = std::sync::Arc::new(endpoints);
+        }
+        self
+    }
+
+    fn pick_endpoint(&self) -> String {
+        let endpoints = self.rpc_endpoints.as_ref();
+        if endpoints.is_empty() {
+            return self.base_url.clone();
+        }
+        let idx = self
+            .rr_index
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            % endpoints.len();
+        endpoints[idx].clone()
     }
 
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
@@ -41,8 +66,11 @@ impl HorizonClient {
     }
 
     /// Submit a transaction to Horizon
-    pub async fn submit_transaction(&self, tx_envelope: &str) -> SubmissionResult<HorizonTransaction> {
-        let url = format!("{}/transactions", self.base_url);
+    pub async fn submit_transaction(
+        &self,
+        tx_envelope: &str,
+    ) -> SubmissionResult<HorizonTransaction> {
+        let url = format!("{}/transactions", self.pick_endpoint());
 
         let mut params = std::collections::HashMap::new();
         params.insert("tx", tx_envelope);
@@ -54,17 +82,16 @@ impl HorizonClient {
             .timeout(self.request_timeout)
             .send()
             .await
-            .map_err(|e| SubmissionError::HorizonApi(format!("POST /transactions failed: {}", e)))?;
+            .map_err(|e| {
+                SubmissionError::HorizonApi(format!("POST /transactions failed: {}", e))
+            })?;
 
         let status = response.status();
 
         if status.is_success() {
-            let tx: HorizonTransaction = response
-                .json()
-                .await
-                .map_err(|e| {
-                    SubmissionError::HorizonApi(format!("failed to parse transaction response: {}", e))
-                })?;
+            let tx: HorizonTransaction = response.json().await.map_err(|e| {
+                SubmissionError::HorizonApi(format!("failed to parse transaction response: {}", e))
+            })?;
             Ok(tx)
         } else {
             let error_msg = response
@@ -76,26 +103,18 @@ impl HorizonClient {
             if let Ok(horizon_err) = serde_json::from_str::<HorizonErrorResponse>(&error_msg) {
                 let detail = horizon_err.detail.unwrap_or_default();
                 let error_code = HorizonErrorCode::from_str(&detail);
-                
+
                 return Err(match error_code {
-                    HorizonErrorCode::TxBadSeq => {
-                        SubmissionError::BadSequence(detail)
-                    }
-                    HorizonErrorCode::TxInsufficientFee => {
-                        SubmissionError::InsufficientFee {
-                            provided: 0,
-                            required: 0,
-                        }
-                    }
-                    HorizonErrorCode::TxMalformed => {
-                        SubmissionError::MalformedTransaction(detail)
-                    }
-                    _ if error_code.is_retryable() => {
-                        SubmissionError::TransientNetworkError {
-                            source: detail,
-                            attempt: 1,
-                        }
-                    }
+                    HorizonErrorCode::TxBadSeq => SubmissionError::BadSequence(detail),
+                    HorizonErrorCode::TxInsufficientFee => SubmissionError::InsufficientFee {
+                        provided: 0,
+                        required: 0,
+                    },
+                    HorizonErrorCode::TxMalformed => SubmissionError::MalformedTransaction(detail),
+                    _ if error_code.is_retryable() => SubmissionError::TransientNetworkError {
+                        source: detail,
+                        attempt: 1,
+                    },
                     _ => SubmissionError::UnknownHorizonError {
                         code: status.to_string(),
                         message: detail,
@@ -111,8 +130,11 @@ impl HorizonClient {
     }
 
     /// Get transaction by hash from Horizon
-    pub async fn get_transaction(&self, tx_hash: &str) -> SubmissionResult<Option<HorizonTransaction>> {
-        let url = format!("{}/transactions/{}", self.base_url, tx_hash);
+    pub async fn get_transaction(
+        &self,
+        tx_hash: &str,
+    ) -> SubmissionResult<Option<HorizonTransaction>> {
+        let url = format!("{}/transactions/{}", self.pick_endpoint(), tx_hash);
 
         let response = self
             .client
@@ -120,19 +142,18 @@ impl HorizonClient {
             .timeout(self.request_timeout)
             .send()
             .await
-            .map_err(|e| SubmissionError::HorizonApi(format!("GET /transactions/{{}} failed: {}", e)))?;
+            .map_err(|e| {
+                SubmissionError::HorizonApi(format!("GET /transactions/{{}} failed: {}", e))
+            })?;
 
         if response.status() == 404 {
             return Ok(None);
         }
 
         if response.status().is_success() {
-            let tx: HorizonTransaction = response
-                .json()
-                .await
-                .map_err(|e| {
-                    SubmissionError::HorizonApi(format!("failed to parse transaction response: {}", e))
-                })?;
+            let tx: HorizonTransaction = response.json().await.map_err(|e| {
+                SubmissionError::HorizonApi(format!("failed to parse transaction response: {}", e))
+            })?;
             Ok(Some(tx))
         } else {
             Err(SubmissionError::HorizonApi(format!(
@@ -144,7 +165,7 @@ impl HorizonClient {
 
     /// Get account details including current sequence
     pub async fn get_account_sequence(&self, account_id: &str) -> SubmissionResult<i64> {
-        let url = format!("{}/accounts/{}", self.base_url, account_id);
+        let url = format!("{}/accounts/{}", self.pick_endpoint(), account_id);
 
         #[derive(Deserialize)]
         struct AccountResponse {
@@ -162,19 +183,14 @@ impl HorizonClient {
             })?;
 
         if response.status().is_success() {
-            let account: AccountResponse = response
-                .json()
-                .await
-                .map_err(|e| {
-                    SubmissionError::HorizonApi(format!("failed to parse account response: {}", e))
-                })?;
+            let account: AccountResponse = response.json().await.map_err(|e| {
+                SubmissionError::HorizonApi(format!("failed to parse account response: {}", e))
+            })?;
 
             account
                 .sequence
                 .parse::<i64>()
-                .map_err(|_| {
-                    SubmissionError::HorizonApi("invalid sequence format".to_string())
-                })
+                .map_err(|_| SubmissionError::HorizonApi("invalid sequence format".to_string()))
         } else if response.status() == 404 {
             Err(SubmissionError::HorizonApi(format!(
                 "account {} not found",

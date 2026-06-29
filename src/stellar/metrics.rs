@@ -1,5 +1,5 @@
 /// Prometheus metrics for Stellar submission engine
-use prometheus::{Counter, Gauge, Histogram, Registry, core::Collector};
+use prometheus::{core::Collector, Counter, Gauge, Histogram, Registry};
 use std::sync::Arc;
 
 /// Metrics collector for the submission engine
@@ -20,6 +20,8 @@ pub struct StellarMetrics {
     pub channels_circuit_broken: Gauge,
     pub in_flight_transactions: Gauge,
     pub current_surge_fee_stroops: Gauge,
+    pub queue_depth: Gauge,
+    pub avg_time_to_finality_seconds: Gauge,
 
     // Histograms
     pub submission_duration_seconds: Histogram,
@@ -56,16 +58,12 @@ impl StellarMetrics {
         )?;
         registry.register(Box::new(channel_rotations_total.clone()))?;
 
-        let sequence_errors_total = Counter::new(
-            "stellar_sequence_errors_total",
-            "Total bad sequence errors",
-        )?;
+        let sequence_errors_total =
+            Counter::new("stellar_sequence_errors_total", "Total bad sequence errors")?;
         registry.register(Box::new(sequence_errors_total.clone()))?;
 
-        let fee_errors_total = Counter::new(
-            "stellar_fee_errors_total",
-            "Total insufficient fee errors",
-        )?;
+        let fee_errors_total =
+            Counter::new("stellar_fee_errors_total", "Total insufficient fee errors")?;
         registry.register(Box::new(fee_errors_total.clone()))?;
 
         let transient_errors_total = Counter::new(
@@ -110,6 +108,18 @@ impl StellarMetrics {
         )?;
         registry.register(Box::new(current_surge_fee_stroops.clone()))?;
 
+        let queue_depth = Gauge::new(
+            "stellar_submission_queue_depth",
+            "Current depth of Stellar submission queue",
+        )?;
+        registry.register(Box::new(queue_depth.clone()))?;
+
+        let avg_time_to_finality_seconds = Gauge::new(
+            "stellar_avg_time_to_finality_seconds",
+            "Average time from submitted to confirmed",
+        )?;
+        registry.register(Box::new(avg_time_to_finality_seconds.clone()))?;
+
         let submission_duration_seconds = Histogram::new(
             "stellar_submission_duration_seconds",
             "Time spent in transaction submission (seconds)",
@@ -142,6 +152,8 @@ impl StellarMetrics {
             channels_circuit_broken,
             in_flight_transactions,
             current_surge_fee_stroops,
+            queue_depth,
+            avg_time_to_finality_seconds,
             submission_duration_seconds,
             confirmation_delay_seconds,
             retry_attempts,
@@ -180,7 +192,7 @@ mod tests {
     fn test_metrics_creation() {
         let registry = Arc::new(Registry::new());
         let metrics = StellarMetrics::new(registry).unwrap();
-        
+
         metrics.tx_submitted_total.inc();
         assert_eq!(metrics.tx_submitted_total.get_value() as i32, 1);
     }
@@ -189,12 +201,12 @@ mod tests {
     fn test_metrics_timer() {
         let registry = Arc::new(Registry::new());
         let metrics = StellarMetrics::new(registry).unwrap();
-        
+
         {
             let _timer = MetricsTimer::new(metrics.submission_duration_seconds.clone());
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        
+
         // Timer should have recorded the observation
         let samples = metrics.submission_duration_seconds.collect();
         assert!(!samples.is_empty());
