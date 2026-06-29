@@ -48,7 +48,7 @@ jobs:
       # 1. Fetch latest backup from immutable S3 bucket
       # -----------------------------------------------------------------------
       - name: Configure AWS credentials (air-gapped backup account)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id:     ${{ secrets.DR_BACKUP_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.DR_BACKUP_AWS_SECRET_ACCESS_KEY }}
