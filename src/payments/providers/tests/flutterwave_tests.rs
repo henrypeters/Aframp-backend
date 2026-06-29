@@ -21,7 +21,7 @@ fn provider_with_base(base_url: &str) -> FlutterwaveProvider {
         timeout_secs: 5,
         max_retries: 0, // no retries so tests are fast
     })
-    .expect("provider init should succeed")
+    .expect("Failed to initialize FlutterwaveProvider with test configuration")
 }
 
 fn payment_request() -> PaymentRequest {
@@ -84,7 +84,7 @@ async fn initiate_payment_constructs_correct_request_and_parses_success() {
     let response = provider
         .initiate_payment(payment_request())
         .await
-        .expect("initiation should succeed");
+        .expect("Failed to initiate payment — check server response");
 
     assert_eq!(response.status, PaymentState::Pending);
     assert_eq!(response.transaction_reference, "txn_flw_001");
@@ -114,7 +114,7 @@ async fn initiate_payment_uses_checkout_url_fallback() {
     let response = provider
         .initiate_payment(payment_request())
         .await
-        .expect("initiation should succeed");
+        .expect("Failed to initiate payment — check server response");
 
     assert_eq!(
         response.payment_url.as_deref(),
@@ -247,7 +247,7 @@ async fn verify_payment_parses_successful_response() {
             provider_reference: None,
         })
         .await
-        .expect("verification should succeed");
+        .expect("Failed to verify payment — check server response");
 
     assert_eq!(response.status, PaymentState::Success);
     assert_eq!(response.provider_reference.as_deref(), Some("FLW-MOCK-123"));
@@ -283,7 +283,7 @@ async fn verify_payment_maps_failed_status() {
             provider_reference: None,
         })
         .await
-        .expect("should parse failed response without error");
+        .expect("Failed to parse failed payment response — check format");
 
     assert_eq!(response.status, PaymentState::Failed);
     assert_eq!(

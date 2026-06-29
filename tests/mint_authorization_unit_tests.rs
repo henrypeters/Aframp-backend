@@ -27,7 +27,7 @@ mod tests {
 
     fn make_unsigned_xdr() -> String {
         aframp_backend::multisig::xdr_builder::build_mint_xdr(ISSUER, DEST, 10_000_000_000, 42)
-            .expect("build_mint_xdr")
+            .expect("Failed to build mint XDR — check ISSUER and DEST are valid Stellar addresses")
     }
 
     /// Generate a fresh Ed25519 keypair and return (stellar_public_key_str, signing_key).
@@ -39,7 +39,8 @@ mod tests {
     }
 
     fn sign_hash(signing_key: &SigningKey, tx_hash_hex: &str) -> String {
-        let hash_bytes = hex::decode(tx_hash_hex).unwrap();
+        let hash_bytes = hex::decode(tx_hash_hex)
+            .expect("Failed to decode tx_hash_hex — must be valid hex string");
         let sig = signing_key.sign(&hash_bytes);
         B64.encode(sig.to_bytes())
     }
@@ -63,8 +64,10 @@ mod tests {
     #[test]
     fn tx_hash_is_deterministic() {
         let xdr = make_unsigned_xdr();
-        let h1 = compute_tx_hash(&xdr, TESTNET_PASSPHRASE).unwrap();
-        let h2 = compute_tx_hash(&xdr, TESTNET_PASSPHRASE).unwrap();
+        let h1 = compute_tx_hash(&xdr, TESTNET_PASSPHRASE)
+            .expect("Failed to compute tx_hash — XDR or passphrase invalid");
+        let h2 = compute_tx_hash(&xdr, TESTNET_PASSPHRASE)
+            .expect("Failed to compute tx_hash — XDR or passphrase invalid");
         assert_eq!(h1, h2);
         assert_eq!(h1.len(), 64, "SHA-256 hex is 64 chars");
     }
@@ -72,9 +75,11 @@ mod tests {
     #[test]
     fn tx_hash_differs_for_different_network() {
         let xdr = make_unsigned_xdr();
-        let testnet = compute_tx_hash(&xdr, TESTNET_PASSPHRASE).unwrap();
+        let testnet = compute_tx_hash(&xdr, TESTNET_PASSPHRASE)
+            .expect("Failed to compute testnet tx_hash");
         let mainnet =
-            compute_tx_hash(&xdr, "Public Global Stellar Network ; September 2015").unwrap();
+            compute_tx_hash(&xdr, "Public Global Stellar Network ; September 2015")
+                .expect("Failed to compute mainnet tx_hash");
         assert_ne!(testnet, mainnet, "network passphrase must affect hash");
     }
 
@@ -91,7 +96,8 @@ mod tests {
     #[test]
     fn valid_signature_passes_verification() {
         let xdr = make_unsigned_xdr();
-        let tx_hash = compute_tx_hash(&xdr, TESTNET_PASSPHRASE).unwrap();
+        let tx_hash = compute_tx_hash(&xdr, TESTNET_PASSPHRASE)
+            .expect("Failed to compute tx_hash for signature verification test");
         let (pub_key, signing_key) = gen_keypair();
         let sig = sign_hash(&signing_key, &tx_hash);
 
@@ -104,7 +110,8 @@ mod tests {
     #[test]
     fn wrong_key_fails_verification() {
         let xdr = make_unsigned_xdr();
-        let tx_hash = compute_tx_hash(&xdr, TESTNET_PASSPHRASE).unwrap();
+        let tx_hash = compute_tx_hash(&xdr, TESTNET_PASSPHRASE)
+            .expect("Failed to compute tx_hash for wrong key test");
         let (_, signing_key) = gen_keypair();
         let (other_pub_key, _) = gen_keypair(); // different key
         let sig = sign_hash(&signing_key, &tx_hash);
@@ -116,13 +123,14 @@ mod tests {
     #[test]
     fn tampered_hash_fails_verification() {
         let xdr = make_unsigned_xdr();
-        let tx_hash = compute_tx_hash(&xdr, TESTNET_PASSPHRASE).unwrap();
+        let tx_hash = compute_tx_hash(&xdr, TESTNET_PASSPHRASE)
+            .expect("Failed to compute tx_hash for tamper test");
         let (pub_key, signing_key) = gen_keypair();
         let sig = sign_hash(&signing_key, &tx_hash);
 
         // Flip one hex char in the hash
         let mut tampered = tx_hash.clone();
-        let last = tampered.pop().unwrap();
+        let last = tampered.pop().expect("tx_hash must not be empty");
         tampered.push(if last == 'a' { 'b' } else { 'a' });
 
         let result = verify_ed25519_signature(&pub_key, &tampered, &sig);
@@ -155,7 +163,8 @@ mod tests {
     #[test]
     fn aggregate_zero_signatures_produces_valid_envelope() {
         let xdr = make_unsigned_xdr();
-        let signed = aggregate_signatures(&xdr, &[]).unwrap();
+        let signed = aggregate_signatures(&xdr, &[])
+            .expect("Failed to aggregate empty signatures");
         assert!(!signed.is_empty());
         // Must still be valid XDR
         use stellar_xdr::next::{Limits, ReadXdr, TransactionEnvelope};
@@ -166,7 +175,8 @@ mod tests {
     #[test]
     fn aggregate_two_signatures_embeds_both() {
         let xdr = make_unsigned_xdr();
-        let tx_hash = compute_tx_hash(&xdr, TESTNET_PASSPHRASE).unwrap();
+        let tx_hash = compute_tx_hash(&xdr, TESTNET_PASSPHRASE)
+            .expect("Failed to compute tx_hash for aggregation test");
 
         let (key1, sk1) = gen_keypair();
         let (key2, sk2) = gen_keypair();
@@ -178,13 +188,15 @@ mod tests {
             make_signature_record(&key2, &sig2),
         ];
 
-        let signed_xdr = aggregate_signatures(&xdr, &sigs).unwrap();
+        let signed_xdr = aggregate_signatures(&xdr, &sigs)
+            .expect("Failed to aggregate two signatures");
 
         use stellar_xdr::next::{Limits, ReadXdr, TransactionEnvelope};
-        let env = TransactionEnvelope::from_xdr_base64(&signed_xdr, Limits::none()).unwrap();
+        let env = TransactionEnvelope::from_xdr_base64(&signed_xdr, Limits::none())
+            .expect("Aggregated XDR must be valid");
         let sig_count = match env {
             TransactionEnvelope::Tx(v1) => v1.signatures.len(),
-            _ => panic!("unexpected envelope type"),
+            _ => panic!("unexpected envelope type — expected Tx variant"),
         };
         assert_eq!(sig_count, 2, "envelope must contain exactly 2 signatures");
     }
@@ -290,10 +302,12 @@ mod tests {
     #[test]
     fn signature_over_different_hash_fails_verification() {
         let xdr = make_unsigned_xdr();
-        let correct_hash = compute_tx_hash(&xdr, TESTNET_PASSPHRASE).unwrap();
+        let correct_hash = compute_tx_hash(&xdr, TESTNET_PASSPHRASE)
+            .expect("Failed to compute correct tx_hash");
 
         // Attacker signs a different hash
-        let different_hash = compute_tx_hash(&xdr, "Attacker Network ; 2024").unwrap();
+        let different_hash = compute_tx_hash(&xdr, "Attacker Network ; 2024")
+            .expect("Failed to compute attacker tx_hash");
         let (pub_key, signing_key) = gen_keypair();
         let attacker_sig = sign_hash(&signing_key, &different_hash);
 
