@@ -280,7 +280,7 @@ jobs:
     if: always() && github.ref == 'refs/heads/main'
     steps:
       - name: Download all scan reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
 
       - name: Ingest findings via API
         run: |
