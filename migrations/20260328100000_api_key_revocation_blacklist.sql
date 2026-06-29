@@ -1,4 +1,3 @@
--- migrate:up
 -- API Key Revocation & Blacklisting System (Issue #138)
 --
 -- Tables:

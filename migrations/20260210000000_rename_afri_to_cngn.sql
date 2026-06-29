@@ -1,4 +1,3 @@
--- migrate:up
 -- Rename Afri-specific schema elements to CNGN to reflect the new stablecoin.
 -- This migration updates existing tables, columns, indexes, and triggers.
 

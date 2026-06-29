@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS consumer_rate_limit_overrides (
     consumer_id   UUID NOT NULL REFERENCES consumers(id) ON DELETE CASCADE,
     limits_json   JSONB NOT NULL,
     expiry_at     TIMESTAMPTZ,  -- NULL = permanent
-    created_by    UUID REFERENCES admin_accounts(id),  -- Optional FK
+    created_by    UUID,  -- Optional admin account identifier
     reason        TEXT,
     created_at    TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -28,9 +28,8 @@ CREATE TABLE IF NOT EXISTS consumer_rate_limit_overrides (
 );
 
 -- Indexes
-CREATE UNIQUE INDEX idx_override_consumer_active 
-    ON consumer_rate_limit_overrides (consumer_id) 
-    WHERE expiry_at IS NULL OR expiry_at > CURRENT_TIMESTAMP;
+CREATE INDEX idx_override_consumer_active
+    ON consumer_rate_limit_overrides (consumer_id);
 
 CREATE INDEX idx_override_expiry ON consumer_rate_limit_overrides (expiry_at);
 CREATE INDEX idx_override_consumer ON consumer_rate_limit_overrides (consumer_id);
@@ -121,4 +120,3 @@ CREATE TRIGGER trigger_cleanup_rate_limit_overrides
     AFTER INSERT OR UPDATE ON consumer_rate_limit_overrides
     FOR EACH STATEMENT
     EXECUTE FUNCTION cleanup_expired_overrides();
-

@@ -90,8 +90,7 @@ fn mpesa_config_from_env_fails_when_keys_missing() {
 
     let err = MpesaConfig::from_env().expect_err("should fail without env vars");
     assert!(
-        err.to_string().contains("MPESA_CONSUMER_KEY")
-            || err.to_string().contains("required"),
+        err.to_string().contains("MPESA_CONSUMER_KEY") || err.to_string().contains("required"),
         "unexpected error: {}",
         err
     );
@@ -308,8 +307,5 @@ fn parse_webhook_event_sets_unknown_status_for_unrecognised_payload() {
         .expect("should parse");
 
     // Stub sets status to Some(PaymentState::Unknown)
-    assert!(matches!(
-        event.status,
-        Some(PaymentState::Unknown) | None
-    ));
+    assert!(matches!(event.status, Some(PaymentState::Unknown) | None));
 }

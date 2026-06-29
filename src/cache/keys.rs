@@ -432,6 +432,155 @@ mod tests {
         let key = auth::RateLimitKey::new("user_123", "login");
         assert_eq!(key.to_string(), "v1:auth:rate_limit:user_123:login");
     }
+
+    // Issue #459 — new namespaces
+    #[test]
+    fn test_user_profile_key() {
+        let key = user::ProfileKey::new("uuid-abc");
+        assert_eq!(key.to_string(), "v1:user:uuid-abc:profile");
+    }
+
+    #[test]
+    fn test_user_onboarding_key() {
+        let key = user::OnboardingKey::new("uuid-xyz");
+        assert_eq!(key.to_string(), "v1:user:uuid-xyz:onboarding");
+    }
+
+    #[test]
+    fn test_partner_config_key() {
+        let key = partner::ConfigKey::new("partner-001");
+        assert_eq!(key.to_string(), "v1:partner:partner-001:config");
+    }
+
+    #[test]
+    fn test_partner_liquidity_key() {
+        let key = partner::LiquidityKey::new("partner-002");
+        assert_eq!(key.to_string(), "v1:partner:partner-002:liquidity");
+    }
+
+    #[test]
+    fn test_namespace_pattern() {
+        assert_eq!(namespace_pattern("rate"), "v1:rate:*");
+        assert_eq!(namespace_pattern("user"), "v1:user:*");
+        assert_eq!(namespace_pattern("partner"), "v1:partner:*");
+    }
+
+    #[test]
+    fn test_user_pattern_isolation() {
+        // Different users produce different patterns — no bleed
+        let a = user::user_pattern("user-A");
+        let b = user::user_pattern("user-B");
+        assert_ne!(a, b);
+        assert!(a.starts_with("v1:user:user-A:"));
+        assert!(b.starts_with("v1:user:user-B:"));
+    }
+
+    #[test]
+    fn test_key_collision_isolation() {
+        // Profile and onboarding keys for same user must be distinct
+        let profile = user::ProfileKey::new("uid-1").to_string();
+        let onboarding = user::OnboardingKey::new("uid-1").to_string();
+        assert_ne!(profile, onboarding);
+    }
+}
+
+/// Returns the canonical SCAN pattern for a namespace.
+/// Always uses the `v1:<ns>:*` format — never the legacy `cache:<ns>:v1:*` alias.
+pub fn namespace_pattern(ns: &str) -> String {
+    format!("v1:{}:*", ns)
+}
+
+// ---------------------------------------------------------------------------
+// User profile, onboarding, and partner config cache keys (Issue #459)
+// ---------------------------------------------------------------------------
+
+pub mod user {
+    use super::*;
+
+    pub const NAMESPACE: &str = "user";
+
+    /// User KYC / profile data: `v1:user:<user_id>:profile`
+    #[derive(Debug, Clone)]
+    pub struct ProfileKey {
+        pub user_id: String,
+    }
+
+    impl ProfileKey {
+        pub fn new(user_id: impl Into<String>) -> Self {
+            Self { user_id: user_id.into() }
+        }
+    }
+
+    impl fmt::Display for ProfileKey {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}:{}:{}:profile", VERSION, NAMESPACE, self.user_id)
+        }
+    }
+
+    /// Progressive onboarding state: `v1:user:<user_id>:onboarding`
+    #[derive(Debug, Clone)]
+    pub struct OnboardingKey {
+        pub user_id: String,
+    }
+
+    impl OnboardingKey {
+        pub fn new(user_id: impl Into<String>) -> Self {
+            Self { user_id: user_id.into() }
+        }
+    }
+
+    impl fmt::Display for OnboardingKey {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}:{}:{}:onboarding", VERSION, NAMESPACE, self.user_id)
+        }
+    }
+
+    /// All user keys for a given user_id (pattern for bulk purge)
+    pub fn user_pattern(user_id: &str) -> String {
+        format!("{}:{}:{}:*", VERSION, NAMESPACE, user_id)
+    }
+}
+
+pub mod partner {
+    use super::*;
+
+    pub const NAMESPACE: &str = "partner";
+
+    /// Partner API configuration: `v1:partner:<partner_id>:config`
+    #[derive(Debug, Clone)]
+    pub struct ConfigKey {
+        pub partner_id: String,
+    }
+
+    impl ConfigKey {
+        pub fn new(partner_id: impl Into<String>) -> Self {
+            Self { partner_id: partner_id.into() }
+        }
+    }
+
+    impl fmt::Display for ConfigKey {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}:{}:{}:config", VERSION, NAMESPACE, self.partner_id)
+        }
+    }
+
+    /// Partner liquidity depth: `v1:partner:<partner_id>:liquidity`
+    #[derive(Debug, Clone)]
+    pub struct LiquidityKey {
+        pub partner_id: String,
+    }
+
+    impl LiquidityKey {
+        pub fn new(partner_id: impl Into<String>) -> Self {
+            Self { partner_id: partner_id.into() }
+        }
+    }
+
+    impl fmt::Display for LiquidityKey {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}:{}:{}:liquidity", VERSION, NAMESPACE, self.partner_id)
+        }
+    }
 }
 
 pub mod signing {
@@ -449,7 +598,9 @@ pub mod signing {
 
     impl DerivedKeyCache {
         pub fn new(key_id: impl Into<String>) -> Self {
-            Self { key_id: key_id.into() }
+            Self {
+                key_id: key_id.into(),
+            }
         }
     }
 

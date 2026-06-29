@@ -10,8 +10,8 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use super::catalogue::{CatalogueError, KeyCatalogueRepository, KeyStatus, NewPlatformKey};
-use super::rotation::{default_algorithm, default_key_length, parse_key_type};
 use super::metrics;
+use super::rotation::{default_algorithm, default_key_length, parse_key_type};
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -99,7 +99,11 @@ impl EmergencyRevocationService {
         );
 
         // 2. Generate replacement key immediately
-        let replacement_id = format!("{}-emergency-{}", key.key_type, chrono::Utc::now().timestamp());
+        let replacement_id = format!(
+            "{}-emergency-{}",
+            key.key_type,
+            chrono::Utc::now().timestamp()
+        );
         let replacement = NewPlatformKey {
             key_id: replacement_id.clone(),
             key_type: key_type.clone(),
@@ -111,9 +115,10 @@ impl EmergencyRevocationService {
             } else {
                 None
             },
-            enc_version: key.enc_version.as_ref().map(|_| {
-                format!("v-emergency-{}", chrono::Utc::now().timestamp())
-            }),
+            enc_version: key
+                .enc_version
+                .as_ref()
+                .map(|_| format!("v-emergency-{}", chrono::Utc::now().timestamp())),
             notes: Some(format!("Emergency replacement for revoked key {key_id}")),
         };
 

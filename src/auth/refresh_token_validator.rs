@@ -9,8 +9,8 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-use crate::database::refresh_token_repository::{RefreshToken, RefreshTokenRepository};
 use super::refresh_token_service::{RefreshTokenError, RefreshTokenService, RefreshTokenStatus};
+use crate::database::refresh_token_repository::{RefreshToken, RefreshTokenRepository};
 
 // ── Validation context ───────────────────────────────────────────────────────
 
@@ -55,12 +55,12 @@ impl RefreshTokenValidator {
         // Find token by token_id (we need to search by hash in real scenario)
         // For now, we'll assume token_id is passed separately or we need to iterate
         // In production, you'd have a lookup mechanism
-        
+
         // This is a placeholder - actual implementation would:
         // 1. Hash the token
         // 2. Search for matching hash in database
         // 3. Validate all conditions
-        
+
         Err(RefreshTokenError::Internal(
             "Token lookup not implemented - use validate_by_id instead".to_string(),
         ))
@@ -82,8 +82,9 @@ impl RefreshTokenValidator {
             .ok_or(RefreshTokenError::Internal("Token not found".to_string()))?;
 
         // Verify token hash
-        let is_valid_hash = RefreshTokenService::verify_token(token_plaintext, &db_token.token_hash)
-            .map_err(|e| RefreshTokenError::Internal(e.to_string()))?;
+        let is_valid_hash =
+            RefreshTokenService::verify_token(token_plaintext, &db_token.token_hash)
+                .map_err(|e| RefreshTokenError::Internal(e.to_string()))?;
 
         if !is_valid_hash {
             return Ok(RefreshTokenValidationResult {

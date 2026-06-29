@@ -3,10 +3,12 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::geo_restriction_repository::GeoRestrictionRepository;
-    use crate::services::geolocation::{GeolocationConfig, GeolocationService};
-    use crate::services::geo_restriction::{GeoRestrictionConfig, GeoRestrictionService, PolicyContext, PolicyResult};
     use crate::cache::RedisCache;
+    use crate::database::geo_restriction_repository::GeoRestrictionRepository;
+    use crate::services::geo_restriction::{
+        GeoRestrictionConfig, GeoRestrictionService, PolicyContext, PolicyResult,
+    };
+    use crate::services::geolocation::{GeolocationConfig, GeolocationService};
     use std::sync::Arc;
     use uuid::Uuid;
 
@@ -20,11 +22,19 @@ mod tests {
     }
 
     impl RedisCache for MockRedisCache {
-        async fn get<T: serde::de::DeserializeOwned>(&self, _key: &str) -> Result<Option<T>, crate::error::AppError> {
+        async fn get<T: serde::de::DeserializeOwned>(
+            &self,
+            _key: &str,
+        ) -> Result<Option<T>, crate::error::AppError> {
             Ok(None)
         }
 
-        async fn set_ex(&self, _key: &str, _value: &str, _ttl: usize) -> Result<(), crate::error::AppError> {
+        async fn set_ex(
+            &self,
+            _key: &str,
+            _value: &str,
+            _ttl: usize,
+        ) -> Result<(), crate::error::AppError> {
             Ok(())
         }
 

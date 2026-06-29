@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use uuid::Uuid;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 // Admin role enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, sqlx::Type)]
@@ -307,8 +307,8 @@ pub struct MfaSetupRequest {
 // MFA setup response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MfaSetupResponse {
-    pub qr_code_url: Option<String>, // For TOTP
-    pub secret: Option<String>, // For TOTP
+    pub qr_code_url: Option<String>,          // For TOTP
+    pub secret: Option<String>,               // For TOTP
     pub challenge: Option<serde_json::Value>, // For FIDO2
 }
 
@@ -445,9 +445,15 @@ impl Default for AdminSecurityConfig {
 }
 
 // Helper functions for password validation
-pub fn validate_password_complexity(password: &str, config: &AdminSecurityConfig) -> Result<(), String> {
+pub fn validate_password_complexity(
+    password: &str,
+    config: &AdminSecurityConfig,
+) -> Result<(), String> {
     if password.len() < config.password_min_length as usize {
-        return Err(format!("Password must be at least {} characters long", config.password_min_length));
+        return Err(format!(
+            "Password must be at least {} characters long",
+            config.password_min_length
+        ));
     }
 
     if config.password_require_uppercase && !password.chars().any(|c| c.is_uppercase()) {
@@ -473,9 +479,14 @@ pub fn validate_password_complexity(password: &str, config: &AdminSecurityConfig
 pub fn is_sensitive_action(action_type: &str) -> bool {
     matches!(
         action_type,
-        "account_suspend" | "account_reinstate" | "role_update" |
-        "mfa_disable" | "permission_grant" | "permission_revoke" |
-        "system_config_update" | "security_policy_update"
+        "account_suspend"
+            | "account_reinstate"
+            | "role_update"
+            | "mfa_disable"
+            | "permission_grant"
+            | "permission_revoke"
+            | "system_config_update"
+            | "security_policy_update"
     )
 }
 

@@ -52,7 +52,7 @@ pub struct IpEvidenceSummary {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct BlockIpRequest {
-    pub block_type: String, // "temporary" or "permanent"
+    pub block_type: String,            // "temporary" or "permanent"
     pub duration_minutes: Option<i64>, // for temporary blocks
     pub reason: Option<String>,
 }
@@ -98,7 +98,11 @@ pub async fn list_flagged_ips(
 
     let mut summaries = Vec::new();
     for ip in ips {
-        let evidence_count = state.repo.get_evidence_for_ip(&ip.ip_address_or_cidr, Some(1)).await?.len() as i64;
+        let evidence_count = state
+            .repo
+            .get_evidence_for_ip(&ip.ip_address_or_cidr, Some(1))
+            .await?
+            .len() as i64;
         summaries.push(IpReputationSummary {
             id: ip.id,
             ip_address_or_cidr: ip.ip_address_or_cidr,
@@ -134,11 +138,15 @@ pub async fn get_ip_reputation(
     State(state): State<IpReputationState>,
     Path(ip): Path<String>,
 ) -> Result<Json<IpReputationDetail>, AppError> {
-    let reputation = state.repo.get_reputation(&ip).await?
+    let reputation = state
+        .repo
+        .get_reputation(&ip)
+        .await?
         .ok_or_else(|| AppError::NotFound(format!("IP reputation record not found: {}", ip)))?;
 
     let evidence = state.repo.get_evidence_for_ip(&ip, None).await?;
-    let evidence_summaries: Vec<IpEvidenceSummary> = evidence.into_iter()
+    let evidence_summaries: Vec<IpEvidenceSummary> = evidence
+        .into_iter()
         .map(|e| IpEvidenceSummary {
             id: e.id,
             evidence_type: e.evidence_type,
@@ -194,7 +202,9 @@ pub async fn block_ip(
 ) -> Result<Json<IpReputationEntity>, AppError> {
     // Validate block type
     if !matches!(request.block_type.as_str(), "temporary" | "permanent") {
-        return Err(AppError::BadRequest("block_type must be 'temporary' or 'permanent'".to_string()));
+        return Err(AppError::BadRequest(
+            "block_type must be 'temporary' or 'permanent'".to_string(),
+        ));
     }
 
     // Calculate expiry for temporary blocks
@@ -205,7 +215,10 @@ pub async fn block_ip(
         None
     };
 
-    let reputation = state.repo.apply_block(&ip, &request.block_type, expiry).await?;
+    let reputation = state
+        .repo
+        .apply_block(&ip, &request.block_type, expiry)
+        .await?;
 
     // TODO: Update Redis cache via detection service
 

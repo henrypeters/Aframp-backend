@@ -33,11 +33,15 @@ mod tests {
 
         let wallet_scopes = catalog.by_category(ScopeCategory::Wallet);
         assert!(!wallet_scopes.is_empty());
-        assert!(wallet_scopes.iter().all(|s| s.category == ScopeCategory::Wallet));
+        assert!(wallet_scopes
+            .iter()
+            .all(|s| s.category == ScopeCategory::Wallet));
 
         let admin_scopes = catalog.by_category(ScopeCategory::Admin);
         assert!(!admin_scopes.is_empty());
-        assert!(admin_scopes.iter().all(|s| s.category == ScopeCategory::Admin));
+        assert!(admin_scopes
+            .iter()
+            .all(|s| s.category == ScopeCategory::Admin));
     }
 
     #[test]
@@ -71,12 +75,7 @@ mod tests {
     #[test]
     fn test_scope_catalog_add() {
         let mut catalog = ScopeCatalog::new();
-        let scope = ScopeDefinition::new(
-            "test:read",
-            "Test scope",
-            ScopeCategory::Wallet,
-            false,
-        );
+        let scope = ScopeDefinition::new("test:read", "Test scope", ScopeCategory::Wallet, false);
 
         assert!(catalog.add(scope.clone()).is_ok());
         assert!(catalog.get("test:read").is_some());

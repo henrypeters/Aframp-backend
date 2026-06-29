@@ -2,8 +2,8 @@
 //! into Aframp transaction states and triggers refunds on failure.
 
 use crate::corridors::kenya::models::KenyaTransferStatus;
-use crate::payments::providers::mpesa_kenya::MpesaKenyaProvider;
 use crate::payments::provider::PaymentProvider;
+use crate::payments::providers::mpesa_kenya::MpesaKenyaProvider;
 use crate::payments::types::PaymentState;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde_json::Value as JsonValue;

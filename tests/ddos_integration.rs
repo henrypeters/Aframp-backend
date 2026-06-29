@@ -11,7 +11,7 @@ use std::time::Duration;
 use Bitmesh_backend::ddos::{
     challenge::{Challenge, ChallengeResponse},
     config::DdosConfig,
-    detector::{AttackDetector, AttackClass, ProtectionMode},
+    detector::{AttackClass, AttackDetector, ProtectionMode},
     fingerprint::RequestFingerprint,
     lockdown::LockdownManager,
     queue::{FairQueue, PriorityTier},
@@ -100,7 +100,10 @@ async fn test_slow_http_connection_flagged() {
     // Simulate 1 byte received after timeout has passed
     let should_terminate = detector.update_connection_bytes("conn-1", 1).await;
     // With 0-second timeout and 1 byte < 1000 threshold, should flag
-    assert!(should_terminate, "Slow HTTP connection should be flagged for termination");
+    assert!(
+        should_terminate,
+        "Slow HTTP connection should be flagged for termination"
+    );
 }
 
 #[tokio::test]
@@ -115,7 +118,10 @@ async fn test_fast_connection_not_flagged() {
     detector.track_connection("conn-fast").await;
     // Send plenty of bytes immediately — should not be flagged
     let should_terminate = detector.update_connection_bytes("conn-fast", 10_000).await;
-    assert!(!should_terminate, "Fast connection should not be terminated");
+    assert!(
+        !should_terminate,
+        "Fast connection should not be terminated"
+    );
 }
 
 // ── Challenge-response ────────────────────────────────────────────────────────
@@ -160,7 +166,9 @@ fn count_leading_zero_bits(hash: &[u8]) -> u32 {
     for byte in hash {
         let zeros = byte.leading_zeros();
         count += zeros;
-        if zeros < 8 { break; }
+        if zeros < 8 {
+            break;
+        }
     }
     count
 }
@@ -173,8 +181,12 @@ fn test_fair_queuing_high_priority_guaranteed() {
     let queue = FairQueue::new(config);
 
     // Fill standard and low slots
-    for _ in 0..5 { queue.try_acquire(PriorityTier::Standard); }
-    for _ in 0..3 { queue.try_acquire(PriorityTier::Low); }
+    for _ in 0..5 {
+        queue.try_acquire(PriorityTier::Standard);
+    }
+    for _ in 0..3 {
+        queue.try_acquire(PriorityTier::Low);
+    }
 
     // High priority should still get through
     assert!(queue.try_acquire(PriorityTier::High));
@@ -187,9 +199,15 @@ fn test_fair_queuing_unauthenticated_shed_first() {
     let queue = FairQueue::new(config);
 
     // Fill all slots
-    for _ in 0..2 { queue.try_acquire(PriorityTier::High); }
-    for _ in 0..5 { queue.try_acquire(PriorityTier::Standard); }
-    for _ in 0..3 { queue.try_acquire(PriorityTier::Low); }
+    for _ in 0..2 {
+        queue.try_acquire(PriorityTier::High);
+    }
+    for _ in 0..5 {
+        queue.try_acquire(PriorityTier::Standard);
+    }
+    for _ in 0..3 {
+        queue.try_acquire(PriorityTier::Low);
+    }
 
     // Queue is full — low priority (unauthenticated) should be rejected
     assert!(!queue.try_acquire(PriorityTier::Low));
@@ -203,11 +221,16 @@ fn test_wred_drop_probability_low_priority_higher() {
     let queue = FairQueue::new(config);
 
     // Fill to 60%
-    for _ in 0..6 { queue.try_acquire(PriorityTier::Standard); }
+    for _ in 0..6 {
+        queue.try_acquire(PriorityTier::Standard);
+    }
 
     let p_low = queue.wred_drop_probability(PriorityTier::Low);
     let p_high = queue.wred_drop_probability(PriorityTier::High);
-    assert!(p_low > p_high, "Low priority should have higher drop probability than high");
+    assert!(
+        p_low > p_high,
+        "Low priority should have higher drop probability than high"
+    );
 }
 
 // ── Lockdown lifecycle ────────────────────────────────────────────────────────

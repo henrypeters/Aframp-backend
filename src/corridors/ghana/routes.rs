@@ -2,7 +2,10 @@
 
 use crate::corridors::ghana::handlers::*;
 use crate::corridors::ghana::webhook::{handle_hubtel_ghana_webhook, GhanaWebhookState};
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use std::sync::Arc;
 
 pub fn ghana_corridor_router(state: Arc<GhanaCorridorState>) -> Router {

@@ -56,7 +56,10 @@ impl KeyEnvironment {
         match s {
             "testnet" => Ok(KeyEnvironment::Testnet),
             "mainnet" => Ok(KeyEnvironment::Mainnet),
-            other => Err(format!("unknown environment '{}'; must be testnet or mainnet", other)),
+            other => Err(format!(
+                "unknown environment '{}'; must be testnet or mainnet",
+                other
+            )),
         }
     }
 }
@@ -197,7 +200,10 @@ mod tests {
     #[test]
     fn test_verify_wrong_key_rejected() {
         let key = generate_api_key(KeyEnvironment::Testnet).unwrap();
-        assert!(!verify_api_key("aframp_test_wrongkeyvalue12345678", &key.key_hash));
+        assert!(!verify_api_key(
+            "aframp_test_wrongkeyvalue12345678",
+            &key.key_hash
+        ));
     }
 
     #[test]
@@ -226,8 +232,14 @@ mod tests {
 
     #[test]
     fn test_parse_environment() {
-        assert_eq!(KeyEnvironment::from_str("testnet").unwrap(), KeyEnvironment::Testnet);
-        assert_eq!(KeyEnvironment::from_str("mainnet").unwrap(), KeyEnvironment::Mainnet);
+        assert_eq!(
+            KeyEnvironment::from_str("testnet").unwrap(),
+            KeyEnvironment::Testnet
+        );
+        assert_eq!(
+            KeyEnvironment::from_str("mainnet").unwrap(),
+            KeyEnvironment::Mainnet
+        );
         assert!(KeyEnvironment::from_str("staging").is_err());
     }
 }

@@ -103,12 +103,24 @@ mod tests {
 
         // Test role-specific session lifetimes
         assert_eq!(config.session_lifetime_minutes[&AdminRole::SuperAdmin], 60);
-        assert_eq!(config.session_lifetime_minutes[&AdminRole::OperationsAdmin], 240);
-        assert_eq!(config.session_lifetime_minutes[&AdminRole::ReadOnlyAdmin], 480);
+        assert_eq!(
+            config.session_lifetime_minutes[&AdminRole::OperationsAdmin],
+            240
+        );
+        assert_eq!(
+            config.session_lifetime_minutes[&AdminRole::ReadOnlyAdmin],
+            480
+        );
 
         // Test role-specific inactivity timeouts
-        assert_eq!(config.inactivity_timeout_minutes[&AdminRole::SuperAdmin], 15);
-        assert_eq!(config.inactivity_timeout_minutes[&AdminRole::ReadOnlyAdmin], 60);
+        assert_eq!(
+            config.inactivity_timeout_minutes[&AdminRole::SuperAdmin],
+            15
+        );
+        assert_eq!(
+            config.inactivity_timeout_minutes[&AdminRole::ReadOnlyAdmin],
+            60
+        );
 
         // Test role-specific concurrent session limits
         assert_eq!(config.max_concurrent_sessions[&AdminRole::SuperAdmin], 2);
@@ -263,7 +275,10 @@ mod tests {
         };
 
         assert_eq!(request.action_type, "account_suspend");
-        assert_eq!(request.target_resource_type, Some("admin_account".to_string()));
+        assert_eq!(
+            request.target_resource_type,
+            Some("admin_account".to_string())
+        );
         assert!(request.target_resource_id.is_some());
         assert_eq!(request.confirmation_method, "password");
         assert!(request.confirmation_data.is_object());
@@ -358,7 +373,7 @@ mod tests {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
-    
+
     // These tests would require a test database and actual service instances
     // They would test:
     // - Full authentication flow with MFA
@@ -366,7 +381,7 @@ mod integration_tests {
     // - Permission middleware enforcement
     // - Audit trail creation and verification
     // - Security monitoring and alerting
-    
+
     /*
     #[tokio::test]
     async fn test_full_authentication_lifecycle() {
@@ -378,7 +393,7 @@ mod integration_tests {
         // 6. Terminate session
         // 7. Verify audit trail entries
     }
-    
+
     #[tokio::test]
     async fn test_permission_middleware_enforcement() {
         // 1. Create admin with limited permissions
@@ -386,7 +401,7 @@ mod integration_tests {
         // 3. Verify 403 response
         // 4. Log permission denial
     }
-    
+
     #[tokio::test]
     async fn test_audit_trail_integrity() {
         // 1. Create multiple audit entries
@@ -394,7 +409,7 @@ mod integration_tests {
         // 3. Tamper with an entry
         // 4. Verify tampering detection
     }
-    
+
     #[tokio::test]
     async fn test_security_monitoring() {
         // 1. Simulate suspicious login patterns

@@ -30,8 +30,11 @@ fn classify_event(method: &str, path: &str) -> (String, AuditEventCategory) {
         let event = format!("credential.{}", method.to_lowercase());
         return (event, AuditEventCategory::Credential);
     }
-    if p.contains("/onramp") || p.contains("/offramp") || p.contains("/transactions")
-        || p.contains("/payments") || p.contains("/transfer")
+    if p.contains("/onramp")
+        || p.contains("/offramp")
+        || p.contains("/transactions")
+        || p.contains("/payments")
+        || p.contains("/transfer")
     {
         let event = format!("financial.{}", method.to_lowercase());
         return (event, AuditEventCategory::FinancialTransaction);
@@ -76,7 +79,14 @@ fn failure_reason(status: u16) -> Option<String> {
 }
 
 /// Extract actor context from request extensions (set by auth middleware).
-fn extract_actor(req: &Request) -> (AuditActorType, Option<String>, Option<String>, Option<String>) {
+fn extract_actor(
+    req: &Request,
+) -> (
+    AuditActorType,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
     // Try OAuth token claims first
     if let Some(claims) = req.extensions().get::<crate::auth::OAuthTokenClaims>() {
         let actor_type = match claims.consumer_type.as_str() {
@@ -103,7 +113,10 @@ fn extract_actor(req: &Request) -> (AuditActorType, Option<String>, Option<Strin
     }
 
     // Try API key
-    if let Some(key) = req.extensions().get::<crate::middleware::api_key::AuthenticatedKey>() {
+    if let Some(key) = req
+        .extensions()
+        .get::<crate::middleware::api_key::AuthenticatedKey>()
+    {
         let actor_type = match key.consumer_type.as_str() {
             "admin" => AuditActorType::Admin,
             "microservice" => AuditActorType::Microservice,
@@ -118,7 +131,10 @@ fn extract_actor(req: &Request) -> (AuditActorType, Option<String>, Option<Strin
     }
 
     // Try admin session context
-    if let Some(ctx) = req.extensions().get::<crate::admin::middleware::AdminAuthContext>() {
+    if let Some(ctx) = req
+        .extensions()
+        .get::<crate::admin::middleware::AdminAuthContext>()
+    {
         return (
             AuditActorType::Admin,
             Some(ctx.admin_id.to_string()),
@@ -149,7 +165,10 @@ fn environment_from_req(req: &Request) -> String {
     if let Some(claims) = req.extensions().get::<crate::auth::OAuthTokenClaims>() {
         return claims.environment.clone();
     }
-    if let Some(key) = req.extensions().get::<crate::middleware::api_key::AuthenticatedKey>() {
+    if let Some(key) = req
+        .extensions()
+        .get::<crate::middleware::api_key::AuthenticatedKey>()
+    {
         return key.environment.clone();
     }
     std::env::var("APP_ENV").unwrap_or_else(|_| "mainnet".to_string())

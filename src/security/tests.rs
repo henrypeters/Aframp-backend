@@ -8,8 +8,8 @@
 mod tests {
     use super::*;
     use crate::security::{
-        AnomalyDetectionService, AnomalyDetectionConfig, SystemStatus, 
-        OnChainMint, CircuitBreakerMiddleware
+        AnomalyDetectionConfig, AnomalyDetectionService, CircuitBreakerMiddleware, OnChainMint,
+        SystemStatus,
     };
     use sqlx::PgPool;
     use std::sync::Arc;
@@ -39,9 +39,18 @@ mod tests {
         let wallet = "GTEST1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string();
 
         // Record multiple mints within the window
-        anomaly_service.record_mint_event(30_000_000, &wallet).await.unwrap(); // 30M
-        anomaly_service.record_mint_event(40_000_000, &wallet).await.unwrap(); // 40M
-        anomaly_service.record_mint_event(35_000_000, &wallet).await.unwrap(); // 35M
+        anomaly_service
+            .record_mint_event(30_000_000, &wallet)
+            .await
+            .unwrap(); // 30M
+        anomaly_service
+            .record_mint_event(40_000_000, &wallet)
+            .await
+            .unwrap(); // 40M
+        anomaly_service
+            .record_mint_event(35_000_000, &wallet)
+            .await
+            .unwrap(); // 35M
 
         // Total: 105M NGN > 100M limit, should trigger circuit breaker
         sleep(Duration::from_millis(100)).await; // Allow async processing
@@ -62,7 +71,10 @@ mod tests {
         let delta_percentage = (on_chain_supply - bank_reserves) as f64 / on_chain_supply as f64; // 5%
 
         // 5% > 0.01% tolerance, should trigger circuit breaker
-        anomaly_service.check_reserve_ratio(bank_reserves, on_chain_supply).await.unwrap();
+        anomaly_service
+            .check_reserve_ratio(bank_reserves, on_chain_supply)
+            .await
+            .unwrap();
 
         sleep(Duration::from_millis(100)).await;
 
@@ -77,16 +89,17 @@ mod tests {
         let anomaly_service = Arc::new(AnomalyDetectionService::new(pool, config));
 
         // Create on-chain mint without corresponding DB record
-        let unknown_mints = vec![
-            OnChainMint {
-                tx_hash: "unknown_tx_hash_123".to_string(),
-                amount: 10_000_000,
-                wallet: "GUNKNOWNWALLET123".to_string(),
-                timestamp: chrono::Utc::now(),
-            }
-        ];
+        let unknown_mints = vec![OnChainMint {
+            tx_hash: "unknown_tx_hash_123".to_string(),
+            amount: 10_000_000,
+            wallet: "GUNKNOWNWALLET123".to_string(),
+            timestamp: chrono::Utc::now(),
+        }];
 
-        anomaly_service.detect_unknown_origin_mints(unknown_mints).await.unwrap();
+        anomaly_service
+            .detect_unknown_origin_mints(unknown_mints)
+            .await
+            .unwrap();
 
         sleep(Duration::from_millis(100)).await;
 
@@ -112,7 +125,10 @@ mod tests {
             window: Duration::from_secs(60),
             limit: 500_000_000,
         };
-        anomaly_service.trigger_circuit_breaker(anomaly1).await.unwrap();
+        anomaly_service
+            .trigger_circuit_breaker(anomaly1)
+            .await
+            .unwrap();
 
         let status1 = anomaly_service.get_system_status().await;
         assert!(matches!(status1, SystemStatus::PartialHalt));
@@ -123,7 +139,10 @@ mod tests {
             amount: 50_000_000,
             wallet: "GHOSTWALLET".to_string(),
         };
-        anomaly_service.trigger_circuit_breaker(anomaly2).await.unwrap();
+        anomaly_service
+            .trigger_circuit_breaker(anomaly2)
+            .await
+            .unwrap();
 
         let status2 = anomaly_service.get_system_status().await;
         assert!(matches!(status2, SystemStatus::EmergencyStop));
@@ -195,11 +214,13 @@ mod tests {
         // Should block operations when halted
         let result = middleware.check_operation_allowed().await;
         assert!(result.is_err());
-        
+
         match result.unwrap_err().kind {
-            crate::error::AppErrorKind::Domain(crate::error::DomainError::SystemHalted { .. }) => {
-            // Expected error type
-        }
+            crate::error::AppErrorKind::Domain(crate::error::DomainError::SystemHalted {
+                ..
+            }) => {
+                // Expected error type
+            }
             _ => panic!("Expected SystemHalted error"),
         }
     }
@@ -216,8 +237,14 @@ mod tests {
         let wallet = "GTESTWALLET".to_string();
 
         // Record mints that exceed limit
-        anomaly_service.record_mint_event(60_000_000, &wallet).await.unwrap();
-        anomaly_service.record_mint_event(60_000_000, &wallet).await.unwrap(); // Total: 120M
+        anomaly_service
+            .record_mint_event(60_000_000, &wallet)
+            .await
+            .unwrap();
+        anomaly_service
+            .record_mint_event(60_000_000, &wallet)
+            .await
+            .unwrap(); // Total: 120M
 
         sleep(Duration::from_millis(100)).await;
         assert!(!matches!(
@@ -229,7 +256,10 @@ mod tests {
         sleep(Duration::from_secs(3)).await;
 
         // Record new mint (should not trigger as old events expired)
-        anomaly_service.record_mint_event(30_000_000, &wallet).await.unwrap();
+        anomaly_service
+            .record_mint_event(30_000_000, &wallet)
+            .await
+            .unwrap();
         sleep(Duration::from_millis(100)).await;
 
         // System should still be halted (no auto-recovery)
@@ -247,8 +277,14 @@ mod tests {
         let wallet2 = "GWALLET2".to_string();
 
         // Each wallet under limit individually
-        anomaly_service.record_mint_event(300_000_000, &wallet1).await.unwrap(); // 300M
-        anomaly_service.record_mint_event(300_000_000, &wallet2).await.unwrap(); // 300M
+        anomaly_service
+            .record_mint_event(300_000_000, &wallet1)
+            .await
+            .unwrap(); // 300M
+        anomaly_service
+            .record_mint_event(300_000_000, &wallet2)
+            .await
+            .unwrap(); // 300M
 
         sleep(Duration::from_millis(100)).await;
 
@@ -259,7 +295,10 @@ mod tests {
         ));
 
         // One wallet exceeds limit
-        anomaly_service.record_mint_event(300_000_000, &wallet1).await.unwrap(); // Total: 600M
+        anomaly_service
+            .record_mint_event(300_000_000, &wallet1)
+            .await
+            .unwrap(); // Total: 600M
 
         sleep(Duration::from_millis(100)).await;
 
@@ -317,7 +356,7 @@ mod tests {
     async fn test_circuit_state_persistence() {
         let pool = create_test_pool().await;
         let config = AnomalyDetectionConfig::default();
-        
+
         // Create two service instances to test persistence
         let service1 = Arc::new(AnomalyDetectionService::new(pool.clone(), config.clone()));
         let service2 = Arc::new(AnomalyDetectionService::new(pool, config));
@@ -348,18 +387,18 @@ mod api_tests {
         http::{Request, StatusCode},
         Router,
     };
-    use tower::ServiceExt;
     use serde_json::json;
+    use tower::ServiceExt;
 
     #[tokio::test]
     async fn test_circuit_breaker_status_endpoint() {
         let pool = create_test_pool().await;
         let anomaly_service = Arc::new(AnomalyDetectionService::new(pool, Default::default()));
-        
-        let app = Router::new()
-            .nest("/api/admin/circuit-breaker", 
-                crate::api::admin::circuit_breaker::create_router(anomaly_service)
-            );
+
+        let app = Router::new().nest(
+            "/api/admin/circuit-breaker",
+            crate::api::admin::circuit_breaker::create_router(anomaly_service),
+        );
 
         // Test status endpoint
         let request = Request::builder()
@@ -375,11 +414,11 @@ mod api_tests {
     async fn test_emergency_stop_endpoint() {
         let pool = create_test_pool().await;
         let anomaly_service = Arc::new(AnomalyDetectionService::new(pool, Default::default()));
-        
-        let app = Router::new()
-            .nest("/api/admin/circuit-breaker", 
-                crate::api::admin::circuit_breaker::create_router(anomaly_service)
-            );
+
+        let app = Router::new().nest(
+            "/api/admin/circuit-breaker",
+            crate::api::admin::circuit_breaker::create_router(anomaly_service),
+        );
 
         let emergency_request = json!({
             "reason": "Test emergency stop",
@@ -395,7 +434,7 @@ mod api_tests {
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
-        
+
         // In development mode without auth codes, this should succeed
         assert_eq!(response.status(), StatusCode::OK);
     }
@@ -404,11 +443,11 @@ mod api_tests {
     async fn test_dashboard_status_endpoint() {
         let pool = create_test_pool().await;
         let anomaly_service = Arc::new(AnomalyDetectionService::new(pool, Default::default()));
-        
-        let app = Router::new()
-            .nest("/api/admin/dashboard", 
-                crate::api::admin::dashboard::create_router(anomaly_service)
-            );
+
+        let app = Router::new().nest(
+            "/api/admin/dashboard",
+            crate::api::admin::dashboard::create_router(anomaly_service),
+        );
 
         let request = Request::builder()
             .uri("/api/admin/dashboard/status")

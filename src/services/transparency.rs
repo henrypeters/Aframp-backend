@@ -108,11 +108,14 @@ impl TransparencyService {
     /// `transparency_key_hex` must be a 64-character lowercase hex string
     /// representing the 32-byte Ed25519 seed.  If `None` or empty a random
     /// ephemeral key is generated (useful for development).
-    pub fn new(pool: PgPool, transparency_key_hex: Option<String>) -> Result<Self, TransparencyError> {
+    pub fn new(
+        pool: PgPool,
+        transparency_key_hex: Option<String>,
+    ) -> Result<Self, TransparencyError> {
         let signing_key = match transparency_key_hex.as_deref() {
             Some(hex) if hex.len() == 64 => {
-                let bytes = hex::decode(hex)
-                    .map_err(|e| TransparencyError::SigningKey(e.to_string()))?;
+                let bytes =
+                    hex::decode(hex).map_err(|e| TransparencyError::SigningKey(e.to_string()))?;
                 let arr: [u8; 32] = bytes
                     .try_into()
                     .map_err(|_| TransparencyError::SigningKey("key must be 32 bytes".into()))?;
@@ -153,7 +156,10 @@ impl TransparencyService {
     }
 
     /// Fetch historical snapshots for the given number of days.
-    pub async fn get_history(&self, days: u32) -> Result<TransparencyHistoryResponse, TransparencyError> {
+    pub async fn get_history(
+        &self,
+        days: u32,
+    ) -> Result<TransparencyHistoryResponse, TransparencyError> {
         let rows: Vec<ReserveRow> = sqlx::query_as(
             r#"
             SELECT total_supply, total_reserves, collateral_ratio, audit_link, recorded_at
@@ -176,7 +182,10 @@ impl TransparencyService {
             })
             .collect();
 
-        Ok(TransparencyHistoryResponse { period_days: days, data_points })
+        Ok(TransparencyHistoryResponse {
+            period_days: days,
+            data_points,
+        })
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

@@ -13,8 +13,8 @@ mod tests {
             EncryptedEnvelope, ALG_ECDH_ES_A256KW, ENC_A256GCM,
         },
         keys::{
-            aes_kw_wrap, ecdh_derive_kek, is_sensitive_field, EncryptionError, KeyStatus,
-            KeyStore, PlatformKeyVersion, SENSITIVE_FIELDS,
+            aes_kw_wrap, ecdh_derive_kek, is_sensitive_field, EncryptionError, KeyStatus, KeyStore,
+            PlatformKeyVersion, SENSITIVE_FIELDS,
         },
     };
 
@@ -43,7 +43,10 @@ mod tests {
         ct_tag[0] ^= 0xFF;
 
         let result = aes_gcm_decrypt(&key, &nonce, &ct_tag);
-        assert!(matches!(result, Err(EncryptionError::AuthTagVerificationFailed)));
+        assert!(matches!(
+            result,
+            Err(EncryptionError::AuthTagVerificationFailed)
+        ));
     }
 
     #[test]
@@ -57,7 +60,10 @@ mod tests {
         ct_tag[len - 1] ^= 0xFF;
 
         let result = aes_gcm_decrypt(&key, &nonce, &ct_tag);
-        assert!(matches!(result, Err(EncryptionError::AuthTagVerificationFailed)));
+        assert!(matches!(
+            result,
+            Err(EncryptionError::AuthTagVerificationFailed)
+        ));
     }
 
     #[test]
@@ -95,7 +101,10 @@ mod tests {
         let store = KeyStore::new(vec![active]).unwrap();
 
         let result = store.get_for_decryption("v99");
-        assert!(matches!(result, Err(EncryptionError::KeyVersionNotFound(_))));
+        assert!(matches!(
+            result,
+            Err(EncryptionError::KeyVersionNotFound(_))
+        ));
     }
 
     #[test]
@@ -215,7 +224,8 @@ mod tests {
             v
         };
 
-        let decrypted = aes_gcm_decrypt(&decrypted_session_key, &nonce_bytes, &ct_tag_bytes).unwrap();
+        let decrypted =
+            aes_gcm_decrypt(&decrypted_session_key, &nonce_bytes, &ct_tag_bytes).unwrap();
         assert_eq!(decrypted.as_slice(), plaintext);
     }
 

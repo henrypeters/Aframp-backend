@@ -1,4 +1,3 @@
-
 use crate::analytics::models::DateRangeParams;
 use chrono::Utc;
 
@@ -66,9 +65,9 @@ fn delta_zero_yesterday_no_panic() {
 
 #[cfg(test)]
 mod tests {
-    use super::super::models::*;
-    use super::super::health::*;
     use super::super::anomaly::*;
+    use super::super::health::*;
+    use super::super::models::*;
 
     #[test]
     fn test_snapshot_period_as_str() {
@@ -119,7 +118,7 @@ mod tests {
         let failures = 50i64;
         let error_rate = failures as f64 / total as f64;
         assert_eq!(error_rate, 0.05);
-        
+
         // Score calculation: 100 at 0% errors, 0 at 10%+ errors
         let score = ((1.0 - (error_rate * 10.0).min(1.0)) * 100.0).round() as i32;
         assert_eq!(score, 50); // 5% error rate = 50 score
@@ -146,13 +145,12 @@ mod tests {
 
         let weights = (0.30, 0.20, 0.15, 0.20, 0.15);
 
-        let health_score = (
-            error_rate_score * weights.0 +
-            rate_limit_score * weights.1 +
-            auth_failure_score * weights.2 +
-            webhook_delivery_score * weights.3 +
-            activity_recency_score * weights.4
-        ).round() as i32;
+        let health_score = (error_rate_score * weights.0
+            + rate_limit_score * weights.1
+            + auth_failure_score * weights.2
+            + webhook_delivery_score * weights.3
+            + activity_recency_score * weights.4)
+            .round() as i32;
 
         assert_eq!(health_score, 88);
     }
@@ -193,5 +191,4 @@ mod tests {
         let is_at_risk = health_score < at_risk_threshold;
         assert!(!is_at_risk);
     }
-
 }

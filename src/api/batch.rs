@@ -194,14 +194,20 @@ pub async fn create_cngn_transfer_batch(
             return error_response(
                 StatusCode::BAD_REQUEST,
                 "INVALID_DESTINATION_WALLET",
-                &format!("Item {}: invalid Stellar address '{}'", i, item.destination_wallet),
+                &format!(
+                    "Item {}: invalid Stellar address '{}'",
+                    i, item.destination_wallet
+                ),
             );
         }
         if parse_positive_decimal(&item.amount_cngn).is_none() {
             return error_response(
                 StatusCode::BAD_REQUEST,
                 "INVALID_AMOUNT",
-                &format!("Item {}: amount_cngn '{}' is not a valid positive decimal", i, item.amount_cngn),
+                &format!(
+                    "Item {}: amount_cngn '{}' is not a valid positive decimal",
+                    i, item.amount_cngn
+                ),
             );
         }
     }
@@ -341,7 +347,10 @@ pub async fn create_fiat_payout_batch(
             return error_response(
                 StatusCode::BAD_REQUEST,
                 "INVALID_AMOUNT",
-                &format!("Item {}: amount_ngn '{}' is not a valid positive decimal", i, item.amount_ngn),
+                &format!(
+                    "Item {}: amount_ngn '{}' is not a valid positive decimal",
+                    i, item.amount_ngn
+                ),
             );
         }
     }

@@ -174,7 +174,10 @@ fn cached_json<T: Serialize>(body: T) -> Response {
     (
         StatusCode::OK,
         [
-            (header::CACHE_CONTROL, "public, max-age=60, stale-while-revalidate=30"),
+            (
+                header::CACHE_CONTROL,
+                "public, max-age=60, stale-while-revalidate=30",
+            ),
             (header::CONTENT_TYPE, "application/json"),
         ],
         Json(body),
@@ -213,22 +216,14 @@ pub async fn get_supply(State(state): State<Arc<TransparencyState>>) -> Response
 
     let (supply_str, status, last_verified) = match snap {
         Some(ref s) => {
-            let ratio: f64 = s
-                .collateralisation_ratio
-                .to_string()
-                .parse()
-                .unwrap_or(0.0);
+            let ratio: f64 = s.collateralisation_ratio.to_string().parse().unwrap_or(0.0);
             (
                 s.circulating_supply.to_string(),
                 BackingStatus::from_ratio(ratio),
                 s.snapshot_at,
             )
         }
-        None => (
-            "0".to_string(),
-            BackingStatus::Unverified,
-            Utc::now(),
-        ),
+        None => ("0".to_string(), BackingStatus::Unverified, Utc::now()),
     };
 
     let payload = SupplyResponse {
@@ -387,9 +382,8 @@ pub fn load_signing_key() -> Arc<ed25519_dalek::SigningKey> {
     use ed25519_dalek::SigningKey;
 
     let key = if let Ok(hex_seed) = std::env::var("TRANSPARENCY_SIGNING_KEY_HEX") {
-        let bytes = hex::decode(hex_seed.trim()).expect(
-            "TRANSPARENCY_SIGNING_KEY_HEX must be 64 hex chars (32-byte Ed25519 seed)",
-        );
+        let bytes = hex::decode(hex_seed.trim())
+            .expect("TRANSPARENCY_SIGNING_KEY_HEX must be 64 hex chars (32-byte Ed25519 seed)");
         let arr: [u8; 32] = bytes
             .try_into()
             .expect("TRANSPARENCY_SIGNING_KEY_HEX must decode to exactly 32 bytes");

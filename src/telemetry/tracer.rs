@@ -7,9 +7,7 @@ use opentelemetry_sdk::{
     Resource,
 };
 use tracing_opentelemetry::OpenTelemetryLayer;
-use tracing_subscriber::{
-    fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
-};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 /// Configuration for the OpenTelemetry tracer loaded from environment variables.
 #[derive(Debug, Clone)]
@@ -30,8 +28,7 @@ impl TracingConfig {
         Self {
             service_name: std::env::var("OTEL_SERVICE_NAME")
                 .unwrap_or_else(|_| "aframp-backend".into()),
-            environment: std::env::var("APP_ENV")
-                .unwrap_or_else(|_| "development".into()),
+            environment: std::env::var("APP_ENV").unwrap_or_else(|_| "development".into()),
             sampling_rate: std::env::var("OTEL_SAMPLING_RATE")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -87,9 +84,7 @@ pub fn init_tracer(config: &TracingConfig) -> anyhow::Result<()> {
     //  1. JSON formatter that includes trace_id / span_id fields for log correlation.
     //  2. OpenTelemetry layer that bridges tracing spans → OTLP.
     //  3. EnvFilter respecting RUST_LOG.
-    let otel_layer = OpenTelemetryLayer::new(
-        tracer_provider.tracer(config.service_name.clone()),
-    );
+    let otel_layer = OpenTelemetryLayer::new(tracer_provider.tracer(config.service_name.clone()));
 
     let fmt_layer = fmt::layer()
         .json()
@@ -98,8 +93,7 @@ pub fn init_tracer(config: &TracingConfig) -> anyhow::Result<()> {
         .with_current_span(true)
         .with_span_list(false);
 
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
         .with(env_filter)

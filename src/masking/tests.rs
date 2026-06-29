@@ -7,7 +7,10 @@ mod integration {
     use crate::masking::{
         engine::{mask_json_value, mask_log_event, MaskingStrategy},
         patterns::scan_and_redact,
-        response::{mask_consumer_response, redact_error_response, validate_debug_mode_disabled_in_production},
+        response::{
+            mask_consumer_response, redact_error_response,
+            validate_debug_mode_disabled_in_production,
+        },
         rules::RuleStore,
         tracing_layer::{mask_span_attributes, safe_metric_label},
     };
@@ -88,7 +91,8 @@ mod integration {
 
     #[test]
     fn test_error_response_no_stack_trace() {
-        let body = json!({"message": "error", "stack_trace": "line 42", "db_error": "syntax error"});
+        let body =
+            json!({"message": "error", "stack_trace": "line 42", "db_error": "syntax error"});
         let redacted = redact_error_response(body);
         assert!(redacted.get("stack_trace").is_none());
         assert!(redacted.get("db_error").is_none());

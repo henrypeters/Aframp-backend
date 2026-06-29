@@ -92,7 +92,8 @@ impl AdminAuditRepository {
             FROM admin_audit_trail at
             LEFT JOIN admin_accounts a ON at.admin_id = a.id
             WHERE 1=1
-        "#.to_string();
+        "#
+        .to_string();
 
         let mut params = Vec::new();
         let mut param_index = 1;
@@ -119,7 +120,11 @@ impl AdminAuditRepository {
         }
 
         query.push_str(" ORDER BY at.timestamp DESC");
-        query.push_str(&format!(" LIMIT ${} OFFSET ${}", param_index, param_index + 1));
+        query.push_str(&format!(
+            " LIMIT ${} OFFSET ${}",
+            param_index,
+            param_index + 1
+        ));
 
         let mut query_builder = sqlx::query_as::<_, AdminAuditTrailDetailed>(&query);
 
@@ -149,7 +154,9 @@ impl AdminAuditRepository {
         Ok(results)
     }
 
-    pub async fn verify_audit_trail_integrity(&self) -> Result<AuditTrailVerificationResult, DatabaseError> {
+    pub async fn verify_audit_trail_integrity(
+        &self,
+    ) -> Result<AuditTrailVerificationResult, DatabaseError> {
         let total_entries = sqlx::query_scalar!("SELECT COUNT(*) FROM admin_audit_trail")
             .fetch_one(&self.pool)
             .await
@@ -167,17 +174,19 @@ impl AdminAuditRepository {
             });
         }
 
-        let first_sequence = sqlx::query_scalar!("SELECT MIN(sequence_number) FROM admin_audit_trail")
-            .fetch_one(&self.pool)
-            .await
-            .map_err(DatabaseError::from_sqlx)?
-            .unwrap_or(0);
+        let first_sequence =
+            sqlx::query_scalar!("SELECT MIN(sequence_number) FROM admin_audit_trail")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(DatabaseError::from_sqlx)?
+                .unwrap_or(0);
 
-        let last_sequence = sqlx::query_scalar!("SELECT MAX(sequence_number) FROM admin_audit_trail")
-            .fetch_one(&self.pool)
-            .await
-            .map_err(DatabaseError::from_sqlx)?
-            .unwrap_or(0);
+        let last_sequence =
+            sqlx::query_scalar!("SELECT MAX(sequence_number) FROM admin_audit_trail")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(DatabaseError::from_sqlx)?
+                .unwrap_or(0);
 
         // Check hash chain integrity
         let tampered_entries = sqlx::query_as!(
@@ -254,7 +263,10 @@ impl AdminPermissionRepository {
         Ok(permissions)
     }
 
-    pub async fn get_permissions_by_role(&self, role: AdminRole) -> Result<Vec<AdminPermission>, DatabaseError> {
+    pub async fn get_permissions_by_role(
+        &self,
+        role: AdminRole,
+    ) -> Result<Vec<AdminPermission>, DatabaseError> {
         let permissions = sqlx::query_as!(
             AdminPermission,
             r#"
@@ -273,7 +285,11 @@ impl AdminPermissionRepository {
         Ok(permissions)
     }
 
-    pub async fn check_permission(&self, role: AdminRole, permission_name: &str) -> Result<bool, DatabaseError> {
+    pub async fn check_permission(
+        &self,
+        role: AdminRole,
+        permission_name: &str,
+    ) -> Result<bool, DatabaseError> {
         // Super admin has all permissions
         if matches!(role, AdminRole::SuperAdmin) {
             return Ok(true);
@@ -334,7 +350,12 @@ impl AdminPermissionRepository {
         Ok(configs)
     }
 
-    pub async fn grant_permission(&self, role: AdminRole, permission_id: Uuid, granted_by: Uuid) -> Result<(), DatabaseError> {
+    pub async fn grant_permission(
+        &self,
+        role: AdminRole,
+        permission_id: Uuid,
+        granted_by: Uuid,
+    ) -> Result<(), DatabaseError> {
         sqlx::query!(
             "INSERT INTO admin_role_permissions (role, permission_id, granted_by) VALUES ($1, $2, $3) ON CONFLICT (role, permission_id) DO NOTHING",
             role as AdminRole,
@@ -348,7 +369,11 @@ impl AdminPermissionRepository {
         Ok(())
     }
 
-    pub async fn revoke_permission(&self, role: AdminRole, permission_id: Uuid) -> Result<(), DatabaseError> {
+    pub async fn revoke_permission(
+        &self,
+        role: AdminRole,
+        permission_id: Uuid,
+    ) -> Result<(), DatabaseError> {
         sqlx::query!(
             "DELETE FROM admin_role_permissions WHERE role = $1 AND permission_id = $2",
             role as AdminRole,
@@ -374,7 +399,10 @@ impl AdminPermissionRepository {
         Ok(count)
     }
 
-    pub async fn can_create_account_for_role(&self, role: AdminRole) -> Result<bool, DatabaseError> {
+    pub async fn can_create_account_for_role(
+        &self,
+        role: AdminRole,
+    ) -> Result<bool, DatabaseError> {
         let config = self.get_role_config(role).await?;
         let current_count = self.count_accounts_by_role(role).await?;
         Ok(current_count < config.max_accounts as i64)
@@ -427,7 +455,10 @@ impl AdminSecurityEventRepository {
         })
     }
 
-    pub async fn get_unresolved_events(&self, severity_filter: Option<&str>) -> Result<Vec<AdminSecurityEvent>, DatabaseError> {
+    pub async fn get_unresolved_events(
+        &self,
+        severity_filter: Option<&str>,
+    ) -> Result<Vec<AdminSecurityEvent>, DatabaseError> {
         let mut query = r#"
             SELECT id, admin_id, event_type, event_data, severity, resolved, resolved_by, resolved_at, created_at
             FROM admin_security_events
@@ -448,7 +479,11 @@ impl AdminSecurityEventRepository {
         Ok(events)
     }
 
-    pub async fn resolve_security_event(&self, event_id: Uuid, resolved_by: Uuid) -> Result<(), DatabaseError> {
+    pub async fn resolve_security_event(
+        &self,
+        event_id: Uuid,
+        resolved_by: Uuid,
+    ) -> Result<(), DatabaseError> {
         sqlx::query!(
             "UPDATE admin_security_events SET resolved = true, resolved_by = $1, resolved_at = NOW() WHERE id = $2",
             resolved_by,

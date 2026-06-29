@@ -560,15 +560,7 @@ mod tests {
         ];
         let body = br#"{"amount":"500"}"#;
 
-        let sig_header = sign_request(
-            HmacAlgorithm::Sha256,
-            "POST",
-            "/api/onramp/quote",
-            "",
-            headers_slice,
-            body,
-            secret,
-        );
+        let sig_header = sign_request($$$).unwrap();
         let parsed = parse_signature_header_pub(&sig_header).unwrap();
 
         let signing_key = derive_signing_key(secret);
@@ -598,15 +590,7 @@ mod tests {
         let original_body = br#"{"amount":"100"}"#;
         let tampered_body = br#"{"amount":"9999"}"#;
 
-        let sig_header = sign_request(
-            HmacAlgorithm::Sha256,
-            "POST",
-            "/api/onramp/quote",
-            "",
-            headers_slice,
-            original_body,
-            secret,
-        );
+        let sig_header = sign_request($$$).unwrap();
         let parsed = parse_signature_header_pub(&sig_header).unwrap();
 
         let signing_key = derive_signing_key(secret);

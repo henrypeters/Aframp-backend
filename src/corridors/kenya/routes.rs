@@ -2,7 +2,10 @@
 
 use crate::corridors::kenya::handlers::*;
 use crate::corridors::kenya::webhook::{handle_mpesa_kenya_webhook, KenyaWebhookState};
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use std::sync::Arc;
 
 pub fn kenya_corridor_router(state: Arc<KenyaCorridorState>) -> Router {

@@ -1,11 +1,11 @@
 use crate::cache::cache::Cache;
 use crate::cache::RedisCache;
-use crate::chains::stellar::client::StellarClient;
+// REMOVED: use crate::chains::stellar::client::StellarClient;
 use crate::database::repository::Repository;
 use crate::database::transaction_repository::TransactionRepository;
 use crate::error::{AppError, AppErrorKind, DomainError, ValidationError};
 use crate::payments::factory::PaymentProviderFactory;
-use crate::payments::types::{StatusRequest, PaymentState};
+use crate::payments::types::{PaymentState, StatusRequest};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -45,7 +45,11 @@ impl OnrampStatusService {
     }
 
     /// Get status for a transaction with ownership verification
-    pub async fn get_status(&self, tx_id: &str, requesting_wallet: Option<&str>) -> Result<OnrampStatusResponse, AppError> {
+    pub async fn get_status(
+        &self,
+        tx_id: &str,
+        requesting_wallet: Option<&str>,
+    ) -> Result<OnrampStatusResponse, AppError> {
         // Validate transaction ID format
         if let Err(_) = Uuid::parse_str(tx_id) {
             return Err(AppError::new(AppErrorKind::Validation(
@@ -59,50 +63,54 @@ impl OnrampStatusService {
 
         // Check cache first
         let cache_key = format!("api:onramp:status:{}", tx_id);
-        let cached_result: Result<Option<OnrampStatusResponse>, _> = self.cache.get(&cache_key).await;
-        
+        let cached_result: Result<Option<OnrampStatusResponse>, _> =
+            self.cache.get(&cache_key).await;
+
         if let Ok(Some(cached)) = cached_result {
             debug!("Cache hit for onramp status: {}", tx_id);
-            
+
             // Still need to verify ownership for cached responses
             if let Some(wallet) = requesting_wallet {
                 if cached.transaction.wallet_address != wallet {
-                    return Err(AppError::new(AppErrorKind::Domain(DomainError::Forbidden {
-                        message: "Transaction does not belong to the requesting wallet".to_string(),
-                    })));
+                    return Err(AppError::new(AppErrorKind::Domain(
+                        DomainError::Forbidden {
+                            message: "Transaction does not belong to the requesting wallet"
+                                .to_string(),
+                        },
+                    )));
                 }
             }
-            
+
             return Ok(cached);
         }
 
         // Fetch from database
-        let transaction = self
-            .transaction_repo
-            .find_by_id(tx_id)
-            .await
-            .map_err(|e| {
-                error!("Failed to fetch transaction: {}", e);
-                AppError::new(AppErrorKind::Domain(DomainError::TransactionNotFound {
-                    transaction_id: tx_id.to_string(),
-                }))
-            })?;
+        let transaction = self.transaction_repo.find_by_id(tx_id).await.map_err(|e| {
+            error!("Failed to fetch transaction: {}", e);
+            AppError::new(AppErrorKind::Domain(DomainError::TransactionNotFound {
+                transaction_id: tx_id.to_string(),
+            }))
+        })?;
 
         let tx = match transaction {
             Some(tx) => tx,
             None => {
-                return Err(AppError::new(AppErrorKind::Domain(DomainError::TransactionNotFound {
-                    transaction_id: tx_id.to_string(),
-                })));
+                return Err(AppError::new(AppErrorKind::Domain(
+                    DomainError::TransactionNotFound {
+                        transaction_id: tx_id.to_string(),
+                    },
+                )));
             }
         };
 
         // Verify ownership if wallet is provided
         if let Some(wallet) = requesting_wallet {
             if tx.wallet_address != wallet {
-                return Err(AppError::new(AppErrorKind::Domain(DomainError::Forbidden {
-                    message: "Transaction does not belong to the requesting wallet".to_string(),
-                })));
+                return Err(AppError::new(AppErrorKind::Domain(
+                    DomainError::Forbidden {
+                        message: "Transaction does not belong to the requesting wallet".to_string(),
+                    },
+                )));
             }
         }
 
@@ -190,10 +198,14 @@ impl OnrampStatusService {
         let provider_name = provider.as_ref()?;
         let payment_reference = reference.as_ref()?;
 
-        debug!("Checking provider status for {} with reference {}", provider_name, payment_reference);
+        debug!(
+            "Checking provider status for {} with reference {}",
+            provider_name, payment_reference
+        );
 
         // Get provider instance
-        let provider_name_enum = match provider_name.parse::<crate::payments::types::ProviderName>() {
+        let provider_name_enum = match provider_name.parse::<crate::payments::types::ProviderName>()
+        {
             Ok(name) => name,
             Err(e) => {
                 warn!("Invalid provider name {}: {}", provider_name, e);
@@ -210,7 +222,10 @@ impl OnrampStatusService {
         let provider_instance = match self.payment_factory.get_provider(provider_name_enum) {
             Ok(provider) => provider,
             Err(e) => {
-                warn!("Failed to get provider instance for {}: {}", provider_name, e);
+                warn!(
+                    "Failed to get provider instance for {}: {}",
+                    provider_name, e
+                );
                 return Some(ProviderStatus {
                     confirmed: false,
                     reference: payment_reference.clone(),
@@ -231,12 +246,16 @@ impl OnrampStatusService {
         let timeout_duration = Duration::from_secs(10);
         let provider_result = tokio::time::timeout(
             timeout_duration,
-            provider_instance.get_payment_status(status_request)
-        ).await;
+            provider_instance.get_payment_status(status_request),
+        )
+        .await;
 
         match provider_result {
             Ok(Ok(status_response)) => {
-                let confirmed = matches!(status_response.state, PaymentState::Completed | PaymentState::Confirmed);
+                let confirmed = matches!(
+                    status_response.state,
+                    PaymentState::Completed | PaymentState::Confirmed
+                );
                 Some(ProviderStatus {
                     confirmed,
                     reference: payment_reference.clone(),
@@ -246,7 +265,10 @@ impl OnrampStatusService {
                 })
             }
             Ok(Err(e)) => {
-                warn!("Provider status check failed for {}: {}", payment_reference, e);
+                warn!(
+                    "Provider status check failed for {}: {}",
+                    payment_reference, e
+                );
                 Some(ProviderStatus {
                     confirmed: false,
                     reference: payment_reference.clone(),
@@ -269,10 +291,7 @@ impl OnrampStatusService {
     }
 
     /// Check blockchain status with Stellar Horizon
-    async fn check_blockchain_status(
-        &self,
-        tx_hash: &Option<String>,
-    ) -> Option<BlockchainStatus> {
+    async fn check_blockchain_status(&self, tx_hash: &Option<String>) -> Option<BlockchainStatus> {
         let hash = tx_hash.as_ref()?;
 
         debug!("Checking blockchain status for transaction {}", hash);
@@ -443,9 +462,12 @@ fn map_status_to_stage(status: &str) -> TransactionStage {
 /// Get human-readable status message
 fn get_status_message(status: &str, provider: &Option<String>) -> String {
     let provider_name = provider.as_deref().unwrap_or("payment provider");
-    
+
     match status {
-        "pending" => format!("Waiting for your payment to be confirmed by {}.", provider_name),
+        "pending" => format!(
+            "Waiting for your payment to be confirmed by {}.",
+            provider_name
+        ),
         "processing" => "Payment confirmed. Sending cNGN to your wallet.".to_string(),
         "completed" => "cNGN has been sent to your wallet successfully.".to_string(),
         "failed" => "Transaction failed. Please contact support.".to_string(),

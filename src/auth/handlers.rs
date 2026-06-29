@@ -1,11 +1,6 @@
 use std::sync::Arc;
 
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -93,7 +88,6 @@ fn auth_error(status: u16, code: &'static str, message: &'static str) -> axum::r
         .into_response()
 }
 
-
 // ── Scope resolution ──────────────────────────────────────────────────────────
 
 fn resolve_scope(wallet_address: &str) -> Scope {
@@ -128,7 +122,11 @@ pub async fn generate_token(
     // Reject stale requests (> 5 minutes)
     let now = Utc::now().timestamp();
     if (now - payload.timestamp).abs() > 300 {
-        return auth_error(400, "VALIDATION_ERROR", "timestamp is too old or in the future");
+        return auth_error(
+            400,
+            "VALIDATION_ERROR",
+            "timestamp is too old or in the future",
+        );
     }
 
     // Verify wallet signature
@@ -139,10 +137,18 @@ pub async fn generate_token(
     ) {
         Ok(true) => {}
         Ok(false) => {
-            return auth_error(401, "INVALID_SIGNATURE", "Wallet signature verification failed");
+            return auth_error(
+                401,
+                "INVALID_SIGNATURE",
+                "Wallet signature verification failed",
+            );
         }
         Err(_) => {
-            return auth_error(400, "INVALID_WALLET", "Invalid wallet address or signature format");
+            return auth_error(
+                400,
+                "INVALID_WALLET",
+                "Invalid wallet address or signature format",
+            );
         }
     }
 
@@ -197,7 +203,11 @@ pub async fn refresh_token(
     let claims = match validate_token(&payload.refresh_token, &state.jwt_secret) {
         Ok(c) => c,
         Err(JwtError::TokenExpired) => {
-            return auth_error(401, "TOKEN_EXPIRED", "Refresh token has expired. Please re-authenticate.");
+            return auth_error(
+                401,
+                "TOKEN_EXPIRED",
+                "Refresh token has expired. Please re-authenticate.",
+            );
         }
         Err(_) => {
             return auth_error(401, "INVALID_TOKEN", "Invalid refresh token");
@@ -206,7 +216,11 @@ pub async fn refresh_token(
 
     // Must be a refresh token
     if claims.token_type != TokenType::Refresh {
-        return auth_error(400, "INVALID_TOKEN", "Provided token is not a refresh token");
+        return auth_error(
+            400,
+            "INVALID_TOKEN",
+            "Provided token is not a refresh token",
+        );
     }
 
     // Check revocation in Redis
@@ -237,7 +251,9 @@ pub async fn refresh_token(
         let (new_refresh_str, new_refresh_claims) =
             match generate_refresh_token(&claims.sub, claims.scope.clone(), &state.jwt_secret) {
                 Ok(t) => t,
-                Err(_) => return auth_error(500, "INTERNAL_ERROR", "Failed to generate refresh token"),
+                Err(_) => {
+                    return auth_error(500, "INTERNAL_ERROR", "Failed to generate refresh token")
+                }
             };
         let jti = new_refresh_claims.jti.as_deref().unwrap_or("");
         let record = RefreshTokenRecord {
@@ -314,7 +330,13 @@ pub async fn revoke_token(
     // Revoke the specific refresh token provided in the body
     let token_str = match &payload.token {
         Some(t) => t.clone(),
-        None => return auth_error(400, "VALIDATION_ERROR", "token is required when revoke_all is false"),
+        None => {
+            return auth_error(
+                400,
+                "VALIDATION_ERROR",
+                "token is required when revoke_all is false",
+            )
+        }
     };
 
     let token_claims = match validate_token(&token_str, &state.jwt_secret) {
@@ -324,11 +346,19 @@ pub async fn revoke_token(
 
     // Ensure the caller owns this token
     if token_claims.sub != caller_claims.sub {
-        return auth_error(403, "FORBIDDEN", "Cannot revoke a token belonging to another wallet");
+        return auth_error(
+            403,
+            "FORBIDDEN",
+            "Cannot revoke a token belonging to another wallet",
+        );
     }
 
     if token_claims.token_type != TokenType::Refresh {
-        return auth_error(400, "INVALID_TOKEN", "Only refresh tokens can be explicitly revoked");
+        return auth_error(
+            400,
+            "INVALID_TOKEN",
+            "Only refresh tokens can be explicitly revoked",
+        );
     }
 
     let jti = match &token_claims.jti {
@@ -355,7 +385,10 @@ fn parse_scope(scope: Option<&str>) -> Scope {
 
 fn jwt_error_response(err: JwtError) -> (StatusCode, Json<serde_json::Value>) {
     let status = match err {
-        JwtError::MissingToken | JwtError::InvalidToken | JwtError::TokenExpired | JwtError::TokenRevoked => StatusCode::UNAUTHORIZED,
+        JwtError::MissingToken
+        | JwtError::InvalidToken
+        | JwtError::TokenExpired
+        | JwtError::TokenRevoked => StatusCode::UNAUTHORIZED,
         JwtError::InsufficientPermissions { .. } => StatusCode::FORBIDDEN,
         JwtError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
     };

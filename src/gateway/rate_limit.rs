@@ -43,7 +43,12 @@ impl GatewayRateLimiter {
         self.check(&self.key_windows, prefix, self.key_limit)
     }
 
-    fn check(&self, map: &Arc<Mutex<HashMap<String, Window>>>, key: &str, limit: u64) -> Result<u64, ()> {
+    fn check(
+        &self,
+        map: &Arc<Mutex<HashMap<String, Window>>>,
+        key: &str,
+        limit: u64,
+    ) -> Result<u64, ()> {
         let mut guard = map.lock().unwrap();
         let entry = guard.entry(key.to_string()).or_default();
         let now = Instant::now();

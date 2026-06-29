@@ -24,8 +24,9 @@
 
 pub mod envelope;
 pub mod keys;
-pub mod middleware;
+pub mod hybrid_signer;
 pub mod metrics;
+pub mod middleware;
 
 #[cfg(test)]
 pub mod tests;

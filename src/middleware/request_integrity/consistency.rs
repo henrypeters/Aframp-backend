@@ -18,17 +18,25 @@ pub async fn validate_consistency(
     match endpoint {
         IntegrityEndpoint::OnrampInitiate => validate_onramp_consistency(payload, ctx),
         IntegrityEndpoint::OfframpInitiate => validate_offramp_consistency(payload, ctx),
-        IntegrityEndpoint::BatchCngnTransfer => validate_batch_cngn_consistency(payload, state, ctx).await,
+        IntegrityEndpoint::BatchCngnTransfer => {
+            validate_batch_cngn_consistency(payload, state, ctx).await
+        }
         IntegrityEndpoint::BatchFiatPayout => Ok(()),
     }
 }
 
-fn validate_onramp_consistency(payload: &Value, ctx: &ValidationContext) -> Result<(), IntegrityError> {
+fn validate_onramp_consistency(
+    payload: &Value,
+    ctx: &ValidationContext,
+) -> Result<(), IntegrityError> {
     let Some(quote) = &ctx.stored_quote else {
         return Ok(());
     };
 
-    let wallet_address = payload.get("wallet_address").and_then(Value::as_str).unwrap_or_default();
+    let wallet_address = payload
+        .get("wallet_address")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     if quote.wallet_address != wallet_address {
         return Err(IntegrityError::consistency(
             "QUOTE_WALLET_MISMATCH",
@@ -37,7 +45,10 @@ fn validate_onramp_consistency(payload: &Value, ctx: &ValidationContext) -> Resu
         ));
     }
 
-    let provider = payload.get("payment_provider").and_then(Value::as_str).unwrap_or_default();
+    let provider = payload
+        .get("payment_provider")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     if !quote.provider.eq_ignore_ascii_case(provider) {
         return Err(IntegrityError::consistency(
             "QUOTE_PROVIDER_MISMATCH",
@@ -49,11 +60,17 @@ fn validate_onramp_consistency(payload: &Value, ctx: &ValidationContext) -> Resu
     Ok(())
 }
 
-fn validate_offramp_consistency(payload: &Value, ctx: &ValidationContext) -> Result<(), IntegrityError> {
+fn validate_offramp_consistency(
+    payload: &Value,
+    ctx: &ValidationContext,
+) -> Result<(), IntegrityError> {
     let Some(quote) = &ctx.stored_quote else {
         return Ok(());
     };
-    let wallet_address = payload.get("wallet_address").and_then(Value::as_str).unwrap_or_default();
+    let wallet_address = payload
+        .get("wallet_address")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     if quote.wallet_address != wallet_address {
         return Err(IntegrityError::consistency(
             "QUOTE_WALLET_MISMATCH",
@@ -88,16 +105,20 @@ async fn validate_batch_cngn_consistency(
     let wallet = repo
         .find_by_account(source_wallet)
         .await
-        .map_err(|_| IntegrityError::consistency(
-            "SOURCE_WALLET_LOOKUP_FAILED",
-            "source_wallet balance could not be validated",
-            Some("source_wallet".to_string()),
-        ))?
-        .ok_or_else(|| IntegrityError::consistency(
-            "SOURCE_WALLET_NOT_FOUND",
-            "source_wallet does not exist in the wallet catalogue",
-            Some("source_wallet".to_string()),
-        ))?;
+        .map_err(|_| {
+            IntegrityError::consistency(
+                "SOURCE_WALLET_LOOKUP_FAILED",
+                "source_wallet balance could not be validated",
+                Some("source_wallet".to_string()),
+            )
+        })?
+        .ok_or_else(|| {
+            IntegrityError::consistency(
+                "SOURCE_WALLET_NOT_FOUND",
+                "source_wallet does not exist in the wallet catalogue",
+                Some("source_wallet".to_string()),
+            )
+        })?;
 
     let balance = Decimal::from_str(&wallet.balance).map_err(|_| {
         IntegrityError::consistency(
@@ -134,7 +155,8 @@ mod tests {
         let ctx = ValidationContext {
             stored_quote: Some(StoredQuote {
                 quote_id: "q_1234567890abcdef1234567890abcdef".to_string(),
-                wallet_address: "GBZXN7PIRZGNMHGAI5T7R2PO4N7WFMQ7P3WG2XSEW3VOV6Q2NYV6G3SH".to_string(),
+                wallet_address: "GBZXN7PIRZGNMHGAI5T7R2PO4N7WFMQ7P3WG2XSEW3VOV6Q2NYV6G3SH"
+                    .to_string(),
                 amount_ngn: 1000,
                 amount_cngn: "1000".to_string(),
                 rate_snapshot: "1.0".to_string(),
@@ -154,4 +176,3 @@ mod tests {
         assert_eq!(err.code, "QUOTE_PROVIDER_MISMATCH");
     }
 }
-

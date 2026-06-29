@@ -4,7 +4,7 @@
 //! Uses Argon2id for hashing and maintains token families for theft detection.
 
 use argon2::{
-    password_hash::{Ident, ParamString, PasswordHash, PasswordHasher, SaltString},
+    password_hash::{Ident, ParamsString, PasswordHash, PasswordHasher, SaltString},
     Argon2, PasswordHash as ArgonPasswordHash, PasswordVerifier,
 };
 use chrono::{DateTime, Duration, Utc};
@@ -65,7 +65,7 @@ pub struct RefreshTokenRequest {
     pub consumer_id: String,
     pub client_id: String,
     pub scope: String,
-    pub family_id: Option<String>, // For rotation
+    pub family_id: Option<String>,       // For rotation
     pub parent_token_id: Option<String>, // For rotation
 }
 
@@ -87,9 +87,7 @@ impl RefreshTokenService {
     /// Generate a new refresh token with secure random bytes
     pub fn generate_token() -> String {
         let mut rng = rand::thread_rng();
-        let random_bytes: Vec<u8> = (0..REFRESH_TOKEN_LENGTH_BYTES)
-            .map(|_| rng.gen())
-            .collect();
+        let random_bytes: Vec<u8> = (0..REFRESH_TOKEN_LENGTH_BYTES).map(|_| rng.gen()).collect();
 
         // Encode as base64url for safe transmission
         base64_url::encode(&random_bytes)
@@ -110,8 +108,8 @@ impl RefreshTokenService {
 
     /// Verify a refresh token against its hash
     pub fn verify_token(token: &str, hash: &str) -> Result<bool, RefreshTokenError> {
-        let parsed_hash = PasswordHash::new(hash)
-            .map_err(|e| RefreshTokenError::InvalidHash(e.to_string()))?;
+        let parsed_hash =
+            PasswordHash::new(hash).map_err(|e| RefreshTokenError::InvalidHash(e.to_string()))?;
 
         let argon2 = Argon2::default();
         let is_valid = argon2
@@ -122,10 +120,14 @@ impl RefreshTokenService {
     }
 
     /// Create a new refresh token
-    pub fn create_token(request: RefreshTokenRequest) -> Result<RefreshTokenResponse, RefreshTokenError> {
+    pub fn create_token(
+        request: RefreshTokenRequest,
+    ) -> Result<RefreshTokenResponse, RefreshTokenError> {
         let token = Self::generate_token();
         let token_id = Uuid::new_v4().to_string();
-        let family_id = request.family_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let family_id = request
+            .family_id
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
 
         let now = Utc::now();
         let expires_in = REFRESH_TOKEN_TTL_SECS;

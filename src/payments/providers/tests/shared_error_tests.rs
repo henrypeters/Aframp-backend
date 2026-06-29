@@ -72,7 +72,10 @@ async fn flutterwave_returns_provider_error_on_400() {
         .expect_err("should fail on 400");
 
     assert!(
-        matches!(err, PaymentError::ProviderError { .. } | PaymentError::ValidationError { .. }),
+        matches!(
+            err,
+            PaymentError::ProviderError { .. } | PaymentError::ValidationError { .. }
+        ),
         "unexpected error variant: {:?}",
         err
     );
@@ -230,7 +233,10 @@ async fn flutterwave_returns_network_error_when_server_unreachable() {
         .expect_err("should fail when server is unreachable");
 
     assert!(
-        matches!(err, PaymentError::NetworkError { .. } | PaymentError::ProviderError { .. }),
+        matches!(
+            err,
+            PaymentError::NetworkError { .. } | PaymentError::ProviderError { .. }
+        ),
         "unexpected error variant: {:?}",
         err
     );
@@ -254,7 +260,10 @@ async fn paystack_returns_network_error_when_server_unreachable() {
         .expect_err("should fail when server is unreachable");
 
     assert!(
-        matches!(err, PaymentError::NetworkError { .. } | PaymentError::ProviderError { .. }),
+        matches!(
+            err,
+            PaymentError::NetworkError { .. } | PaymentError::ProviderError { .. }
+        ),
         "unexpected error variant: {:?}",
         err
     );
@@ -360,8 +369,7 @@ async fn flutterwave_handles_html_response_body_gracefully() {
     Mock::given(method("POST"))
         .and(path("/payments"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string("<html><body>Gateway Error</body></html>"),
+            ResponseTemplate::new(200).set_body_string("<html><body>Gateway Error</body></html>"),
         )
         .mount(&server)
         .await;

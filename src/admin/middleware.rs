@@ -1,6 +1,6 @@
+use crate::admin::auth::AdminAuthService;
 use crate::admin::models::*;
 use crate::admin::repositories::AdminPermissionRepository;
-use crate::admin::auth::AdminAuthService;
 use crate::error::Error;
 use axum::{
     extract::{Request, State},
@@ -45,9 +45,8 @@ pub async fn admin_auth_middleware(
         .and_then(|h| h.to_str().ok())
         .and_then(|h| h.strip_prefix("Bearer "));
 
-    let session_token = auth_header.ok_or_else(|| {
-        Error::Authentication("Missing authorization token".to_string())
-    })?;
+    let session_token = auth_header
+        .ok_or_else(|| Error::Authentication("Missing authorization token".to_string()))?;
 
     // Parse session token as UUID
     let session_id = Uuid::parse_str(session_token)
@@ -78,12 +77,18 @@ pub async fn admin_auth_middleware(
     // Get admin permissions
     let permissions = if admin.role == AdminRole::SuperAdmin {
         // Super admin has all permissions
-        state.permission_repo.get_all_permissions().await?
+        state
+            .permission_repo
+            .get_all_permissions()
+            .await?
             .into_iter()
             .map(|p| p.name)
             .collect()
     } else {
-        state.permission_repo.get_permissions_by_role(admin.role).await?
+        state
+            .permission_repo
+            .get_permissions_by_role(admin.role)
+            .await?
             .into_iter()
             .map(|p| p.name)
             .collect()
@@ -112,14 +117,19 @@ pub async fn require_permission_middleware(
     next: Next,
 ) -> Result<Response, Error> {
     // Get auth context from request extensions
-    let auth_context = request.extensions().get::<AdminAuthContext>()
+    let auth_context = request
+        .extensions()
+        .get::<AdminAuthContext>()
         .ok_or_else(|| Error::Authentication("Authentication required".to_string()))?;
 
     // Check if admin has the required permission
     let has_permission = if auth_context.role == AdminRole::SuperAdmin {
         true // Super admin has all permissions
     } else {
-        state.permission_repo.check_permission(auth_context.role, permission).await?
+        state
+            .permission_repo
+            .check_permission(auth_context.role, permission)
+            .await?
     };
 
     if !has_permission {
@@ -139,7 +149,9 @@ pub async fn require_role_middleware(
     next: Next,
 ) -> Result<Response, Error> {
     // Get auth context from request extensions
-    let auth_context = request.extensions().get::<AdminAuthContext>()
+    let auth_context = request
+        .extensions()
+        .get::<AdminAuthContext>()
         .ok_or_else(|| Error::Authentication("Authentication required".to_string()))?;
 
     // Check if admin has the required role
@@ -150,18 +162,33 @@ pub async fn require_role_middleware(
             }
         }
         AdminRole::SecurityAdmin => {
-            if !matches!(auth_context.role, AdminRole::SecurityAdmin | AdminRole::SuperAdmin) {
-                return Err(Error::Forbidden("Security admin access required".to_string()));
+            if !matches!(
+                auth_context.role,
+                AdminRole::SecurityAdmin | AdminRole::SuperAdmin
+            ) {
+                return Err(Error::Forbidden(
+                    "Security admin access required".to_string(),
+                ));
             }
         }
         AdminRole::OperationsAdmin => {
-            if !matches!(auth_context.role, AdminRole::OperationsAdmin | AdminRole::SuperAdmin) {
-                return Err(Error::Forbidden("Operations admin access required".to_string()));
+            if !matches!(
+                auth_context.role,
+                AdminRole::OperationsAdmin | AdminRole::SuperAdmin
+            ) {
+                return Err(Error::Forbidden(
+                    "Operations admin access required".to_string(),
+                ));
             }
         }
         AdminRole::ComplianceAdmin => {
-            if !matches!(auth_context.role, AdminRole::ComplianceAdmin | AdminRole::SuperAdmin) {
-                return Err(Error::Forbidden("Compliance admin access required".to_string()));
+            if !matches!(
+                auth_context.role,
+                AdminRole::ComplianceAdmin | AdminRole::SuperAdmin
+            ) {
+                return Err(Error::Forbidden(
+                    "Compliance admin access required".to_string(),
+                ));
             }
         }
         AdminRole::ReadOnlyAdmin => {
@@ -206,27 +233,37 @@ pub async fn require_compliance_admin_middleware(
 macro_rules! require_permission {
     ($permission:expr) => {
         |State(state): State<Arc<AdminAuthState>>, request: Request, next: Next| async move {
-            $crate::admin::middleware::require_permission_middleware($permission, State(state), request, next).await
+            $crate::admin::middleware::require_permission_middleware(
+                $permission,
+                State(state),
+                request,
+                next,
+            )
+            .await
         }
     };
 }
 
 // Helper function to extract auth context from request
 pub fn get_auth_context(request: &Request) -> Result<&AdminAuthContext, Error> {
-    request.extensions().get::<AdminAuthContext>()
+    request
+        .extensions()
+        .get::<AdminAuthContext>()
         .ok_or_else(|| Error::Authentication("Authentication required".to_string()))
 }
 
 // Helper function to check if current admin has specific permission
 pub fn has_permission(auth_context: &AdminAuthContext, permission: &str) -> bool {
-    auth_context.role == AdminRole::SuperAdmin || 
-    auth_context.permissions.contains(&permission.to_string())
+    auth_context.role == AdminRole::SuperAdmin
+        || auth_context.permissions.contains(&permission.to_string())
 }
 
 // Helper function to check if current admin has any of the specified permissions
 pub fn has_any_permission(auth_context: &AdminAuthContext, permissions: &[&str]) -> bool {
-    auth_context.role == AdminRole::SuperAdmin || 
-    permissions.iter().any(|p| auth_context.permissions.contains(&p.to_string()))
+    auth_context.role == AdminRole::SuperAdmin
+        || permissions
+            .iter()
+            .any(|p| auth_context.permissions.contains(&p.to_string()))
 }
 
 // Helper function to check if current admin has all of the specified permissions
@@ -234,8 +271,10 @@ pub fn has_all_permissions(auth_context: &AdminAuthContext, permissions: &[&str]
     if auth_context.role == AdminRole::SuperAdmin {
         return true;
     }
-    
-    permissions.iter().all(|p| auth_context.permissions.contains(&p.to_string()))
+
+    permissions
+        .iter()
+        .all(|p| auth_context.permissions.contains(&p.to_string()))
 }
 
 // Permission check middleware that can be used with specific endpoint patterns
@@ -245,7 +284,9 @@ pub async fn endpoint_permission_middleware(
     next: Next,
 ) -> Result<Response, Error> {
     // Get auth context from request extensions
-    let auth_context = request.extensions().get::<AdminAuthContext>()
+    let auth_context = request
+        .extensions()
+        .get::<AdminAuthContext>()
         .ok_or_else(|| Error::Authentication("Authentication required".to_string()))?;
 
     // Extract endpoint and method
@@ -260,7 +301,10 @@ pub async fn endpoint_permission_middleware(
     let has_permission = if auth_context.role == AdminRole::SuperAdmin {
         true
     } else {
-        state.permission_repo.check_permission(auth_context.role, required_permission).await?
+        state
+            .permission_repo
+            .check_permission(auth_context.role, required_permission)
+            .await?
     };
 
     if !has_permission {
@@ -281,7 +325,9 @@ pub async fn sensitive_action_middleware(
     next: Next,
 ) -> Result<Response, Error> {
     // Get auth context from request extensions
-    let auth_context = request.extensions().get::<AdminAuthContext>()
+    let auth_context = request
+        .extensions()
+        .get::<AdminAuthContext>()
         .ok_or_else(|| Error::Authentication("Authentication required".to_string()))?;
 
     // Extract endpoint and method
@@ -289,8 +335,12 @@ pub async fn sensitive_action_middleware(
     let method = request.method().as_str();
 
     // Check if this is a sensitive action
-    let action_type = format!("{}_{}", method.to_lowercase(), path.trim_start_matches("/api/admin/"));
-    
+    let action_type = format!(
+        "{}_{}",
+        method.to_lowercase(),
+        path.trim_start_matches("/api/admin/")
+    );
+
     if is_sensitive_action(&action_type) {
         // Check for sensitive action confirmation header
         let confirmation_header = request
@@ -320,11 +370,17 @@ pub async fn session_activity_middleware(
     next: Next,
 ) -> Result<Response, Error> {
     // Get auth context from request extensions
-    let auth_context = request.extensions().get::<AdminAuthContext>()
+    let auth_context = request
+        .extensions()
+        .get::<AdminAuthContext>()
         .ok_or_else(|| Error::Authentication("Authentication required".to_string()))?;
 
     // Update session last activity
-    state.auth_service.session_repo.update_last_activity(auth_context.session_id).await?;
+    state
+        .auth_service
+        .session_repo
+        .update_last_activity(auth_context.session_id)
+        .await?;
 
     // Continue with the request
     Ok(next.run(request).await)
@@ -354,20 +410,20 @@ impl AdminRateLimiter {
     pub async fn check_rate_limit(&self, admin_id: Uuid) -> Result<(), Error> {
         let mut requests = self.requests.write().await;
         let now = Instant::now();
-        
+
         let admin_requests = requests.entry(admin_id).or_insert_with(Vec::new);
-        
+
         // Remove old requests outside the window
         admin_requests.retain(|&timestamp| now.duration_since(timestamp) < self.window);
-        
+
         // Check if limit exceeded
         if admin_requests.len() >= self.max_requests {
             return Err(Error::TooManyRequests("Rate limit exceeded".to_string()));
         }
-        
+
         // Add current request
         admin_requests.push(now);
-        
+
         Ok(())
     }
 }
@@ -378,7 +434,9 @@ pub async fn admin_rate_limit_middleware(
     next: Next,
 ) -> Result<Response, Error> {
     // Get auth context from request extensions
-    let auth_context = request.extensions().get::<AdminAuthContext>()
+    let auth_context = request
+        .extensions()
+        .get::<AdminAuthContext>()
         .ok_or_else(|| Error::Authentication("Authentication required".to_string()))?;
 
     // Check rate limit

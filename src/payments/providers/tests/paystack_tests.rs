@@ -16,16 +16,15 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-fn provider_with_base(base_url: &str) -> PaystackProvider {
-    PaystackProvider::new(PaystackConfig {
+fn provider_with_base(base_url: &str) -> Result<PaystackProvider, Box<dyn std::error::Error>> {
+    Ok(PaystackProvider::new(PaystackConfig {
         public_key: Some("pk_test_demo".to_string()),
         secret_key: "sk_test_demo".to_string(),
         webhook_secret: Some("wh_secret_demo".to_string()),
         base_url: base_url.to_string(),
         timeout_secs: 5,
         max_retries: 0,
-    })
-    .expect("provider init should succeed")
+    })?)
 }
 
 fn payment_request() -> PaymentRequest {
@@ -67,7 +66,9 @@ fn withdrawal_request() -> WithdrawalRequest {
 /// Compute a valid HMAC-SHA512 hex signature for a payload using the test secret.
 fn valid_hmac_signature(payload: &[u8], secret: &str) -> String {
     type HmacSha512 = Hmac<Sha512>;
-    let mut mac = HmacSha512::new_from_slice(secret.as_bytes()).unwrap();
+    // HMAC accepts any key length, so new_from_slice is always Ok for non-empty slices.
+    let mut mac = HmacSha512::new_from_slice(secret.as_bytes())
+        .expect("HMAC init: key must be non-empty");
     mac.update(payload);
     hex::encode(mac.finalize().into_bytes())
 }
@@ -75,7 +76,8 @@ fn valid_hmac_signature(payload: &[u8], secret: &str) -> String {
 // ── initiate_payment ──────────────────────────────────────────────────────────
 
 #[tokio::test]
-async fn initiate_payment_constructs_correct_request_and_parses_success() {
+async fn initiate_payment_constructs_correct_request_and_parses_success(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -93,11 +95,8 @@ async fn initiate_payment_constructs_correct_request_and_parses_success() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
-    let response = provider
-        .initiate_payment(payment_request())
-        .await
-        .expect("initiation should succeed");
+    let provider = provider_with_base(&server.uri())?;
+    let response = provider.initiate_payment(payment_request()).await?;
 
     assert_eq!(response.status, PaymentState::Pending);
     assert_eq!(response.transaction_reference, "txn_ps_001");
@@ -105,14 +104,13 @@ async fn initiate_payment_constructs_correct_request_and_parses_success() {
         response.payment_url.as_deref(),
         Some("https://checkout.paystack.com/abc123")
     );
-    assert_eq!(
-        response.provider_reference.as_deref(),
-        Some("txn_ps_001")
-    );
+    assert_eq!(response.provider_reference.as_deref(), Some("txn_ps_001"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn initiate_payment_returns_error_when_status_false() {
+async fn initiate_payment_returns_error_when_status_false(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -125,18 +123,19 @@ async fn initiate_payment_returns_error_when_status_false() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
+    let provider = provider_with_base(&server.uri())?;
     let err = provider
         .initiate_payment(payment_request())
         .await
         .expect_err("should fail when status is false");
 
     assert!(err.to_string().contains("Invalid key"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn initiate_payment_validates_missing_email() {
-    let provider = provider_with_base("http://localhost:9999");
+async fn initiate_payment_validates_missing_email() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let mut req = payment_request();
     req.customer.email = None;
 
@@ -146,11 +145,12 @@ async fn initiate_payment_validates_missing_email() {
         .expect_err("should fail without email");
 
     assert!(err.to_string().contains("email"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn initiate_payment_validates_zero_amount() {
-    let provider = provider_with_base("http://localhost:9999");
+async fn initiate_payment_validates_zero_amount() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let mut req = payment_request();
     req.amount.amount = "0".to_string();
 
@@ -160,10 +160,12 @@ async fn initiate_payment_validates_zero_amount() {
         .expect_err("should fail on zero amount");
 
     assert!(err.to_string().contains("amount"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn initiate_payment_handles_malformed_response_body() {
+async fn initiate_payment_handles_malformed_response_body(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -172,24 +174,24 @@ async fn initiate_payment_handles_malformed_response_body() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
+    let provider = provider_with_base(&server.uri())?;
     let err = provider
         .initiate_payment(payment_request())
         .await
         .expect_err("should fail on malformed response");
 
     assert!(
-        err.to_string().contains("invalid provider JSON")
-            || err.to_string().contains("JSON"),
+        err.to_string().contains("invalid provider JSON") || err.to_string().contains("JSON"),
         "unexpected error: {}",
         err
     );
+    Ok(())
 }
 
 // ── verify_payment ────────────────────────────────────────────────────────────
 
 #[tokio::test]
-async fn verify_payment_parses_successful_response() {
+async fn verify_payment_parses_successful_response() -> Result<(), Box<dyn std::error::Error>> {
     let server = MockServer::start().await;
 
     Mock::given(method("GET"))
@@ -210,22 +212,22 @@ async fn verify_payment_parses_successful_response() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
+    let provider = provider_with_base(&server.uri())?;
     let response = provider
         .verify_payment(StatusRequest {
             transaction_reference: None,
             provider_reference: Some("txn_ps_001".to_string()),
         })
-        .await
-        .expect("verification should succeed");
+        .await?;
 
     assert_eq!(response.status, PaymentState::Success);
     assert_eq!(response.payment_method, Some(PaymentMethod::Card));
     assert!(response.amount.is_some());
+    Ok(())
 }
 
 #[tokio::test]
-async fn verify_payment_maps_abandoned_to_cancelled() {
+async fn verify_payment_maps_abandoned_to_cancelled() -> Result<(), Box<dyn std::error::Error>> {
     let server = MockServer::start().await;
 
     Mock::given(method("GET"))
@@ -243,20 +245,20 @@ async fn verify_payment_maps_abandoned_to_cancelled() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
+    let provider = provider_with_base(&server.uri())?;
     let response = provider
         .verify_payment(StatusRequest {
             provider_reference: Some("txn_ps_002".to_string()),
             transaction_reference: None,
         })
-        .await
-        .expect("should parse abandoned status");
+        .await?;
 
     assert_eq!(response.status, PaymentState::Cancelled);
+    Ok(())
 }
 
 #[tokio::test]
-async fn verify_payment_maps_failed_status() {
+async fn verify_payment_maps_failed_status() -> Result<(), Box<dyn std::error::Error>> {
     let server = MockServer::start().await;
 
     Mock::given(method("GET"))
@@ -275,21 +277,22 @@ async fn verify_payment_maps_failed_status() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
+    let provider = provider_with_base(&server.uri())?;
     let response = provider
         .verify_payment(StatusRequest {
             provider_reference: Some("txn_ps_003".to_string()),
             transaction_reference: None,
         })
-        .await
-        .expect("should parse failed status");
+        .await?;
 
     assert_eq!(response.status, PaymentState::Failed);
     assert_eq!(response.failure_reason.as_deref(), Some("Declined"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn verify_payment_returns_error_when_status_false() {
+async fn verify_payment_returns_error_when_status_false() -> Result<(), Box<dyn std::error::Error>>
+{
     let server = MockServer::start().await;
 
     Mock::given(method("GET"))
@@ -302,7 +305,7 @@ async fn verify_payment_returns_error_when_status_false() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
+    let provider = provider_with_base(&server.uri())?;
     let err = provider
         .verify_payment(StatusRequest {
             provider_reference: Some("txn_ps_001".to_string()),
@@ -312,11 +315,12 @@ async fn verify_payment_returns_error_when_status_false() {
         .expect_err("should fail when status is false");
 
     assert!(err.to_string().contains("not found") || err.to_string().contains("reference"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn verify_payment_requires_reference() {
-    let provider = provider_with_base("http://localhost:9999");
+async fn verify_payment_requires_reference() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let err = provider
         .verify_payment(StatusRequest {
             transaction_reference: None,
@@ -326,10 +330,12 @@ async fn verify_payment_requires_reference() {
         .expect_err("should fail without reference");
 
     assert!(err.to_string().contains("reference"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn verify_payment_handles_malformed_response_body() {
+async fn verify_payment_handles_malformed_response_body() -> Result<(), Box<dyn std::error::Error>>
+{
     let server = MockServer::start().await;
 
     Mock::given(method("GET"))
@@ -338,7 +344,7 @@ async fn verify_payment_handles_malformed_response_body() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
+    let provider = provider_with_base(&server.uri())?;
     let err = provider
         .verify_payment(StatusRequest {
             provider_reference: Some("txn_ps_001".to_string()),
@@ -348,12 +354,14 @@ async fn verify_payment_handles_malformed_response_body() {
         .expect_err("should fail on malformed JSON");
 
     assert!(err.to_string().contains("JSON") || err.to_string().contains("invalid"));
+    Ok(())
 }
 
 // ── process_withdrawal ────────────────────────────────────────────────────────
 
 #[tokio::test]
-async fn process_withdrawal_constructs_correct_request_and_parses_success() {
+async fn process_withdrawal_constructs_correct_request_and_parses_success(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = MockServer::start().await;
 
     // First call: create recipient
@@ -387,22 +395,18 @@ async fn process_withdrawal_constructs_correct_request_and_parses_success() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
-    let response = provider
-        .process_withdrawal(withdrawal_request())
-        .await
-        .expect("withdrawal should succeed");
+    let provider = provider_with_base(&server.uri())?;
+    let response = provider.process_withdrawal(withdrawal_request()).await?;
 
     assert_eq!(response.transaction_reference, "wd_ps_001");
     assert_eq!(response.status, PaymentState::Processing);
-    assert_eq!(
-        response.provider_reference.as_deref(),
-        Some("wd_ps_001")
-    );
+    assert_eq!(response.provider_reference.as_deref(), Some("wd_ps_001"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn process_withdrawal_maps_success_transfer_status() {
+async fn process_withdrawal_maps_success_transfer_status(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -429,17 +433,16 @@ async fn process_withdrawal_maps_success_transfer_status() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
-    let response = provider
-        .process_withdrawal(withdrawal_request())
-        .await
-        .expect("should succeed");
+    let provider = provider_with_base(&server.uri())?;
+    let response = provider.process_withdrawal(withdrawal_request()).await?;
 
     assert_eq!(response.status, PaymentState::Success);
+    Ok(())
 }
 
 #[tokio::test]
-async fn process_withdrawal_returns_error_when_recipient_creation_fails() {
+async fn process_withdrawal_returns_error_when_recipient_creation_fails(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -452,17 +455,19 @@ async fn process_withdrawal_returns_error_when_recipient_creation_fails() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
+    let provider = provider_with_base(&server.uri())?;
     let err = provider
         .process_withdrawal(withdrawal_request())
         .await
         .expect_err("should fail when recipient creation fails");
 
     assert!(err.to_string().contains("Invalid bank account"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn process_withdrawal_returns_error_when_transfer_fails() {
+async fn process_withdrawal_returns_error_when_transfer_fails(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -485,18 +490,20 @@ async fn process_withdrawal_returns_error_when_transfer_fails() {
         .mount(&server)
         .await;
 
-    let provider = provider_with_base(&server.uri());
+    let provider = provider_with_base(&server.uri())?;
     let err = provider
         .process_withdrawal(withdrawal_request())
         .await
         .expect_err("should fail when transfer fails");
 
     assert!(err.to_string().contains("Insufficient balance"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn process_withdrawal_rejects_non_bank_transfer_method() {
-    let provider = provider_with_base("http://localhost:9999");
+async fn process_withdrawal_rejects_non_bank_transfer_method(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let mut req = withdrawal_request();
     req.withdrawal_method = WithdrawalMethod::MobileMoney;
 
@@ -506,11 +513,12 @@ async fn process_withdrawal_rejects_non_bank_transfer_method() {
         .expect_err("should reject mobile money");
 
     assert!(err.to_string().contains("bank transfer"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn process_withdrawal_requires_account_number() {
-    let provider = provider_with_base("http://localhost:9999");
+async fn process_withdrawal_requires_account_number() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let mut req = withdrawal_request();
     req.recipient.account_number = None;
 
@@ -520,11 +528,12 @@ async fn process_withdrawal_requires_account_number() {
         .expect_err("should fail without account number");
 
     assert!(err.to_string().contains("account_number"));
+    Ok(())
 }
 
 #[tokio::test]
-async fn process_withdrawal_requires_bank_code() {
-    let provider = provider_with_base("http://localhost:9999");
+async fn process_withdrawal_requires_bank_code() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let mut req = withdrawal_request();
     req.recipient.bank_code = None;
 
@@ -534,13 +543,14 @@ async fn process_withdrawal_requires_bank_code() {
         .expect_err("should fail without bank code");
 
     assert!(err.to_string().contains("bank_code"));
+    Ok(())
 }
 
 // ── webhook signature verification ───────────────────────────────────────────
 
 #[test]
-fn verify_webhook_accepts_valid_hmac_sha512_signature() {
-    let provider = provider_with_base("http://localhost:9999");
+fn verify_webhook_accepts_valid_hmac_sha512_signature() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let payload = br#"{"event":"charge.success","data":{"reference":"txn_ps_001"}}"#;
     let sig = valid_hmac_signature(payload, "wh_secret_demo");
 
@@ -550,11 +560,12 @@ fn verify_webhook_accepts_valid_hmac_sha512_signature() {
 
     assert!(result.valid, "valid HMAC signature should be accepted");
     assert!(result.reason.is_none());
+    Ok(())
 }
 
 #[test]
-fn verify_webhook_rejects_tampered_signature() {
-    let provider = provider_with_base("http://localhost:9999");
+fn verify_webhook_rejects_tampered_signature() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let payload = br#"{"event":"charge.success"}"#;
 
     let result = provider
@@ -563,20 +574,23 @@ fn verify_webhook_rejects_tampered_signature() {
 
     assert!(!result.valid, "tampered signature should be rejected");
     assert!(result.reason.is_some());
+    Ok(())
 }
 
 #[test]
-fn verify_webhook_rejects_empty_signature() {
-    let provider = provider_with_base("http://localhost:9999");
+fn verify_webhook_rejects_empty_signature() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let result = provider
         .verify_webhook(b"payload", "")
         .expect("should not error");
 
     assert!(!result.valid);
+    Ok(())
 }
 
 #[test]
-fn verify_webhook_falls_back_to_secret_key_when_no_webhook_secret() {
+fn verify_webhook_falls_back_to_secret_key_when_no_webhook_secret(
+) -> Result<(), Box<dyn std::error::Error>> {
     // When webhook_secret is None, Paystack falls back to secret_key
     let provider = PaystackProvider::new(PaystackConfig {
         public_key: None,
@@ -585,14 +599,14 @@ fn verify_webhook_falls_back_to_secret_key_when_no_webhook_secret() {
         base_url: "http://localhost:9999".to_string(),
         timeout_secs: 5,
         max_retries: 0,
-    })
-    .unwrap();
+    })?;
 
     let payload = b"test payload";
     let sig = valid_hmac_signature(payload, "sk_fallback");
 
-    let result = provider.verify_webhook(payload, &sig).unwrap();
+    let result = provider.verify_webhook(payload, &sig).expect("should not error");
     assert!(result.valid);
+    Ok(())
 }
 
 #[test]
@@ -609,8 +623,8 @@ fn verify_hmac_sha512_hex_utility_works_correctly() {
 // ── parse_webhook_event ───────────────────────────────────────────────────────
 
 #[test]
-fn parse_webhook_event_maps_charge_success() {
-    let provider = provider_with_base("http://localhost:9999");
+fn parse_webhook_event_maps_charge_success() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let payload = br#"{
         "event": "charge.success",
         "data": {
@@ -619,48 +633,47 @@ fn parse_webhook_event_maps_charge_success() {
         }
     }"#;
 
-    let event = provider
-        .parse_webhook_event(payload)
-        .expect("should parse successfully");
+    let event = provider.parse_webhook_event(payload)?;
 
     assert_eq!(event.event_type, "charge.success");
-    assert_eq!(
-        event.provider_reference.as_deref(),
-        Some("txn_ps_001")
-    );
+    assert_eq!(event.provider_reference.as_deref(), Some("txn_ps_001"));
     assert!(matches!(event.status, Some(PaymentState::Success)));
+    Ok(())
 }
 
 #[test]
-fn parse_webhook_event_maps_failed_status() {
-    let provider = provider_with_base("http://localhost:9999");
+fn parse_webhook_event_maps_failed_status() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let payload = br#"{
         "event": "charge.failed",
         "data": { "reference": "txn_ps_002", "status": "failed" }
     }"#;
 
-    let event = provider.parse_webhook_event(payload).expect("should parse");
+    let event = provider.parse_webhook_event(payload)?;
     assert!(matches!(event.status, Some(PaymentState::Failed)));
+    Ok(())
 }
 
 #[test]
-fn parse_webhook_event_handles_malformed_json() {
-    let provider = provider_with_base("http://localhost:9999");
+fn parse_webhook_event_handles_malformed_json() -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let err = provider
         .parse_webhook_event(b"{{not valid json")
         .expect_err("should fail on malformed JSON");
 
     assert!(err.to_string().contains("invalid webhook JSON"));
+    Ok(())
 }
 
 #[test]
-fn parse_webhook_event_handles_missing_optional_fields_gracefully() {
-    let provider = provider_with_base("http://localhost:9999");
+fn parse_webhook_event_handles_missing_optional_fields_gracefully(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let provider = provider_with_base("http://localhost:9999")?;
     let event = provider
-        .parse_webhook_event(br#"{"event":"transfer.success"}"#)
-        .expect("should not panic on missing fields");
+        .parse_webhook_event(br#"{"event":"transfer.success"}"#)?;
 
     assert_eq!(event.event_type, "transfer.success");
     assert!(event.provider_reference.is_none());
     assert!(event.status.is_none());
+    Ok(())
 }

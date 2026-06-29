@@ -1,7 +1,7 @@
 //! Gateway CORS policy — per-endpoint-category allowlist, no wildcard on auth endpoints.
 
-use axum::http::{HeaderValue, Method, Request, Response, StatusCode};
 use axum::body::Body;
+use axum::http::{HeaderValue, Method, Request, Response, StatusCode};
 
 use crate::gateway::config::cors_origins_for;
 
@@ -28,8 +28,14 @@ pub fn evaluate_cors<B>(req: &Request<B>) -> Option<Response<Body>> {
         if origin_ok {
             builder = builder
                 .header("Access-Control-Allow-Origin", origin)
-                .header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-                .header("Access-Control-Allow-Headers", "Authorization, X-API-Key, Content-Type, X-Request-ID")
+                .header(
+                    "Access-Control-Allow-Methods",
+                    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+                )
+                .header(
+                    "Access-Control-Allow-Headers",
+                    "Authorization, X-API-Key, Content-Type, X-Request-ID",
+                )
                 .header("Access-Control-Allow-Credentials", "true")
                 .header("Access-Control-Max-Age", "86400")
                 .header("Vary", "Origin");
@@ -59,7 +65,10 @@ pub fn inject_cors_headers(resp: &mut Response<Body>, origin: &str, path: &str) 
         if let Ok(v) = HeaderValue::from_str(origin) {
             h.insert("Access-Control-Allow-Origin", v);
         }
-        h.insert("Access-Control-Allow-Credentials", HeaderValue::from_static("true"));
+        h.insert(
+            "Access-Control-Allow-Credentials",
+            HeaderValue::from_static("true"),
+        );
         h.insert("Vary", HeaderValue::from_static("Origin"));
     }
 }
@@ -81,7 +90,11 @@ mod tests {
 
     #[test]
     fn test_no_origin_passes_through() {
-        let r = Request::builder().method("GET").uri("/api/v1/wallet").body(Body::empty()).unwrap();
+        let r = Request::builder()
+            .method("GET")
+            .uri("/api/v1/wallet")
+            .body(Body::empty())
+            .unwrap();
         assert!(evaluate_cors(&r).is_none());
     }
 

@@ -6,11 +6,11 @@ use axum::{
     routing::post,
     Router,
 };
+use serde_json::{json, Value};
+use tower::util::ServiceExt;
 use Bitmesh_backend::middleware::request_integrity::{
     request_integrity_middleware, IntegrityEndpoint, RequestIntegrityState,
 };
-use serde_json::{json, Value};
-use tower::util::ServiceExt;
 
 async fn ok_handler() -> impl IntoResponse {
     StatusCode::OK

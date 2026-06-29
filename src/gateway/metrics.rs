@@ -1,6 +1,9 @@
 //! Prometheus metrics for the gateway layer.
 
-use prometheus::{register_counter_vec_with_registry, register_histogram_vec_with_registry, CounterVec, HistogramVec, Registry};
+use prometheus::{
+    register_counter_vec_with_registry, register_histogram_vec_with_registry, CounterVec,
+    HistogramVec, Registry,
+};
 use std::sync::OnceLock;
 
 static GATEWAY_REQUESTS_TOTAL: OnceLock<CounterVec> = OnceLock::new();
@@ -79,11 +82,19 @@ pub fn record_tls_failure(reason: &str) {
 }
 
 fn path_prefix(path: &str) -> &'static str {
-    if path.starts_with("/api/admin") { "/api/admin" }
-    else if path.starts_with("/api/v1/onramp") { "/api/v1/onramp" }
-    else if path.starts_with("/api/v1/offramp") { "/api/v1/offramp" }
-    else if path.starts_with("/api/v1/wallet") { "/api/v1/wallet" }
-    else if path.starts_with("/api/v1/auth") { "/api/v1/auth" }
-    else if path.starts_with("/api/developer") { "/api/developer" }
-    else { "/other" }
+    if path.starts_with("/api/admin") {
+        "/api/admin"
+    } else if path.starts_with("/api/v1/onramp") {
+        "/api/v1/onramp"
+    } else if path.starts_with("/api/v1/offramp") {
+        "/api/v1/offramp"
+    } else if path.starts_with("/api/v1/wallet") {
+        "/api/v1/wallet"
+    } else if path.starts_with("/api/v1/auth") {
+        "/api/v1/auth"
+    } else if path.starts_with("/api/developer") {
+        "/api/developer"
+    } else {
+        "/other"
+    }
 }

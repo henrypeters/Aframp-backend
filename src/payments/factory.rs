@@ -1,6 +1,8 @@
 use crate::payments::error::{PaymentError, PaymentResult};
 use crate::payments::provider::PaymentProvider;
-use crate::payments::providers::{FlutterwaveProvider, MpesaProvider, PaystackProvider, MockProvider};
+use crate::payments::providers::{
+    FlutterwaveProvider, MockProvider, MpesaProvider, PaystackProvider,
+};
 use crate::payments::types::ProviderName;
 use std::collections::HashMap;
 use std::str::FromStr;

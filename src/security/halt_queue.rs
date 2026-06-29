@@ -53,7 +53,7 @@ impl SystemHaltQueueManager {
     /// Move all pending/processing transactions to halted status when circuit breaker triggers
     pub async fn halt_all_pending_transactions(&self) -> anyhow::Result<u64> {
         let tx_repo = TransactionRepository::new(self.pool.clone());
-        
+
         // Get all transactions that are not in final states
         let pending_transactions = tx_repo
             .find_all_by_status(&["pending", "processing", "pending_payment"])
@@ -140,11 +140,10 @@ impl SystemHaltQueueManager {
             tx.status = HaltedTransactionStatus::SystemHalted.to_string();
             tx.metadata = metadata;
 
-            if let Err(e) = tx_repo.update_status_with_metadata(
-                transaction_id,
-                &tx.status,
-                tx.metadata,
-            ).await {
+            if let Err(e) = tx_repo
+                .update_status_with_metadata(transaction_id, &tx.status, tx.metadata)
+                .await
+            {
                 error!(
                     transaction_id = %transaction_id,
                     error = %e,
@@ -171,35 +170,33 @@ impl SystemHaltQueueManager {
     /// Resume processing of halted transactions after system reset
     pub async fn resume_halted_transactions(&self) -> anyhow::Result<u64> {
         let tx_repo = TransactionRepository::new(self.pool.clone());
-        
+
         // Get all halted transactions
         let halted_transactions = tx_repo
-            .find_all_by_status(&[
-                "SYSTEM_HALTED",
-                "HALTED_IN_PROGRESS", 
-                "HALTED_PENDING"
-            ])
+            .find_all_by_status(&["SYSTEM_HALTED", "HALTED_IN_PROGRESS", "HALTED_PENDING"])
             .await?;
 
         let mut resumed_count = 0u64;
 
         for transaction in halted_transactions {
             // Determine original status from metadata
-            let original_status = transaction.metadata
+            let original_status = transaction
+                .metadata
                 .get("previous_status")
                 .and_then(|v| v.as_str())
                 .unwrap_or("pending");
 
             // Remove halt metadata and restore original status
             let mut updated_metadata = transaction.metadata.clone();
-            updated_metadata.as_object_mut()
-                .map(|obj| {
-                    obj.remove("halted_at");
-                    obj.remove("halt_reason");
-                    obj.remove("system_status");
-                    obj.insert("resumed_at".to_string(), 
-                        serde_json::Value::String(chrono::Utc::now().to_rfc3339()));
-                });
+            updated_metadata.as_object_mut().map(|obj| {
+                obj.remove("halted_at");
+                obj.remove("halt_reason");
+                obj.remove("system_status");
+                obj.insert(
+                    "resumed_at".to_string(),
+                    serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
+                );
+            });
 
             if let Err(e) = tx_repo
                 .update_status_with_metadata(
@@ -233,7 +230,10 @@ impl SystemHaltQueueManager {
         let tx_repo = TransactionRepository::new(self.pool.clone());
 
         let system_halted = tx_repo.count_by_status("SYSTEM_HALTED").await.unwrap_or(0);
-        let halted_in_progress = tx_repo.count_by_status("HALTED_IN_PROGRESS").await.unwrap_or(0);
+        let halted_in_progress = tx_repo
+            .count_by_status("HALTED_IN_PROGRESS")
+            .await
+            .unwrap_or(0);
         let halted_pending = tx_repo.count_by_status("HALTED_PENDING").await.unwrap_or(0);
 
         Ok(HaltStatistics {
@@ -258,7 +258,10 @@ pub struct HaltStatistics {
 
 /// Extension trait for TransactionRepository to support halted transactions
 pub trait HaltedTransactionRepository {
-    async fn find_all_by_status(&self, statuses: &[&str]) -> anyhow::Result<Vec<crate::database::transaction::Transaction>>;
+    async fn find_all_by_status(
+        &self,
+        statuses: &[&str],
+    ) -> anyhow::Result<Vec<crate::database::transaction::Transaction>>;
     async fn count_by_status(&self, status: &str) -> anyhow::Result<i64>;
 }
 
@@ -275,9 +278,18 @@ mod tests {
 
     #[test]
     fn test_halted_transaction_status_display() {
-        assert_eq!(HaltedTransactionStatus::SystemHalted.to_string(), "SYSTEM_HALTED");
-        assert_eq!(HaltedTransactionStatus::HaltedInProgress.to_string(), "HALTED_IN_PROGRESS");
-        assert_eq!(HaltedTransactionStatus::HaltedPending.to_string(), "HALTED_PENDING");
+        assert_eq!(
+            HaltedTransactionStatus::SystemHalted.to_string(),
+            "SYSTEM_HALTED"
+        );
+        assert_eq!(
+            HaltedTransactionStatus::HaltedInProgress.to_string(),
+            "HALTED_IN_PROGRESS"
+        );
+        assert_eq!(
+            HaltedTransactionStatus::HaltedPending.to_string(),
+            "HALTED_PENDING"
+        );
     }
 
     #[test]

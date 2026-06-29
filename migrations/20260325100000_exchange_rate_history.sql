@@ -1,5 +1,7 @@
 -- Exchange rate history table for full audit trail.
--- Unique constraint on (from_currency, to_currency, window_ts) enforces idempotency.
+-- The maintenance-worker migration may already have created this table with
+-- a `recorded_at` timestamp column, so this migration is written to be
+-- compatible with that earlier bootstrap shape.
 
 CREATE TABLE IF NOT EXISTS exchange_rate_history (
     id            UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -7,12 +9,11 @@ CREATE TABLE IF NOT EXISTS exchange_rate_history (
     to_currency   TEXT            NOT NULL,
     rate          NUMERIC(36, 18) NOT NULL CHECK (rate > 0),
     source        TEXT            NOT NULL,
-    window_ts     TIMESTAMPTZ     NOT NULL,
-    created_at    TIMESTAMPTZ     NOT NULL DEFAULT now()
+    recorded_at   TIMESTAMPTZ     NOT NULL DEFAULT now()
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_exchange_rate_history_window
-    ON exchange_rate_history (from_currency, to_currency, window_ts);
+    ON exchange_rate_history (from_currency, to_currency, recorded_at);
 
 CREATE INDEX IF NOT EXISTS idx_exchange_rate_history_pair_time
-    ON exchange_rate_history (from_currency, to_currency, created_at DESC);
+    ON exchange_rate_history (from_currency, to_currency, recorded_at DESC);

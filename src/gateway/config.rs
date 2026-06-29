@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use std::env;
 
 /// Per-endpoint category body size limits (bytes).
-pub const BODY_LIMIT_DEFAULT: usize = 1024 * 1024;       // 1 MB
-pub const BODY_LIMIT_KYC: usize = 10 * 1024 * 1024;      // 10 MB (document uploads)
-pub const BODY_LIMIT_PAYMENT: usize = 64 * 1024;          // 64 KB
+pub const BODY_LIMIT_DEFAULT: usize = 1024 * 1024; // 1 MB
+pub const BODY_LIMIT_KYC: usize = 10 * 1024 * 1024; // 10 MB (document uploads)
+pub const BODY_LIMIT_PAYMENT: usize = 64 * 1024; // 64 KB
 pub const MAX_URL_LENGTH: usize = 2048;
 
 /// Gateway-level rate limits (higher than app-level — catch egregious abuse only).
-pub const GATEWAY_RATE_LIMIT_PER_IP: u64 = 1000;         // per minute
+pub const GATEWAY_RATE_LIMIT_PER_IP: u64 = 1000; // per minute
 pub const GATEWAY_RATE_LIMIT_PER_KEY_PREFIX: u64 = 5000; // per minute
 
 /// HMAC-SHA256 secret used to sign the X-Gateway-Signature header.
@@ -72,10 +72,7 @@ pub fn cors_origins_for(path: &str) -> Vec<String> {
     } else {
         // Consumer API
         match env_name.as_str() {
-            "production" => vec![
-                "https://app.aframp.io".into(),
-                "https://aframp.io".into(),
-            ],
+            "production" => vec!["https://app.aframp.io".into(), "https://aframp.io".into()],
             "staging" => vec!["https://staging.aframp.io".into()],
             _ => vec![
                 "http://localhost:3000".into(),

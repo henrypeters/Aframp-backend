@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::{broadcast, Mutex};
 use tracing::{debug, info};
 
 type SharedResult<T> = Arc<Result<T, String>>;

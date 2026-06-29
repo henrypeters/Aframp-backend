@@ -140,11 +140,11 @@ pub enum WorkflowError {
 impl From<WorkflowError> for AppError {
     fn from(e: WorkflowError) -> Self {
         match e {
-            WorkflowError::NotFound { id } => AppError::new(AppErrorKind::Domain(
-                DomainError::TransactionNotFound {
+            WorkflowError::NotFound { id } => {
+                AppError::new(AppErrorKind::Domain(DomainError::TransactionNotFound {
                     transaction_id: id.to_string(),
-                },
-            )),
+                }))
+            }
             // InvalidTransition → 409 Conflict
             WorkflowError::InvalidTransition { from, to } => {
                 AppError::new(AppErrorKind::Domain(DomainError::DuplicateTransaction {
@@ -191,14 +191,12 @@ impl From<WorkflowError> for AppError {
                     reason,
                 }))
             }
-            WorkflowError::Database(msg) => {
-                AppError::new(AppErrorKind::Infrastructure(
-                    crate::error::InfrastructureError::Database {
-                        message: msg,
-                        is_retryable: false,
-                    },
-                ))
-            }
+            WorkflowError::Database(msg) => AppError::new(AppErrorKind::Infrastructure(
+                crate::error::InfrastructureError::Database {
+                    message: msg,
+                    is_retryable: false,
+                },
+            )),
         }
     }
 }
@@ -499,6 +497,7 @@ impl MintApprovalService {
     /// - status == "approved"
     /// - All required role approvals are present
     /// - Request has not expired
+    /// - Internal SLA has not been breached (blocks Stellar submission)
     pub async fn assert_executable(
         &self,
         mint_request_id: Uuid,
@@ -514,16 +513,33 @@ impl MintApprovalService {
 
         if request.status != "approved" {
             return Err(WorkflowError::ExecutionNotAllowed {
-                reason: format!(
-                    "Request status is '{}', must be 'approved'",
-                    request.status
-                ),
+                reason: format!("Request status is '{}', must be 'approved'", request.status),
             });
         }
 
         if Utc::now() > request.expires_at {
             return Err(WorkflowError::ExecutionNotAllowed {
                 reason: "Request has expired".to_string(),
+            });
+        }
+
+        // ── SLA breach guard: block Stellar submission if SLA is expired ──────
+        // This is the critical gate that prevents any transaction hitting the
+        // Stellar ledger after the internal SLA deadline has been breached.
+        let sla_stage: Option<String> = sqlx::query_scalar!(
+            "SELECT stage::text FROM mint_sla_state WHERE mint_request_id = $1",
+            mint_request_id,
+        )
+        .fetch_optional(self.repo.pool())
+        .await
+        .map_err(|e| WorkflowError::Database(e.to_string()))?
+        .flatten();
+
+        if sla_stage.as_deref() == Some("expired") {
+            return Err(WorkflowError::ExecutionNotAllowed {
+                reason: "SLA expired: this request cannot be submitted to Stellar. \
+                         A fresh re-submission is required (#123)."
+                    .to_string(),
             });
         }
 
@@ -734,7 +750,10 @@ mod tests {
 
     #[test]
     fn test_valid_transitions() {
-        assert!(is_valid_transition("pending_approval", "partially_approved"));
+        assert!(is_valid_transition(
+            "pending_approval",
+            "partially_approved"
+        ));
         assert!(is_valid_transition("pending_approval", "approved"));
         assert!(is_valid_transition("pending_approval", "rejected"));
         assert!(is_valid_transition("partially_approved", "approved"));

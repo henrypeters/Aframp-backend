@@ -144,12 +144,28 @@ pub fn verify_challenge_response_pub(
     signature_hex: &str,
     ip: Option<&str>,
 ) -> Result<(), String> {
-    super::mint_signer_service::verify_challenge_response_pub(challenge, public_key, signature_hex, ip)
+    super::mint_signer_service::verify_challenge_response_pub(
+        challenge,
+        public_key,
+        signature_hex,
+        ip,
+    )
 }
 
-pub fn role_diversity_satisfied(roles: &[crate::admin::mint_signer_models::SignerRole], require_cfo_or_cco: bool) -> bool {
-    if !require_cfo_or_cco { return true; }
-    roles.iter().any(|r| matches!(r, crate::admin::mint_signer_models::SignerRole::Cfo | crate::admin::mint_signer_models::SignerRole::Cco))
+pub fn role_diversity_satisfied(
+    roles: &[crate::admin::mint_signer_models::SignerRole],
+    require_cfo_or_cco: bool,
+) -> bool {
+    if !require_cfo_or_cco {
+        return true;
+    }
+    roles.iter().any(|r| {
+        matches!(
+            r,
+            crate::admin::mint_signer_models::SignerRole::Cfo
+                | crate::admin::mint_signer_models::SignerRole::Cco
+        )
+    })
 }
 
 pub fn quorum_reachable(total_weight: i64, threshold: i64) -> bool {

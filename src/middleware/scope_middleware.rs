@@ -67,11 +67,7 @@ impl ScopeEnforcementError {
 // ── Scope Enforcement Middleware ─────────────────────────────────────────────
 
 /// Enforce single scope requirement
-pub async fn enforce_single_scope(
-    scope: String,
-    mut req: Request,
-    next: Next,
-) -> Response {
+pub async fn enforce_single_scope(scope: String, mut req: Request, next: Next) -> Response {
     // Extract claims from extensions (set by token validator)
     let claims = match req.extensions().get::<OAuthTokenClaims>() {
         Some(c) => c.clone(),
@@ -125,11 +121,7 @@ pub async fn enforce_single_scope(
 }
 
 /// Enforce multiple scopes (ALL must be present)
-pub async fn enforce_all_scopes(
-    scopes: Vec<String>,
-    mut req: Request,
-    next: Next,
-) -> Response {
+pub async fn enforce_all_scopes(scopes: Vec<String>, mut req: Request, next: Next) -> Response {
     let claims = match req.extensions().get::<OAuthTokenClaims>() {
         Some(c) => c.clone(),
         None => {
@@ -171,11 +163,7 @@ pub async fn enforce_all_scopes(
 }
 
 /// Enforce any scope (at least one must be present)
-pub async fn enforce_any_scope(
-    scopes: Vec<String>,
-    mut req: Request,
-    next: Next,
-) -> Response {
+pub async fn enforce_any_scope(scopes: Vec<String>, mut req: Request, next: Next) -> Response {
     let claims = match req.extensions().get::<OAuthTokenClaims>() {
         Some(c) => c.clone(),
         None => {

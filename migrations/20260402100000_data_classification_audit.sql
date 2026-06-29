@@ -1,4 +1,3 @@
--- migrate:up
 -- Data Classification Framework — Audit Table
 -- Purpose: Persist policy violation events, field access audit trails, and
 --          retention purge records for compliance reporting.
@@ -53,6 +52,3 @@ CREATE INDEX idx_dca_occurred_at      ON data_classification_audit (occurred_at 
 CREATE INDEX idx_dca_actor            ON data_classification_audit (actor) WHERE actor IS NOT NULL;
 CREATE INDEX idx_dca_violations       ON data_classification_audit (occurred_at DESC)
     WHERE event_kind = 'policy_violation';
-
--- migrate:down
-DROP TABLE IF EXISTS data_classification_audit;

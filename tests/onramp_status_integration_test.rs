@@ -1,3 +1,5 @@
+#![cfg(all(feature = "database", feature = "cache"))]
+
 //! Integration tests for the onramp status endpoint
 //!
 //! Tests the GET /api/onramp/status/:tx_id endpoint implementation
@@ -5,12 +7,12 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::api::onramp::status::{OnrampStatusResponse, OnrampStatusService, TransactionStage};
-    use crate::cache::RedisCache;
-    use crate::chains::stellar::client::StellarClient;
-    use crate::database::transaction_repository::{Transaction, TransactionRepository};
-    use crate::error::{AppError, AppErrorKind, DomainError};
-    use crate::payments::factory::PaymentProviderFactory;
+    use aframp_backend::api::onramp::status::{OnrampStatusResponse, OnrampStatusService, TransactionStage};
+    use aframp_backend::cache::RedisCache;
+    use aframp_backend::chains::stellar::client::StellarClient;
+    use aframp_backend::database::transaction_repository::{Transaction, TransactionRepository};
+    use aframp_backend::error::{AppError, AppErrorKind, DomainError};
+    use aframp_backend::payments::factory::PaymentProviderFactory;
     use chrono::Utc;
     use serde_json::json;
     use sqlx::types::BigDecimal;

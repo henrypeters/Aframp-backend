@@ -27,20 +27,27 @@ impl HealthScoreCalculator {
         let period_start = Utc::now() - lookback;
 
         // Calculate individual factor scores
-        let error_rate_score = self.calculate_error_rate_score(consumer_id, period_start).await?;
-        let rate_limit_score = self.calculate_rate_limit_score(consumer_id, period_start).await?;
-        let auth_failure_score = self.calculate_auth_failure_score(consumer_id, period_start).await?;
-        let webhook_delivery_score = self.calculate_webhook_delivery_score(consumer_id, period_start).await?;
+        let error_rate_score = self
+            .calculate_error_rate_score(consumer_id, period_start)
+            .await?;
+        let rate_limit_score = self
+            .calculate_rate_limit_score(consumer_id, period_start)
+            .await?;
+        let auth_failure_score = self
+            .calculate_auth_failure_score(consumer_id, period_start)
+            .await?;
+        let webhook_delivery_score = self
+            .calculate_webhook_delivery_score(consumer_id, period_start)
+            .await?;
         let activity_recency_score = self.calculate_activity_recency_score(consumer_id).await?;
 
         // Calculate weighted health score
-        let health_score = (
-            error_rate_score as f64 * config.error_rate_weight +
-            rate_limit_score as f64 * config.rate_limit_weight +
-            auth_failure_score as f64 * config.auth_failure_weight +
-            webhook_delivery_score as f64 * config.webhook_delivery_weight +
-            activity_recency_score as f64 * config.activity_recency_weight
-        ).round() as i32;
+        let health_score = (error_rate_score as f64 * config.error_rate_weight
+            + rate_limit_score as f64 * config.rate_limit_weight
+            + auth_failure_score as f64 * config.auth_failure_weight
+            + webhook_delivery_score as f64 * config.webhook_delivery_weight
+            + activity_recency_score as f64 * config.activity_recency_weight)
+            .round() as i32;
 
         // Get previous score for trend analysis
         let previous_score_record = self.repo.get_latest_health_score(consumer_id).await?;
@@ -48,7 +55,9 @@ impl HealthScoreCalculator {
         let score_change = previous_score.map(|prev| health_score - prev).unwrap_or(0);
 
         // Determine trend
-        let health_trend = self.determine_trend(consumer_id, health_score, &config).await?;
+        let health_trend = self
+            .determine_trend(consumer_id, health_score, &config)
+            .await?;
 
         // Identify risk factors
         let mut risk_factors = Vec::new();
@@ -242,7 +251,8 @@ impl HealthScoreCalculator {
             return Ok(HealthTrend::Stable);
         }
 
-        let avg_historical = historical_scores.iter().sum::<i32>() as f64 / historical_scores.len() as f64;
+        let avg_historical =
+            historical_scores.iter().sum::<i32>() as f64 / historical_scores.len() as f64;
         let diff = current_score as f64 - avg_historical;
 
         if diff > 5.0 {

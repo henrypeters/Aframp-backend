@@ -34,7 +34,10 @@ pub async fn run_cngn_batch_processor(
     poll_interval: Duration,
     mut shutdown_rx: watch::Receiver<bool>,
 ) {
-    info!("cNGN batch processor started (poll interval: {:?})", poll_interval);
+    info!(
+        "cNGN batch processor started (poll interval: {:?})",
+        poll_interval
+    );
 
     loop {
         tokio::select! {
@@ -52,10 +55,7 @@ pub async fn run_cngn_batch_processor(
 }
 
 /// Pick the oldest pending cNGN transfer batch and process it.
-async fn process_pending_cngn_batch(
-    pool: &PgPool,
-    horizon_url: &str,
-) -> anyhow::Result<()> {
+async fn process_pending_cngn_batch(pool: &PgPool, horizon_url: &str) -> anyhow::Result<()> {
     // Claim a pending batch — update to 'processing' atomically to prevent double-processing
     let batch = sqlx::query!(
         r#"
@@ -221,7 +221,10 @@ pub async fn run_fiat_payout_processor(
     poll_interval: Duration,
     mut shutdown_rx: watch::Receiver<bool>,
 ) {
-    info!("Fiat payout batch processor started (poll interval: {:?})", poll_interval);
+    info!(
+        "Fiat payout batch processor started (poll interval: {:?})",
+        poll_interval
+    );
 
     loop {
         tokio::select! {
@@ -339,10 +342,7 @@ async fn process_pending_fiat_batch(pool: &PgPool) -> anyhow::Result<()> {
 /// Returns the provider-assigned payout reference on success.
 ///
 /// NOTE: Replace with actual Paystack / Flutterwave bulk transfer API call.
-async fn submit_fiat_payout(
-    destination: &str,
-    _amount: &BigDecimal,
-) -> anyhow::Result<String> {
+async fn submit_fiat_payout(destination: &str, _amount: &BigDecimal) -> anyhow::Result<String> {
     // TODO: integrate with payment provider bulk payout API
     // Format: destination is "bank_code:account_number"
     let reference = format!(

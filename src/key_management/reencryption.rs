@@ -181,10 +181,7 @@ impl ReencryptionService {
 
     /// Check if all re-encryption jobs for a key rotation are complete.
     /// Only retires the old key when all jobs are done.
-    pub async fn try_retire_old_key(
-        &self,
-        old_key_uuid: Uuid,
-    ) -> Result<bool, ReencryptionError> {
+    pub async fn try_retire_old_key(&self, old_key_uuid: Uuid) -> Result<bool, ReencryptionError> {
         let pending: i64 = sqlx::query_scalar!(
             "SELECT COUNT(*) FROM reencryption_jobs WHERE old_key_id=$1 AND status != 'completed'",
             old_key_uuid,

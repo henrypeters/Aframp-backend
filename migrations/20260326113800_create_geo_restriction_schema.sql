@@ -2,22 +2,39 @@
 -- Geo-restriction & Country-level Access Controls
 
 -- Create enum types for geo-restriction system
-CREATE TYPE access_level AS ENUM ('allowed', 'restricted', 'blocked');
-CREATE TYPE override_type AS ENUM ('allow', 'block');
-CREATE TYPE transaction_type AS ENUM (
-    'onramp',
-    'offramp',
-    'bill_payment',
-    'batch_transfer',
-    'wallet_balance',
-    'exchange_rate',
-    'fee_calculation',
-    'read_only'
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'access_level') THEN
+        CREATE TYPE access_level AS ENUM ('allowed', 'restricted', 'blocked');
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'override_type') THEN
+        CREATE TYPE override_type AS ENUM ('allow', 'block');
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transaction_type') THEN
+        CREATE TYPE transaction_type AS ENUM (
+            'onramp',
+            'offramp',
+            'bill_payment',
+            'batch_transfer',
+            'wallet_balance',
+            'exchange_rate',
+            'fee_calculation',
+            'read_only'
+        );
+    END IF;
+END $$;
 
 -- Country Access Policy Table
 -- Stores access policies for each country
-CREATE TABLE country_access_policies (
+CREATE TABLE IF NOT EXISTS country_access_policies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     country_code CHAR(2) NOT NULL UNIQUE, -- ISO 3166-1 alpha-2
     country_name VARCHAR(100) NOT NULL,
@@ -31,7 +48,7 @@ CREATE TABLE country_access_policies (
 
 -- Region Grouping Table
 -- Groups countries into regions with regional policies
-CREATE TABLE region_groupings (
+CREATE TABLE IF NOT EXISTS region_groupings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     region_name VARCHAR(100) NOT NULL UNIQUE,
     member_country_codes CHAR(2)[] NOT NULL DEFAULT ARRAY[]::CHAR(2)[],
@@ -45,7 +62,7 @@ CREATE TABLE region_groupings (
 
 -- Consumer Geo-Override Table
 -- Stores consumer-specific overrides for country policies
-CREATE TABLE consumer_geo_overrides (
+CREATE TABLE IF NOT EXISTS consumer_geo_overrides (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     consumer_id UUID NOT NULL,
     country_code CHAR(2) NOT NULL,
@@ -66,7 +83,7 @@ CREATE TABLE consumer_geo_overrides (
 
 -- Geo-Restriction Audit Table
 -- Audit log for all geo-restriction enforcement decisions
-CREATE TABLE geo_restriction_audit (
+CREATE TABLE IF NOT EXISTS geo_restriction_audit (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     request_ip INET NOT NULL,
     resolved_country_code CHAR(2),
@@ -80,29 +97,29 @@ CREATE TABLE geo_restriction_audit (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_country_access_policies_country_code ON country_access_policies(country_code);
-CREATE INDEX idx_country_access_policies_access_level ON country_access_policies(access_level);
+CREATE INDEX IF NOT EXISTS idx_country_access_policies_country_code ON country_access_policies(country_code);
+CREATE INDEX IF NOT EXISTS idx_country_access_policies_access_level ON country_access_policies(access_level);
 
-CREATE INDEX idx_region_groupings_region_name ON region_groupings(region_name);
-CREATE INDEX idx_region_groupings_member_countries ON region_groupings USING GIN(member_country_codes);
+CREATE INDEX IF NOT EXISTS idx_region_groupings_region_name ON region_groupings(region_name);
+CREATE INDEX IF NOT EXISTS idx_region_groupings_member_countries ON region_groupings USING GIN(member_country_codes);
 
-CREATE INDEX idx_consumer_geo_overrides_consumer_id ON consumer_geo_overrides(consumer_id);
-CREATE INDEX idx_consumer_geo_overrides_country_code ON consumer_geo_overrides(country_code);
-CREATE INDEX idx_consumer_geo_overrides_expiry ON consumer_geo_overrides(expiry_at) WHERE expiry_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_consumer_geo_overrides_consumer_id ON consumer_geo_overrides(consumer_id);
+CREATE INDEX IF NOT EXISTS idx_consumer_geo_overrides_country_code ON consumer_geo_overrides(country_code);
+CREATE INDEX IF NOT EXISTS idx_consumer_geo_overrides_expiry ON consumer_geo_overrides(expiry_at) WHERE expiry_at IS NOT NULL;
 
-CREATE INDEX idx_geo_restriction_audit_request_ip ON geo_restriction_audit(request_ip);
-CREATE INDEX idx_geo_restriction_audit_country_code ON geo_restriction_audit(resolved_country_code);
-CREATE INDEX idx_geo_restriction_audit_consumer_id ON geo_restriction_audit(consumer_id);
-CREATE INDEX idx_geo_restriction_audit_timestamp ON geo_restriction_audit(timestamp DESC);
-CREATE INDEX idx_geo_restriction_audit_decision ON geo_restriction_audit(access_decision);
+CREATE INDEX IF NOT EXISTS idx_geo_restriction_audit_request_ip ON geo_restriction_audit(request_ip);
+CREATE INDEX IF NOT EXISTS idx_geo_restriction_audit_country_code ON geo_restriction_audit(resolved_country_code);
+CREATE INDEX IF NOT EXISTS idx_geo_restriction_audit_consumer_id ON geo_restriction_audit(consumer_id);
+CREATE INDEX IF NOT EXISTS idx_geo_restriction_audit_timestamp ON geo_restriction_audit(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_geo_restriction_audit_decision ON geo_restriction_audit(access_decision);
 
 -- Composite indexes for common queries
-CREATE INDEX idx_geo_restriction_audit_ip_country_timestamp
+CREATE INDEX IF NOT EXISTS idx_geo_restriction_audit_ip_country_timestamp
 ON geo_restriction_audit(request_ip, resolved_country_code, timestamp DESC);
 
-CREATE INDEX idx_consumer_geo_overrides_active
+CREATE INDEX IF NOT EXISTS idx_consumer_geo_overrides_active
 ON consumer_geo_overrides(consumer_id, country_code, expiry_at)
-WHERE expiry_at IS NULL OR expiry_at > NOW();
+WHERE TRUE;
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_country_policy_updated_at()
@@ -123,11 +140,13 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Triggers for automatic timestamp updates
+DROP TRIGGER IF EXISTS trigger_update_country_policy_updated_at ON country_access_policies;
 CREATE TRIGGER trigger_update_country_policy_updated_at
     BEFORE UPDATE ON country_access_policies
     FOR EACH ROW
     EXECUTE FUNCTION update_country_policy_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_update_region_grouping_updated_at ON region_groupings;
 CREATE TRIGGER trigger_update_region_grouping_updated_at
     BEFORE UPDATE ON region_groupings
     FOR EACH ROW
@@ -135,22 +154,30 @@ CREATE TRIGGER trigger_update_region_grouping_updated_at
 
 -- Insert default policies for common scenarios
 -- Note: These are examples - actual policies should be configured based on business requirements
-INSERT INTO country_access_policies (country_code, country_name, access_level, restriction_reason) VALUES
-('US', 'United States', 'blocked', 'Regulatory compliance - US financial restrictions'),
-('CN', 'China', 'restricted', 'Enhanced verification required', '["onramp","offramp","bill_payment"]'),
-('NG', 'Nigeria', 'allowed', NULL),
-('GH', 'Ghana', 'allowed', NULL),
-('KE', 'Kenya', 'allowed', NULL),
-('ZA', 'South Africa', 'allowed', NULL);
+INSERT INTO country_access_policies (
+    country_code,
+    country_name,
+    access_level,
+    restriction_reason,
+    applicable_transaction_types
+) VALUES
+('US', 'United States', 'blocked', 'Regulatory compliance - US financial restrictions', ARRAY[]::transaction_type[]),
+('CN', 'China', 'restricted', 'Enhanced verification required', ARRAY['onramp','offramp','bill_payment']::transaction_type[]),
+('NG', 'Nigeria', 'allowed', NULL, ARRAY[]::transaction_type[]),
+('GH', 'Ghana', 'allowed', NULL, ARRAY[]::transaction_type[]),
+('KE', 'Kenya', 'allowed', NULL, ARRAY[]::transaction_type[]),
+('ZA', 'South Africa', 'allowed', NULL, ARRAY[]::transaction_type[])
+ON CONFLICT (country_code) DO NOTHING;
 
 -- Insert default region groupings
 INSERT INTO region_groupings (region_name, member_country_codes, access_level) VALUES
 ('West Africa', ARRAY['NG','GH','CI','SN','BF'], 'allowed'),
 ('East Africa', ARRAY['KE','TZ','UG','RW','ET'], 'allowed'),
 ('Southern Africa', ARRAY['ZA','ZW','MZ','BW','NA'], 'allowed'),
-('North Africa', ARRAY['MA','TN','EG','DZ','LY'], 'restricted');
+('North Africa', ARRAY['MA','TN','EG','DZ','LY'], 'restricted')
+ON CONFLICT (region_name) DO NOTHING;
 
 -- Create a view for active consumer overrides (non-expired)
-CREATE VIEW active_consumer_geo_overrides AS
+CREATE OR REPLACE VIEW active_consumer_geo_overrides AS
 SELECT * FROM consumer_geo_overrides
 WHERE expiry_at IS NULL OR expiry_at > NOW();

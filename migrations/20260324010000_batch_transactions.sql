@@ -1,4 +1,3 @@
--- migrate:up
 -- Batch Transaction Processing (Issue #125)
 --
 -- Tables:

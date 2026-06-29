@@ -1,14 +1,14 @@
-use crate::chains::stellar::client::StellarClient;
-use crate::database::bill_payment_repository::{BillPaymentRepository, BillPayment};
-use crate::database::transaction_repository::TransactionRepository;
+// REMOVED: use crate::chains::stellar::client::StellarClient;
+use crate::database::bill_payment_repository::{BillPayment, BillPaymentRepository};
 use crate::database::repository::Repository;
+use crate::database::transaction_repository::TransactionRepository;
 use crate::services::notification::{NotificationService, NotificationType};
-use crate::workers::bill_processor::providers::BillProviderFactory;
-use crate::workers::bill_processor::types::*;
 use crate::workers::bill_processor::account_verification::AccountVerifier;
 use crate::workers::bill_processor::payment_executor::PaymentExecutor;
+use crate::workers::bill_processor::providers::BillProviderFactory;
 use crate::workers::bill_processor::refund_handler::RefundHandler;
 use crate::workers::bill_processor::token_manager::TokenManager;
+use crate::workers::bill_processor::types::*;
 use sqlx::PgPool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -97,7 +97,9 @@ impl BillProcessorWorker {
     #[instrument(skip(self), name = "bill_processor_cycle")]
     async fn run_cycle(&self) -> anyhow::Result<()> {
         let bill_repo = BillPaymentRepository::new(self.pool.clone());
-        let pending = bill_repo.find_pending_processing(self.config.batch_size).await?;
+        let pending = bill_repo
+            .find_pending_processing(self.config.batch_size)
+            .await?;
 
         for bill in pending {
             if let Err(e) = self.process_bill(bill).await {
@@ -115,7 +117,8 @@ impl BillProcessorWorker {
     }
 
     async fn process_bill(&self, bill: BillPayment) -> anyhow::Result<()> {
-        let state = BillProcessingState::from_str(&bill.status).unwrap_or(BillProcessingState::PendingPayment);
+        let state = BillProcessingState::from_str(&bill.status)
+            .unwrap_or(BillProcessingState::PendingPayment);
 
         match state {
             BillProcessingState::CngnReceived => self.handle_cngn_received(bill).await,
@@ -130,20 +133,20 @@ impl BillProcessorWorker {
 
     async fn handle_cngn_received(&self, mut bill: BillPayment) -> anyhow::Result<()> {
         info!(bill_id = %bill.id, "Handling received cNGN for bill");
-        
+
         // In a real implementation, we would verify the amount against Stellar here
         // For this worker, we transition to verification stage
-        
+
         bill.status = BillProcessingState::VerifyingAccount.as_str().to_string();
         let repo = BillPaymentRepository::new(self.pool.clone());
         repo.update(&bill.id.to_string(), &bill).await?;
-        
+
         Ok(())
     }
 
     async fn handle_verifying_account(&self, mut bill: BillPayment) -> anyhow::Result<()> {
         info!(bill_id = %bill.id, "Verifying account for bill");
-        
+
         let provider = self.provider_factory.get_provider(&bill.provider_name);
         let request = VerificationRequest {
             provider_code: bill.provider_name.clone(), // This might need mapping
@@ -196,7 +199,7 @@ impl BillProcessorWorker {
                 } else {
                     BillProcessingState::ProviderProcessing.as_str().to_string()
                 };
-                
+
                 if bill.status == "completed" {
                     self.send_completion_notification(&bill).await;
                 }
@@ -250,8 +253,14 @@ impl BillProcessorWorker {
             bill.status = BillProcessingState::RefundInitiated.as_str().to_string();
         } else {
             let last_retry = bill.last_retry_at.unwrap_or(bill.created_at);
-            let backoff = self.config.retry_config.backoff_seconds.get(retry_count as usize).copied().unwrap_or(300);
-            
+            let backoff = self
+                .config
+                .retry_config
+                .backoff_seconds
+                .get(retry_count as usize)
+                .copied()
+                .unwrap_or(300);
+
             if chrono::Utc::now() > last_retry + Duration::from_secs(backoff) {
                 info!(bill_id = %bill.id, attempt = retry_count + 1, "Retrying payment");
                 bill.status = BillProcessingState::ProcessingBill.as_str().to_string();
@@ -266,7 +275,7 @@ impl BillProcessorWorker {
 
     async fn handle_refund_initiated(&self, mut bill: BillPayment) -> anyhow::Result<()> {
         info!(bill_id = %bill.id, "Processing refund");
-        
+
         bill.status = BillProcessingState::RefundProcessing.as_str().to_string();
         let repo = BillPaymentRepository::new(self.pool.clone());
         repo.update(&bill.id.to_string(), &bill).await?;
@@ -274,8 +283,16 @@ impl BillProcessorWorker {
         // Simulate Stellar refund
         let wallet = "G...".to_string(); // In real world, get from transaction
         let amount = 0.0; // In real world, get from transaction
-        
-        match RefundHandler::process_refund(&self.stellar_client, bill.transaction_id, &wallet, amount, "Bill payment failed").await {
+
+        match RefundHandler::process_refund(
+            &self.stellar_client,
+            bill.transaction_id,
+            &wallet,
+            amount,
+            "Bill payment failed",
+        )
+        .await
+        {
             Ok(hash) => {
                 info!(bill_id = %bill.id, hash = %hash, "Refund successful");
                 bill.status = BillProcessingState::Refunded.as_str().to_string();
@@ -295,12 +312,17 @@ impl BillProcessorWorker {
         let tx_repo = TransactionRepository::new(self.pool.clone());
         if let Ok(Some(tx)) = tx_repo.find_by_id(&bill.transaction_id.to_string()).await {
             let message = if let Some(token) = &bill.token {
-                format!("Payment successful. Token: {}", TokenManager::format_token(token, &bill.bill_type))
+                format!(
+                    "Payment successful. Token: {}",
+                    TokenManager::format_token(token, &bill.bill_type)
+                )
             } else {
                 "Payment successful".to_string()
             };
-            
-            self.notification_service.send_notification(&tx, NotificationType::OfframpCompleted, &message).await;
+
+            self.notification_service
+                .send_notification(&tx, NotificationType::OfframpCompleted, &message)
+                .await;
         }
     }
 }

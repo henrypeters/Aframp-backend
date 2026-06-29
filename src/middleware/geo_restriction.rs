@@ -117,7 +117,9 @@ fn extract_client_ip(req: &Request) -> String {
 
 /// Check if path should be excluded from geo-restriction
 fn is_excluded_path(path: &str, exclude_paths: &[String]) -> bool {
-    exclude_paths.iter().any(|excluded| path.starts_with(excluded))
+    exclude_paths
+        .iter()
+        .any(|excluded| path.starts_with(excluded))
 }
 
 /// Geo-restriction middleware function
@@ -153,8 +155,10 @@ pub async fn geo_restriction_middleware(
             json!({
                 "error": "Authentication required",
                 "message": "Consumer authentication is required for this endpoint"
-            }).to_string(),
-        ).into_response();
+            })
+            .to_string(),
+        )
+            .into_response();
     }
 
     // Build policy context
@@ -189,8 +193,10 @@ pub async fn geo_restriction_middleware(
                 json!({
                     "error": "Access restricted",
                     "message": "Access from your location is restricted for this service"
-                }).to_string(),
-            ).into_response()
+                })
+                .to_string(),
+            )
+                .into_response()
         }
         Ok(PolicyResult::Blocked) => {
             error!(
@@ -205,8 +211,10 @@ pub async fn geo_restriction_middleware(
                 json!({
                     "error": "Access blocked",
                     "message": "Access from your location is blocked for this service"
-                }).to_string(),
-            ).into_response()
+                })
+                .to_string(),
+            )
+                .into_response()
         }
         Ok(PolicyResult::RequiresVerification) => {
             info!(
@@ -222,8 +230,10 @@ pub async fn geo_restriction_middleware(
                     "error": "Enhanced verification required",
                     "message": "Additional verification is required for access from your location",
                     "requires_verification": true
-                }).to_string(),
-            ).into_response()
+                })
+                .to_string(),
+            )
+                .into_response()
         }
         Err(e) => {
             error!(

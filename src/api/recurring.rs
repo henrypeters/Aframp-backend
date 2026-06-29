@@ -125,7 +125,13 @@ pub struct ErrorBody {
 }
 
 fn err(status: StatusCode, code: &str, msg: impl Into<String>) -> impl IntoResponse {
-    (status, Json(ErrorBody { code: code.to_string(), message: msg.into() }))
+    (
+        status,
+        Json(ErrorBody {
+            code: code.to_string(),
+            message: msg.into(),
+        }),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -183,29 +189,45 @@ pub async fn create_schedule(
     // Validate amount
     let amount = match BigDecimal::from_str(&req.amount) {
         Ok(a) if a > BigDecimal::from(0) => a,
-        _ => return err(StatusCode::BAD_REQUEST, "INVALID_AMOUNT", "amount must be a positive number").into_response(),
+        _ => {
+            return err(
+                StatusCode::BAD_REQUEST,
+                "INVALID_AMOUNT",
+                "amount must be a positive number",
+            )
+            .into_response()
+        }
     };
 
     // Validate transaction_type
     if !["bill_payment", "onramp", "offramp"].contains(&req.transaction_type.as_str()) {
-        return err(StatusCode::BAD_REQUEST, "INVALID_TYPE", "unsupported transaction_type").into_response();
+        return err(
+            StatusCode::BAD_REQUEST,
+            "INVALID_TYPE",
+            "unsupported transaction_type",
+        )
+        .into_response();
     }
 
     let start = req.start_at.unwrap_or_else(Utc::now);
     let next_execution_at = next_execution_from_now(&freq, start);
 
-    match state.repo.create_schedule(
-        &req.wallet_address,
-        &req.transaction_type,
-        req.provider.as_deref(),
-        amount,
-        &req.currency,
-        &req.frequency,
-        req.custom_interval_days,
-        req.payment_metadata,
-        state.default_failure_threshold,
-        next_execution_at,
-    ).await {
+    match state
+        .repo
+        .create_schedule(
+            &req.wallet_address,
+            &req.transaction_type,
+            req.provider.as_deref(),
+            amount,
+            &req.currency,
+            &req.frequency,
+            req.custom_interval_days,
+            req.payment_metadata,
+            state.default_failure_threshold,
+            next_execution_at,
+        )
+        .await
+    {
         Ok(schedule) => {
             info!(
                 schedule_id = %schedule.id,
@@ -218,7 +240,12 @@ pub async fn create_schedule(
         }
         Err(e) => {
             error!(error = %e, "Failed to create recurring schedule");
-            err(StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "failed to create schedule").into_response()
+            err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DATABASE_ERROR",
+                "failed to create schedule",
+            )
+            .into_response()
         }
     }
 }
@@ -229,21 +256,35 @@ pub async fn list_schedules(
     Query(query): Query<ListSchedulesQuery>,
 ) -> impl IntoResponse {
     if query.wallet_address.is_empty() {
-        return err(StatusCode::BAD_REQUEST, "MISSING_WALLET", "wallet_address is required").into_response();
+        return err(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WALLET",
+            "wallet_address is required",
+        )
+        .into_response();
     }
 
-    match state.repo.list_for_wallet(
-        &query.wallet_address,
-        query.status.as_deref(),
-        query.transaction_type.as_deref(),
-    ).await {
+    match state
+        .repo
+        .list_for_wallet(
+            &query.wallet_address,
+            query.status.as_deref(),
+            query.transaction_type.as_deref(),
+        )
+        .await
+    {
         Ok(schedules) => {
             let resp: Vec<ScheduleResponse> = schedules.into_iter().map(map_schedule).collect();
             Json(resp).into_response()
         }
         Err(e) => {
             error!(error = %e, "Failed to list recurring schedules");
-            err(StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "failed to list schedules").into_response()
+            err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DATABASE_ERROR",
+                "failed to list schedules",
+            )
+            .into_response()
         }
     }
 }
@@ -255,15 +296,31 @@ pub async fn get_schedule(
     Query(query): Query<ListSchedulesQuery>,
 ) -> impl IntoResponse {
     if query.wallet_address.is_empty() {
-        return err(StatusCode::BAD_REQUEST, "MISSING_WALLET", "wallet_address is required").into_response();
+        return err(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WALLET",
+            "wallet_address is required",
+        )
+        .into_response();
     }
 
-    let schedule = match state.repo.find_by_id_and_wallet(id, &query.wallet_address).await {
+    let schedule = match state
+        .repo
+        .find_by_id_and_wallet(id, &query.wallet_address)
+        .await
+    {
         Ok(Some(s)) => s,
-        Ok(None) => return err(StatusCode::NOT_FOUND, "NOT_FOUND", "schedule not found").into_response(),
+        Ok(None) => {
+            return err(StatusCode::NOT_FOUND, "NOT_FOUND", "schedule not found").into_response()
+        }
         Err(e) => {
             error!(error = %e, "Failed to fetch recurring schedule");
-            return err(StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "failed to fetch schedule").into_response();
+            return err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DATABASE_ERROR",
+                "failed to fetch schedule",
+            )
+            .into_response();
         }
     };
 
@@ -271,14 +328,20 @@ pub async fn get_schedule(
         Ok(execs) => execs.into_iter().map(map_execution).collect(),
         Err(e) => {
             error!(error = %e, "Failed to fetch execution history");
-            return err(StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "failed to fetch executions").into_response();
+            return err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DATABASE_ERROR",
+                "failed to fetch executions",
+            )
+            .into_response();
         }
     };
 
     Json(ScheduleDetailResponse {
         schedule: map_schedule(schedule),
         executions,
-    }).into_response()
+    })
+    .into_response()
 }
 
 /// PATCH /api/recurring/:id
@@ -288,31 +351,64 @@ pub async fn update_schedule(
     Json(req): Json<UpdateScheduleRequest>,
 ) -> impl IntoResponse {
     // Ownership check
-    let existing = match state.repo.find_by_id_and_wallet(id, &req.wallet_address).await {
+    let existing = match state
+        .repo
+        .find_by_id_and_wallet(id, &req.wallet_address)
+        .await
+    {
         Ok(Some(s)) => s,
-        Ok(None) => return err(StatusCode::NOT_FOUND, "NOT_FOUND", "schedule not found").into_response(),
+        Ok(None) => {
+            return err(StatusCode::NOT_FOUND, "NOT_FOUND", "schedule not found").into_response()
+        }
         Err(e) => {
             error!(error = %e, "DB error on update ownership check");
-            return err(StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "db error").into_response();
+            return err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DATABASE_ERROR",
+                "db error",
+            )
+            .into_response();
         }
     };
 
     // Cannot update cancelled or suspended schedules (except to resume from paused)
     if existing.status == "cancelled" {
-        return err(StatusCode::UNPROCESSABLE_ENTITY, "CANCELLED", "cannot update a cancelled schedule").into_response();
+        return err(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "CANCELLED",
+            "cannot update a cancelled schedule",
+        )
+        .into_response();
     }
 
     // Validate status transition
     if let Some(ref new_status) = req.status {
         match new_status.as_str() {
             "paused" if existing.status != "active" => {
-                return err(StatusCode::UNPROCESSABLE_ENTITY, "INVALID_TRANSITION", "only active schedules can be paused").into_response();
+                return err(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "INVALID_TRANSITION",
+                    "only active schedules can be paused",
+                )
+                .into_response();
             }
             "active" if existing.status != "paused" => {
-                return err(StatusCode::UNPROCESSABLE_ENTITY, "INVALID_TRANSITION", "only paused schedules can be resumed").into_response();
+                return err(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "INVALID_TRANSITION",
+                    "only paused schedules can be resumed",
+                )
+                .into_response();
             }
             "paused" | "active" => {}
-            _ => return err(StatusCode::BAD_REQUEST, "INVALID_STATUS", "status must be 'paused' or 'active'").into_response(),
+            _ => {
+                return err(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_STATUS",
+                    "status must be 'paused' or 'active'",
+                )
+                .into_response()
+            }
         }
     }
 
@@ -326,26 +422,42 @@ pub async fn update_schedule(
     let amount = match req.amount.as_deref() {
         Some(a) => match BigDecimal::from_str(a) {
             Ok(v) if v > BigDecimal::from(0) => Some(v),
-            _ => return err(StatusCode::BAD_REQUEST, "INVALID_AMOUNT", "amount must be positive").into_response(),
+            _ => {
+                return err(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_AMOUNT",
+                    "amount must be positive",
+                )
+                .into_response()
+            }
         },
         None => None,
     };
 
-    match state.repo.update_schedule(
-        id,
-        amount,
-        req.frequency.as_deref(),
-        req.custom_interval_days,
-        req.next_execution_at,
-        req.status.as_deref(),
-    ).await {
+    match state
+        .repo
+        .update_schedule(
+            id,
+            amount,
+            req.frequency.as_deref(),
+            req.custom_interval_days,
+            req.next_execution_at,
+            req.status.as_deref(),
+        )
+        .await
+    {
         Ok(schedule) => {
             info!(schedule_id = %id, "Recurring schedule updated");
             Json(map_schedule(schedule)).into_response()
         }
         Err(e) => {
             error!(error = %e, "Failed to update recurring schedule");
-            err(StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "failed to update schedule").into_response()
+            err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DATABASE_ERROR",
+                "failed to update schedule",
+            )
+            .into_response()
         }
     }
 }
@@ -357,11 +469,22 @@ pub async fn cancel_schedule(
     Json(req): Json<CancelScheduleRequest>,
 ) -> impl IntoResponse {
     // Ownership check
-    match state.repo.find_by_id_and_wallet(id, &req.wallet_address).await {
-        Ok(None) => return err(StatusCode::NOT_FOUND, "NOT_FOUND", "schedule not found").into_response(),
+    match state
+        .repo
+        .find_by_id_and_wallet(id, &req.wallet_address)
+        .await
+    {
+        Ok(None) => {
+            return err(StatusCode::NOT_FOUND, "NOT_FOUND", "schedule not found").into_response()
+        }
         Err(e) => {
             error!(error = %e, "DB error on cancel ownership check");
-            return err(StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "db error").into_response();
+            return err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DATABASE_ERROR",
+                "db error",
+            )
+            .into_response();
         }
         Ok(Some(_)) => {}
     }
@@ -373,7 +496,12 @@ pub async fn cancel_schedule(
         }
         Err(e) => {
             error!(error = %e, "Failed to cancel recurring schedule");
-            err(StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "failed to cancel schedule").into_response()
+            err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DATABASE_ERROR",
+                "failed to cancel schedule",
+            )
+            .into_response()
         }
     }
 }

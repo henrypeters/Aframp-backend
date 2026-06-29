@@ -1,11 +1,11 @@
 use async_trait::async_trait;
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
-use bigdecimal::BigDecimal;
 
-use crate::database::kyc_repository::{KycTier, KycStatus, DocumentType};
+use crate::database::kyc_repository::{DocumentType, KycStatus, KycTier};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KycSessionRequest {
@@ -115,21 +115,34 @@ pub struct ProviderConfig {
 pub trait KycProvider: Send + Sync {
     fn name(&self) -> &str;
     fn config(&self) -> &ProviderConfig;
-    
-    async fn create_session(&self, request: KycSessionRequest) -> Result<KycSessionResponse, KycProviderError>;
-    
-    async fn submit_document(&self, request: DocumentSubmissionRequest) -> Result<DocumentSubmissionResponse, KycProviderError>;
-    
-    async fn submit_selfie(&self, request: SelfieSubmissionRequest) -> Result<SelfieSubmissionResponse, KycProviderError>;
-    
+
+    async fn create_session(
+        &self,
+        request: KycSessionRequest,
+    ) -> Result<KycSessionResponse, KycProviderError>;
+
+    async fn submit_document(
+        &self,
+        request: DocumentSubmissionRequest,
+    ) -> Result<DocumentSubmissionResponse, KycProviderError>;
+
+    async fn submit_selfie(
+        &self,
+        request: SelfieSubmissionRequest,
+    ) -> Result<SelfieSubmissionResponse, KycProviderError>;
+
     async fn check_status(&self, session_id: &str) -> Result<KycStatusResponse, KycProviderError>;
-    
-    async fn verify_webhook_signature(&self, payload: &str, signature: &str) -> Result<bool, KycProviderError>;
-    
+
+    async fn verify_webhook_signature(
+        &self,
+        payload: &str,
+        signature: &str,
+    ) -> Result<bool, KycProviderError>;
+
     fn map_document_type(&self, document_type: DocumentType) -> Result<String, KycProviderError>;
-    
+
     fn map_provider_status(&self, provider_status: &str) -> Result<KycStatus, KycProviderError>;
-    
+
     fn map_provider_tier(&self, provider_tier: &str) -> Result<Option<KycTier>, KycProviderError>;
 }
 
@@ -137,37 +150,37 @@ pub trait KycProvider: Send + Sync {
 pub enum KycProviderError {
     #[error("API request failed: {0}")]
     ApiError(String),
-    
+
     #[error("Authentication failed: {0}")]
     AuthenticationError(String),
-    
+
     #[error("Invalid request: {0}")]
     InvalidRequest(String),
-    
+
     #[error("Document processing failed: {0}")]
     DocumentProcessingError(String),
-    
+
     #[error("Session not found: {0}")]
     SessionNotFound(String),
-    
+
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
-    
+
     #[error("Service unavailable: {0}")]
     ServiceUnavailable(String),
-    
+
     #[error("Invalid response: {0}")]
     InvalidResponse(String),
-    
+
     #[error("Webhook signature verification failed")]
     WebhookSignatureError,
-    
+
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
-    
+
     #[error("Network error: {0}")]
     NetworkError(#[from] reqwest::Error),
-    
+
     #[error("JSON serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 }
@@ -184,20 +197,20 @@ impl SmileIdentityProvider {
             .timeout(std::time::Duration::from_secs(config.timeout_seconds))
             .build()
             .expect("Failed to create HTTP client");
-            
+
         Self { config, client }
     }
-    
+
     fn create_signature(&self, payload: &str) -> String {
         use hmac::{Hmac, Mac};
         use sha2::Sha256;
-        
+
         type HmacSha256 = Hmac<Sha256>;
-        
+
         let mut mac = HmacSha256::new_from_slice(self.config.api_secret.as_bytes())
             .expect("Invalid key length");
         mac.update(payload.as_bytes());
-        
+
         hex::encode(mac.finalize().into_bytes())
     }
 }
@@ -207,14 +220,17 @@ impl KycProvider for SmileIdentityProvider {
     fn name(&self) -> &str {
         "smile_identity"
     }
-    
+
     fn config(&self) -> &ProviderConfig {
         &self.config
     }
-    
-    async fn create_session(&self, request: KycSessionRequest) -> Result<KycSessionResponse, KycProviderError> {
+
+    async fn create_session(
+        &self,
+        request: KycSessionRequest,
+    ) -> Result<KycSessionResponse, KycProviderError> {
         let url = format!("{}/api/v1/verification/session", self.config.base_url);
-        
+
         let mut payload = serde_json::json!({
             "partner_id": self.config.api_key,
             "callback_url": request.callback_url,
@@ -222,22 +238,23 @@ impl KycProvider for SmileIdentityProvider {
             "language": request.language.unwrap_or_else(|| "en".to_string()),
             "metadata": request.metadata
         });
-        
+
         if let Some(redirect_url) = request.redirect_url {
             payload["redirect_url"] = serde_json::Value::String(redirect_url);
         }
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-            
+
         if response.status().is_success() {
             let result: serde_json::Value = response.json().await?;
-            
+
             Ok(KycSessionResponse {
                 session_id: result["session_id"].as_str().unwrap().to_string(),
                 session_url: result["session_url"].as_str().map(|s| s.to_string()),
@@ -252,42 +269,46 @@ impl KycProvider for SmileIdentityProvider {
             Err(KycProviderError::ApiError(error_text))
         }
     }
-    
-    async fn submit_document(&self, request: DocumentSubmissionRequest) -> Result<DocumentSubmissionResponse, KycProviderError> {
+
+    async fn submit_document(
+        &self,
+        request: DocumentSubmissionRequest,
+    ) -> Result<DocumentSubmissionResponse, KycProviderError> {
         let url = format!("{}/api/v1/verification/document", self.config.base_url);
-        
+
         let provider_doc_type = self.map_document_type(request.document_type)?;
-        
+
         let mut payload = serde_json::json!({
             "session_id": request.session_id,
             "document_type": provider_doc_type,
             "front_image": request.front_image_base64,
             "metadata": request.metadata
         });
-        
+
         if let Some(back_image) = request.back_image_base64 {
             payload["back_image"] = serde_json::Value::String(back_image);
         }
-        
+
         if let Some(doc_number) = request.document_number {
             payload["document_number"] = serde_json::Value::String(doc_number);
         }
-        
+
         if let Some(country) = request.issuing_country {
             payload["issuing_country"] = serde_json::Value::String(country);
         }
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-            
+
         if response.status().is_success() {
             let result: serde_json::Value = response.json().await?;
-            
+
             Ok(DocumentSubmissionResponse {
                 document_id: result["document_id"].as_str().unwrap().to_string(),
                 provider_document_id: result["provider_document_id"].as_str().unwrap().to_string(),
@@ -299,28 +320,32 @@ impl KycProvider for SmileIdentityProvider {
             Err(KycProviderError::ApiError(error_text))
         }
     }
-    
-    async fn submit_selfie(&self, request: SelfieSubmissionRequest) -> Result<SelfieSubmissionResponse, KycProviderError> {
+
+    async fn submit_selfie(
+        &self,
+        request: SelfieSubmissionRequest,
+    ) -> Result<SelfieSubmissionResponse, KycProviderError> {
         let url = format!("{}/api/v1/verification/selfie", self.config.base_url);
-        
+
         let payload = serde_json::json!({
             "session_id": request.session_id,
             "selfie_image": request.selfie_image_base64,
             "liveness_check": request.liveness_check,
             "match_with_document": request.match_with_document
         });
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .await?;
-            
+
         if response.status().is_success() {
             let result: serde_json::Value = response.json().await?;
-            
+
             Ok(SelfieSubmissionResponse {
                 selfie_id: result["selfie_id"].as_str().unwrap().to_string(),
                 provider_selfie_id: result["provider_selfie_id"].as_str().unwrap().to_string(),
@@ -333,59 +358,69 @@ impl KycProvider for SmileIdentityProvider {
             Err(KycProviderError::ApiError(error_text))
         }
     }
-    
+
     async fn check_status(&self, session_id: &str) -> Result<KycStatusResponse, KycProviderError> {
-        let url = format!("{}/api/v1/verification/status/{}", self.config.base_url, session_id);
-        
-        let response = self.client
+        let url = format!(
+            "{}/api/v1/verification/status/{}",
+            self.config.base_url, session_id
+        );
+
+        let response = self
+            .client
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .send()
             .await?;
-            
+
         if response.status().is_success() {
             let result: serde_json::Value = response.json().await?;
-            
+
             let completed_steps: Vec<String> = result["completed_steps"]
                 .as_array()
                 .unwrap_or(&serde_json::Value::Array(vec![]))
                 .iter()
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect();
-                
+
             let pending_steps: Vec<String> = result["pending_steps"]
                 .as_array()
                 .unwrap_or(&serde_json::Value::Array(vec![]))
                 .iter()
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect();
-            
+
             let decision = if let Some(decision_data) = result.get("decision") {
                 Some(KycDecision {
-                    decision: self.map_provider_status(decision_data["decision"].as_str().unwrap())?,
+                    decision: self
+                        .map_provider_status(decision_data["decision"].as_str().unwrap())?,
                     reason: decision_data["reason"].as_str().unwrap().to_string(),
-                    tier: decision_data["tier"].as_str()
+                    tier: decision_data["tier"]
+                        .as_str()
                         .and_then(|t| self.map_provider_tier(t).ok())
                         .flatten(),
-                    reviewer_notes: decision_data["reviewer_notes"].as_str().map(|s| s.to_string()),
+                    reviewer_notes: decision_data["reviewer_notes"]
+                        .as_str()
+                        .map(|s| s.to_string()),
                     provider_reference: decision_data["reference"].as_str().unwrap().to_string(),
                 })
             } else {
                 None
             };
-            
+
             Ok(KycStatusResponse {
                 session_id: session_id.to_string(),
                 status: self.map_provider_status(result["status"].as_str().unwrap())?,
-                tier: result["tier"].as_str()
+                tier: result["tier"]
+                    .as_str()
                     .and_then(|t| self.map_provider_tier(t).ok())
                     .flatten(),
                 decision,
                 risk_score: result["risk_score"].as_i64().map(|i| i as i32),
-                risk_flags: result["risk_flags"].as_array()
-                    .map(|arr| arr.iter()
+                risk_flags: result["risk_flags"].as_array().map(|arr| {
+                    arr.iter()
                         .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()),
+                        .collect()
+                }),
                 completed_steps,
                 pending_steps,
                 expires_at: DateTime::parse_from_rfc3339(result["expires_at"].as_str().unwrap())
@@ -397,14 +432,20 @@ impl KycProvider for SmileIdentityProvider {
             Err(KycProviderError::ApiError(error_text))
         }
     }
-    
-    async fn verify_webhook_signature(&self, payload: &str, signature: &str) -> Result<bool, KycProviderError> {
+
+    async fn verify_webhook_signature(
+        &self,
+        payload: &str,
+        signature: &str,
+    ) -> Result<bool, KycProviderError> {
         let expected_signature = self.create_signature(payload);
         Ok(hmac::compare::compare(&expected_signature.as_bytes(), signature.as_bytes()).is_ok())
     }
-    
+
     fn map_document_type(&self, document_type: DocumentType) -> Result<String, KycProviderError> {
-        let mapping = self.config.document_type_mappings
+        let mapping = self
+            .config
+            .document_type_mappings
             .get(&document_type)
             .cloned()
             .unwrap_or_else(|| match document_type {
@@ -417,10 +458,10 @@ impl KycProvider for SmileIdentityProvider {
                 DocumentType::SourceOfFunds => "SOURCE_OF_FUNDS".to_string(),
                 DocumentType::BusinessRegistration => "BUSINESS_REGISTRATION".to_string(),
             });
-            
+
         Ok(mapping)
     }
-    
+
     fn map_provider_status(&self, provider_status: &str) -> Result<KycStatus, KycProviderError> {
         match provider_status.to_lowercase().as_str() {
             "pending" | "processing" | "uploaded" => Ok(KycStatus::Pending),
@@ -428,10 +469,13 @@ impl KycProvider for SmileIdentityProvider {
             "rejected" | "failed" | "declined" => Ok(KycStatus::Rejected),
             "manual_review" | "review_required" => Ok(KycStatus::ManualReview),
             "expired" | "timeout" => Ok(KycStatus::Expired),
-            _ => Err(KycProviderError::InvalidResponse(format!("Unknown provider status: {}", provider_status))),
+            _ => Err(KycProviderError::InvalidResponse(format!(
+                "Unknown provider status: {}",
+                provider_status
+            ))),
         }
     }
-    
+
     fn map_provider_tier(&self, provider_tier: &str) -> Result<Option<KycTier>, KycProviderError> {
         let tier = match provider_tier.to_lowercase().as_str() {
             "basic" | "tier1" => Some(KycTier::Basic),
@@ -448,20 +492,27 @@ impl KycProvider for SmileIdentityProvider {
 pub struct KycProviderFactory;
 
 impl KycProviderFactory {
-    pub fn create_provider(config: ProviderConfig) -> Result<Box<dyn KycProvider>, KycProviderError> {
+    pub fn create_provider(
+        config: ProviderConfig,
+    ) -> Result<Box<dyn KycProvider>, KycProviderError> {
         match config.name.to_lowercase().as_str() {
-            "smile_identity" | "smileidentity" => {
-                Ok(Box::new(SmileIdentityProvider::new(config)))
-            },
+            "smile_identity" | "smileidentity" => Ok(Box::new(SmileIdentityProvider::new(config))),
             "onfido" => {
                 // TODO: Implement Onfido provider
-                Err(KycProviderError::ConfigurationError("Onfido provider not yet implemented".to_string()))
-            },
+                Err(KycProviderError::ConfigurationError(
+                    "Onfido provider not yet implemented".to_string(),
+                ))
+            }
             "sumsub" => {
                 // TODO: Implement Sumsub provider
-                Err(KycProviderError::ConfigurationError("Sumsub provider not yet implemented".to_string()))
-            },
-            _ => Err(KycProviderError::ConfigurationError(format!("Unknown provider: {}", config.name))),
+                Err(KycProviderError::ConfigurationError(
+                    "Sumsub provider not yet implemented".to_string(),
+                ))
+            }
+            _ => Err(KycProviderError::ConfigurationError(format!(
+                "Unknown provider: {}",
+                config.name
+            ))),
         }
     }
 }

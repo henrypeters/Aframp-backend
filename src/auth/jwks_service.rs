@@ -17,11 +17,11 @@ use tracing::{error, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JwksKey {
-    pub kty: String,      // Key type (RSA)
-    pub use_: String,     // Use (sig)
-    pub kid: String,      // Key ID
-    pub n: String,        // Modulus
-    pub e: String,        // Exponent
+    pub kty: String,  // Key type (RSA)
+    pub use_: String, // Use (sig)
+    pub kid: String,  // Key ID
+    pub n: String,    // Modulus
+    pub e: String,    // Exponent
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alg: Option<String>, // Algorithm
 }

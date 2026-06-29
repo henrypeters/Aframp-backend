@@ -25,13 +25,18 @@ use uuid::Uuid;
 
 use super::{
     client_store::{
-        consume_auth_code, get_refresh_token, is_token_blacklisted, revoke_refresh_token,
-        store_auth_code, store_refresh_token, blacklist_token, CreateClientInput,
+        blacklist_token, consume_auth_code, get_refresh_token, is_token_blacklisted,
+        revoke_refresh_token, store_auth_code, store_refresh_token, CreateClientInput,
         OAuthClientRepository, OAuthRefreshRecord, REFRESH_TOKEN_TTL_SECS,
     },
     keys::{JwkSet, RsaKeyPair},
-    pkce::{compute_s256_challenge, validate_challenge_method, validate_code_verifier, verify_pkce_s256},
-    token::{generate_access_token, validate_access_token, IntrospectionResponse, OAuthClaims, TokenParams, ACCESS_TOKEN_TTL_SECS},
+    pkce::{
+        compute_s256_challenge, validate_challenge_method, validate_code_verifier, verify_pkce_s256,
+    },
+    token::{
+        generate_access_token, validate_access_token, IntrospectionResponse, OAuthClaims,
+        TokenParams, ACCESS_TOKEN_TTL_SECS,
+    },
     types::{
         parse_scope_string, scope_vec_to_string, AuthorizationCode, ClientType, GrantType,
         OAuthClient, OAuthError, TokenResponse, SUPPORTED_SCOPES,
@@ -102,9 +107,7 @@ async fn register_client_inner(
     }
 
     // Public clients cannot use client_credentials
-    if client_type == ClientType::Public
-        && grant_types.contains(&GrantType::ClientCredentials)
-    {
+    if client_type == ClientType::Public && grant_types.contains(&GrantType::ClientCredentials) {
         return Err(OAuthError::InvalidRequest(
             "public clients cannot use the client_credentials grant type".to_string(),
         ));
@@ -174,8 +177,7 @@ pub async fn admin_register_client(
     headers: HeaderMap,
     Json(req): Json<RegisterClientRequest>,
 ) -> Response {
-    let created_by = get_request_id_from_headers(&headers)
-        .map(|_| "admin".to_string());
+    let created_by = get_request_id_from_headers(&headers).map(|_| "admin".to_string());
     match register_client_inner(&state, req, created_by).await {
         Ok(resp) => (StatusCode::CREATED, Json(resp)).into_response(),
         Err(e) => oauth_error_response(e),
@@ -371,15 +373,9 @@ pub async fn token_endpoint(
     };
 
     match grant {
-        GrantType::AuthorizationCode => {
-            handle_authorization_code(&state, req, &headers).await
-        }
-        GrantType::ClientCredentials => {
-            handle_client_credentials(&state, req, &headers).await
-        }
-        GrantType::RefreshToken => {
-            handle_refresh_token(&state, req, &headers).await
-        }
+        GrantType::AuthorizationCode => handle_authorization_code(&state, req, &headers).await,
+        GrantType::ClientCredentials => handle_client_credentials(&state, req, &headers).await,
+        GrantType::RefreshToken => handle_refresh_token(&state, req, &headers).await,
     }
 }
 
@@ -392,15 +388,25 @@ async fn handle_authorization_code(
 ) -> Response {
     let code = match req.code.as_deref() {
         Some(c) if !c.is_empty() => c.to_string(),
-        _ => return oauth_error_response(OAuthError::InvalidRequest("code is required".to_string())),
+        _ => {
+            return oauth_error_response(OAuthError::InvalidRequest("code is required".to_string()))
+        }
     };
     let redirect_uri = match req.redirect_uri.as_deref() {
         Some(u) if !u.is_empty() => u.to_string(),
-        _ => return oauth_error_response(OAuthError::InvalidRequest("redirect_uri is required".to_string())),
+        _ => {
+            return oauth_error_response(OAuthError::InvalidRequest(
+                "redirect_uri is required".to_string(),
+            ))
+        }
     };
     let code_verifier = match req.code_verifier.as_deref() {
         Some(v) if !v.is_empty() => v.to_string(),
-        _ => return oauth_error_response(OAuthError::InvalidRequest("code_verifier is required".to_string())),
+        _ => {
+            return oauth_error_response(OAuthError::InvalidRequest(
+                "code_verifier is required".to_string(),
+            ))
+        }
     };
     let client_id = match req.client_id.as_deref() {
         Some(id) if !id.is_empty() => id.to_string(),
@@ -438,13 +444,19 @@ async fn handle_authorization_code(
     // Consume authorization code (single-use)
     let auth_code = match consume_auth_code(&state.redis_cache, &code).await {
         Ok(Some(ac)) => ac,
-        Ok(None) => return oauth_error_response(OAuthError::InvalidGrant("authorization code is invalid or already used".to_string())),
+        Ok(None) => {
+            return oauth_error_response(OAuthError::InvalidGrant(
+                "authorization code is invalid or already used".to_string(),
+            ))
+        }
         Err(e) => return oauth_error_response(e),
     };
 
     // Validate code hasn't expired
     if auth_code.is_expired() {
-        return oauth_error_response(OAuthError::InvalidGrant("authorization code has expired".to_string()));
+        return oauth_error_response(OAuthError::InvalidGrant(
+            "authorization code has expired".to_string(),
+        ));
     }
 
     // Validate client_id matches
@@ -454,7 +466,9 @@ async fn handle_authorization_code(
 
     // Validate redirect_uri matches
     if auth_code.redirect_uri != redirect_uri {
-        return oauth_error_response(OAuthError::InvalidGrant("redirect_uri mismatch".to_string()));
+        return oauth_error_response(OAuthError::InvalidGrant(
+            "redirect_uri mismatch".to_string(),
+        ));
     }
 
     // Verify PKCE
@@ -607,7 +621,11 @@ async fn handle_refresh_token(
 ) -> Response {
     let refresh_token_str = match req.refresh_token.as_deref() {
         Some(t) if !t.is_empty() => t.to_string(),
-        _ => return oauth_error_response(OAuthError::InvalidRequest("refresh_token is required".to_string())),
+        _ => {
+            return oauth_error_response(OAuthError::InvalidRequest(
+                "refresh_token is required".to_string(),
+            ))
+        }
     };
 
     // Validate the refresh token JWT
@@ -618,14 +636,22 @@ async fn handle_refresh_token(
 
     // Check not blacklisted
     match is_token_blacklisted(&state.redis_cache, &claims.jti).await {
-        Ok(true) => return oauth_error_response(OAuthError::InvalidGrant("refresh token has been revoked".to_string())),
+        Ok(true) => {
+            return oauth_error_response(OAuthError::InvalidGrant(
+                "refresh token has been revoked".to_string(),
+            ))
+        }
         Err(e) => return oauth_error_response(e),
         Ok(false) => {}
     }
 
     // Verify the refresh record still exists in Redis
     match get_refresh_token(&state.redis_cache, &claims.jti).await {
-        Ok(None) => return oauth_error_response(OAuthError::InvalidGrant("refresh token not found or expired".to_string())),
+        Ok(None) => {
+            return oauth_error_response(OAuthError::InvalidGrant(
+                "refresh token not found or expired".to_string(),
+            ))
+        }
         Err(e) => return oauth_error_response(e),
         Ok(Some(_)) => {}
     }
@@ -753,7 +779,9 @@ pub async fn revoke_token(
     // Per RFC 7009: invalid tokens return 200 (don't leak info)
     let claims = match validate_access_token(&req.token, &state.key_pair, &state.issuer) {
         Ok(c) => c,
-        Err(_) => return (StatusCode::OK, Json(serde_json::json!({ "revoked": true }))).into_response(),
+        Err(_) => {
+            return (StatusCode::OK, Json(serde_json::json!({ "revoked": true }))).into_response()
+        }
     };
 
     let remaining = (claims.exp - Utc::now().timestamp()).max(0) as u64;
@@ -808,11 +836,7 @@ pub async fn discovery(State(state): State<Arc<OAuthState>>) -> Response {
 fn generate_client_secret() -> String {
     use std::collections::hash_map::DefaultHasher;
     // Use UUID v4 entropy (two UUIDs = 256 bits)
-    format!(
-        "{}{}",
-        Uuid::new_v4().simple(),
-        Uuid::new_v4().simple()
-    )
+    format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }
 
 /// Hash a client secret with SHA-256.
@@ -831,7 +855,11 @@ fn verify_client_secret(secret: &str, stored_hash: Option<&str>) -> bool {
 
 /// Generate a cryptographically random authorization code.
 fn generate_auth_code() -> String {
-    format!("code_{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
+    format!(
+        "code_{}{}",
+        Uuid::new_v4().simple(),
+        Uuid::new_v4().simple()
+    )
 }
 
 // Crypto helpers use hex from the existing dep

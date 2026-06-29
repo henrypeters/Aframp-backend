@@ -1,4 +1,3 @@
--- migrate:up
 -- Extend bill_payments table with bill processor state and token management
 
 -- Add columns for bill processor state tracking

@@ -54,7 +54,9 @@ impl AuditWriter {
     pub async fn write(&self, entry: PendingAuditEntry) {
         // Update channel utilisation metric
         let utilisation = 1.0 - (self.tx.capacity() as f64 / self.buffer_size as f64);
-        crate::audit::metrics::writer_channel_utilisation().set(utilisation);
+        if let Ok(metric) = crate::audit::metrics::writer_channel_utilisation() {
+            metric.set(utilisation);
+        }
 
         if utilisation >= CHANNEL_WARN_THRESHOLD {
             warn!(
@@ -67,16 +69,16 @@ impl AuditWriter {
             Ok(_) => {}
             Err(mpsc::error::TrySendError::Full(entry)) => {
                 error!("Audit writer channel full — falling back to synchronous write");
-                crate::audit::metrics::overflow_fallbacks_total()
-                    .with_label_values(&["channel_full"])
-                    .inc();
+                if let Ok(metric) = crate::audit::metrics::overflow_fallbacks_total() {
+                    metric.with_label_values(&["channel_full"]).inc();
+                }
                 self.write_sync(entry).await;
             }
             Err(mpsc::error::TrySendError::Closed(entry)) => {
                 error!("Audit writer channel closed — falling back to synchronous write");
-                crate::audit::metrics::overflow_fallbacks_total()
-                    .with_label_values(&["channel_closed"])
-                    .inc();
+                if let Ok(metric) = crate::audit::metrics::overflow_fallbacks_total() {
+                    metric.with_label_values(&["channel_closed"]).inc();
+                }
                 self.write_sync(entry).await;
             }
         }
@@ -126,9 +128,9 @@ async fn persist_entry(
     let current_hash = compute_entry_hash(&prev_hash, &content);
 
     let hash_duration = start.elapsed().as_secs_f64();
-    crate::audit::metrics::hash_chain_duration_seconds()
-        .with_label_values(&["compute"])
-        .observe(hash_duration);
+    if let Ok(metric) = crate::audit::metrics::hash_chain_duration_seconds() {
+        metric.with_label_values(&["compute"]).observe(hash_duration);
+    }
 
     let entry = AuditLogEntry {
         id,
@@ -156,9 +158,9 @@ async fn persist_entry(
 
     repo.insert(&entry).await.map_err(|e| e.to_string())?;
 
-    crate::audit::metrics::entries_total()
-        .with_label_values(&[entry.event_category.as_str()])
-        .inc();
+    if let Ok(metric) = crate::audit::metrics::entries_total() {
+        metric.with_label_values(&[entry.event_category.as_str()]).inc();
+    }
 
     // Publish to Redis pub/sub (non-blocking — failure is logged, not fatal)
     streamer.publish(&entry).await;

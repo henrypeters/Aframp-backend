@@ -2,20 +2,31 @@
 -- Suspicious IP Detection & Automated Blocking
 
 -- Create enum types for IP reputation system
-CREATE TYPE ip_block_type AS ENUM ('temporary', 'permanent', 'shadow');
-CREATE TYPE evidence_type AS ENUM (
-    'auth_failure_rate',
-    'signature_verification_failure',
-    'rate_limit_breach',
-    'impossible_travel',
-    'new_ip_high_value_transaction',
-    'scanning_pattern',
-    'external_threat_feed'
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ip_block_type') THEN
+        CREATE TYPE ip_block_type AS ENUM ('temporary', 'permanent', 'shadow');
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'evidence_type') THEN
+        CREATE TYPE evidence_type AS ENUM (
+            'auth_failure_rate',
+            'signature_verification_failure',
+            'rate_limit_breach',
+            'impossible_travel',
+            'new_ip_high_value_transaction',
+            'scanning_pattern',
+            'external_threat_feed'
+        );
+    END IF;
+END $$;
 
 -- IP Reputation Record Table
 -- Stores reputation scores and block status for IP addresses/CIDR ranges
-CREATE TABLE ip_reputation_records (
+CREATE TABLE IF NOT EXISTS ip_reputation_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ip_address_or_cidr INET NOT NULL UNIQUE,
     reputation_score DECIMAL(5,2) NOT NULL DEFAULT 0.00 CHECK (reputation_score >= -100.00 AND reputation_score <= 100.00),
@@ -31,7 +42,7 @@ CREATE TABLE ip_reputation_records (
 
 -- Evidence Records Table
 -- Stores individual evidence instances that contributed to reputation scoring
-CREATE TABLE ip_evidence_records (
+CREATE TABLE IF NOT EXISTS ip_evidence_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ip_address_or_cidr INET NOT NULL,
     evidence_type evidence_type NOT NULL,
@@ -48,23 +59,23 @@ CREATE TABLE ip_evidence_records (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_ip_reputation_records_ip ON ip_reputation_records(ip_address_or_cidr);
-CREATE INDEX idx_ip_reputation_records_score ON ip_reputation_records(reputation_score);
-CREATE INDEX idx_ip_reputation_records_block_status ON ip_reputation_records(block_status);
-CREATE INDEX idx_ip_reputation_records_whitelisted ON ip_reputation_records(is_whitelisted);
-CREATE INDEX idx_ip_reputation_records_last_seen ON ip_reputation_records(last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_ip_reputation_records_ip ON ip_reputation_records(ip_address_or_cidr);
+CREATE INDEX IF NOT EXISTS idx_ip_reputation_records_score ON ip_reputation_records(reputation_score);
+CREATE INDEX IF NOT EXISTS idx_ip_reputation_records_block_status ON ip_reputation_records(block_status);
+CREATE INDEX IF NOT EXISTS idx_ip_reputation_records_whitelisted ON ip_reputation_records(is_whitelisted);
+CREATE INDEX IF NOT EXISTS idx_ip_reputation_records_last_seen ON ip_reputation_records(last_seen_at);
 
-CREATE INDEX idx_ip_evidence_records_ip ON ip_evidence_records(ip_address_or_cidr);
-CREATE INDEX idx_ip_evidence_records_type ON ip_evidence_records(evidence_type);
-CREATE INDEX idx_ip_evidence_records_detected_at ON ip_evidence_records(detected_at);
-CREATE INDEX idx_ip_evidence_records_consumer ON ip_evidence_records(consumer_id);
+CREATE INDEX IF NOT EXISTS idx_ip_evidence_records_ip ON ip_evidence_records(ip_address_or_cidr);
+CREATE INDEX IF NOT EXISTS idx_ip_evidence_records_type ON ip_evidence_records(evidence_type);
+CREATE INDEX IF NOT EXISTS idx_ip_evidence_records_detected_at ON ip_evidence_records(detected_at);
+CREATE INDEX IF NOT EXISTS idx_ip_evidence_records_consumer ON ip_evidence_records(consumer_id);
 
 -- Composite indexes for common queries
-CREATE INDEX idx_ip_reputation_records_active_blocks
+CREATE INDEX IF NOT EXISTS idx_ip_reputation_records_active_blocks
 ON ip_reputation_records(block_status, block_expiry_at)
-WHERE block_status IS NOT NULL AND (block_expiry_at IS NULL OR block_expiry_at > NOW());
+WHERE block_status IS NOT NULL;
 
-CREATE INDEX idx_ip_evidence_records_ip_type_detected
+CREATE INDEX IF NOT EXISTS idx_ip_evidence_records_ip_type_detected
 ON ip_evidence_records(ip_address_or_cidr, evidence_type, detected_at DESC);
 
 -- Function to update last_seen_at timestamp
@@ -79,6 +90,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to automatically update last_seen_at when evidence is added
+DROP TRIGGER IF EXISTS trigger_update_ip_last_seen ON ip_evidence_records;
 CREATE TRIGGER trigger_update_ip_last_seen
     AFTER INSERT ON ip_evidence_records
     FOR EACH ROW
@@ -94,6 +106,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to automatically update updated_at on reputation record changes
+DROP TRIGGER IF EXISTS trigger_update_ip_reputation_updated_at ON ip_reputation_records;
 CREATE TRIGGER trigger_update_ip_reputation_updated_at
     BEFORE UPDATE ON ip_reputation_records
     FOR EACH ROW

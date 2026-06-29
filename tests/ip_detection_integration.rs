@@ -1,8 +1,8 @@
 //! Integration tests for IP Detection System
 
 use aframp_backend::*;
-use axum::http::{Request, StatusCode};
 use axum::body::Body;
+use axum::http::{Request, StatusCode};
 use serde_json::json;
 use tower::ServiceExt;
 

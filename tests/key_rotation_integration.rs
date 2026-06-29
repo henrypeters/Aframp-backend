@@ -25,7 +25,10 @@ mod key_rotation_integration {
         }
     }
 
-    fn resolve_expiry(consumer_type: &str, requested_days: Option<i64>) -> Result<chrono::DateTime<Utc>, String> {
+    fn resolve_expiry(
+        consumer_type: &str,
+        requested_days: Option<i64>,
+    ) -> Result<chrono::DateTime<Utc>, String> {
         let max = max_lifetime_for(consumer_type);
         let days = requested_days.unwrap_or(max);
         if days > max {
@@ -159,7 +162,10 @@ mod key_rotation_integration {
         let inserted_second = sent.insert((key_id, 30));
 
         assert!(inserted_first);
-        assert!(!inserted_second, "Duplicate notification must be suppressed");
+        assert!(
+            !inserted_second,
+            "Duplicate notification must be suppressed"
+        );
     }
 
     #[test]

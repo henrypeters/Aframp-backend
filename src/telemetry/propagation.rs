@@ -14,16 +14,11 @@ pub struct HeaderExtractor<'a>(pub &'a axum::http::HeaderMap);
 
 impl<'a> Extractor for HeaderExtractor<'a> {
     fn get(&self, key: &str) -> Option<&str> {
-        self.0
-            .get(key)
-            .and_then(|v| v.to_str().ok())
+        self.0.get(key).and_then(|v| v.to_str().ok())
     }
 
     fn keys(&self) -> Vec<&str> {
-        self.0
-            .keys()
-            .map(|k| k.as_str())
-            .collect()
+        self.0.keys().map(|k| k.as_str()).collect()
     }
 }
 
@@ -43,10 +38,7 @@ pub struct ReqwestHeaderInjector<'a>(pub &'a mut HeaderMap);
 
 impl<'a> Injector for ReqwestHeaderInjector<'a> {
     fn set(&mut self, key: &str, value: String) {
-        if let (Ok(name), Ok(val)) = (
-            HeaderName::from_str(key),
-            HeaderValue::from_str(&value),
-        ) {
+        if let (Ok(name), Ok(val)) = (HeaderName::from_str(key), HeaderValue::from_str(&value)) {
             self.0.insert(name, val);
         }
     }

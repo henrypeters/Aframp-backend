@@ -6,7 +6,10 @@
 #[cfg(test)]
 mod unit {
     use crate::oauth::{
-        pkce::{compute_s256_challenge, validate_challenge_method, validate_code_verifier, verify_pkce_s256},
+        pkce::{
+            compute_s256_challenge, validate_challenge_method, validate_code_verifier,
+            verify_pkce_s256,
+        },
         token::{IntrospectionResponse, OAuthClaims, ACCESS_TOKEN_TTL_SECS},
         types::{
             is_supported_scope, parse_scope_string, scope_vec_to_string, ClientType, GrantType,
@@ -124,9 +127,7 @@ mod unit {
             vec!["authorization_code"],
             vec!["wallet:read", "transactions:read"],
         );
-        assert!(client
-            .validate_scopes(&["wallet:read".to_string()])
-            .is_ok());
+        assert!(client.validate_scopes(&["wallet:read".to_string()]).is_ok());
     }
 
     #[test]
@@ -168,7 +169,10 @@ mod unit {
     #[test]
     fn scope_vec_to_string_joins_with_space() {
         let scopes = vec!["wallet:read".to_string(), "transactions:read".to_string()];
-        assert_eq!(scope_vec_to_string(&scopes), "wallet:read transactions:read");
+        assert_eq!(
+            scope_vec_to_string(&scopes),
+            "wallet:read transactions:read"
+        );
     }
 
     #[test]
@@ -306,15 +310,27 @@ mod unit {
 
     #[test]
     fn oauth_error_http_status_invalid_request_is_400() {
-        assert_eq!(OAuthError::InvalidRequest("x".to_string()).http_status(), 400);
+        assert_eq!(
+            OAuthError::InvalidRequest("x".to_string()).http_status(),
+            400
+        );
     }
 
     #[test]
     fn oauth_error_codes_are_rfc_compliant() {
         assert_eq!(OAuthError::InvalidClient.error_code(), "invalid_client");
-        assert_eq!(OAuthError::InvalidRequest("".to_string()).error_code(), "invalid_request");
-        assert_eq!(OAuthError::UnsupportedGrantType("".to_string()).error_code(), "unsupported_grant_type");
-        assert_eq!(OAuthError::InvalidScope("".to_string()).error_code(), "invalid_scope");
+        assert_eq!(
+            OAuthError::InvalidRequest("".to_string()).error_code(),
+            "invalid_request"
+        );
+        assert_eq!(
+            OAuthError::UnsupportedGrantType("".to_string()).error_code(),
+            "unsupported_grant_type"
+        );
+        assert_eq!(
+            OAuthError::InvalidScope("".to_string()).error_code(),
+            "invalid_scope"
+        );
         assert_eq!(OAuthError::AccessDenied.error_code(), "access_denied");
     }
 }

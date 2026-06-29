@@ -135,13 +135,12 @@ impl AuditLogRepository {
              FROM api_audit_logs
              {} ORDER BY created_at DESC
              LIMIT ${} OFFSET ${}",
-            where_clause, limit_offset_idx_start, limit_offset_idx_start + 1
+            where_clause,
+            limit_offset_idx_start,
+            limit_offset_idx_start + 1
         );
 
-        let count_sql = format!(
-            "SELECT COUNT(*) FROM api_audit_logs {}",
-            where_clause
-        );
+        let count_sql = format!("SELECT COUNT(*) FROM api_audit_logs {}", where_clause);
 
         // Use sqlx QueryBuilder for type-safe dynamic queries
         use sqlx::QueryBuilder;
@@ -152,7 +151,7 @@ impl AuditLogRepository {
                     request_method, request_path, request_body_hash, response_status,
                     response_latency_ms, outcome as \"outcome: AuditOutcome\", failure_reason,
                     environment, previous_entry_hash, current_entry_hash, created_at
-             FROM api_audit_logs"
+             FROM api_audit_logs",
         );
 
         let mut count_qb: QueryBuilder<sqlx::Postgres> =
@@ -184,15 +183,35 @@ impl AuditLogRepository {
         let mut first_count = true;
 
         if let Some(cat) = &filter.event_category {
-            if first_main { qb.push(" WHERE "); first_main = false; } else { qb.push(" AND "); }
+            if first_main {
+                qb.push(" WHERE ");
+                first_main = false;
+            } else {
+                qb.push(" AND ");
+            }
             qb.push("event_category = ").push_bind(cat.as_str());
-            if first_count { count_qb.push(" WHERE "); first_count = false; } else { count_qb.push(" AND "); }
+            if first_count {
+                count_qb.push(" WHERE ");
+                first_count = false;
+            } else {
+                count_qb.push(" AND ");
+            }
             count_qb.push("event_category = ").push_bind(cat.as_str());
         }
         if let Some(aid) = &filter.actor_id {
-            if first_main { qb.push(" WHERE "); first_main = false; } else { qb.push(" AND "); }
+            if first_main {
+                qb.push(" WHERE ");
+                first_main = false;
+            } else {
+                qb.push(" AND ");
+            }
             qb.push("actor_id = ").push_bind(aid);
-            if first_count { count_qb.push(" WHERE "); first_count = false; } else { count_qb.push(" AND "); }
+            if first_count {
+                count_qb.push(" WHERE ");
+                first_count = false;
+            } else {
+                count_qb.push(" AND ");
+            }
             count_qb.push("actor_id = ").push_bind(aid);
         }
         if let Some(at) = &filter.actor_type {
@@ -202,21 +221,51 @@ impl AuditLogRepository {
                 AuditActorType::Microservice => "microservice",
                 AuditActorType::System => "system",
             };
-            if first_main { qb.push(" WHERE "); first_main = false; } else { qb.push(" AND "); }
+            if first_main {
+                qb.push(" WHERE ");
+                first_main = false;
+            } else {
+                qb.push(" AND ");
+            }
             qb.push("actor_type = ").push_bind(s);
-            if first_count { count_qb.push(" WHERE "); first_count = false; } else { count_qb.push(" AND "); }
+            if first_count {
+                count_qb.push(" WHERE ");
+                first_count = false;
+            } else {
+                count_qb.push(" AND ");
+            }
             count_qb.push("actor_type = ").push_bind(s);
         }
         if let Some(trt) = &filter.target_resource_type {
-            if first_main { qb.push(" WHERE "); first_main = false; } else { qb.push(" AND "); }
+            if first_main {
+                qb.push(" WHERE ");
+                first_main = false;
+            } else {
+                qb.push(" AND ");
+            }
             qb.push("target_resource_type = ").push_bind(trt);
-            if first_count { count_qb.push(" WHERE "); first_count = false; } else { count_qb.push(" AND "); }
+            if first_count {
+                count_qb.push(" WHERE ");
+                first_count = false;
+            } else {
+                count_qb.push(" AND ");
+            }
             count_qb.push("target_resource_type = ").push_bind(trt);
         }
         if let Some(tri) = &filter.target_resource_id {
-            if first_main { qb.push(" WHERE "); first_main = false; } else { qb.push(" AND "); }
+            if first_main {
+                qb.push(" WHERE ");
+                first_main = false;
+            } else {
+                qb.push(" AND ");
+            }
             qb.push("target_resource_id = ").push_bind(tri);
-            if first_count { count_qb.push(" WHERE "); first_count = false; } else { count_qb.push(" AND "); }
+            if first_count {
+                count_qb.push(" WHERE ");
+                first_count = false;
+            } else {
+                count_qb.push(" AND ");
+            }
             count_qb.push("target_resource_id = ").push_bind(tri);
         }
         if let Some(oc) = &filter.outcome {
@@ -225,27 +274,67 @@ impl AuditLogRepository {
                 AuditOutcome::Failure => "failure",
                 AuditOutcome::Partial => "partial",
             };
-            if first_main { qb.push(" WHERE "); first_main = false; } else { qb.push(" AND "); }
+            if first_main {
+                qb.push(" WHERE ");
+                first_main = false;
+            } else {
+                qb.push(" AND ");
+            }
             qb.push("outcome = ").push_bind(s);
-            if first_count { count_qb.push(" WHERE "); first_count = false; } else { count_qb.push(" AND "); }
+            if first_count {
+                count_qb.push(" WHERE ");
+                first_count = false;
+            } else {
+                count_qb.push(" AND ");
+            }
             count_qb.push("outcome = ").push_bind(s);
         }
         if let Some(env) = &filter.environment {
-            if first_main { qb.push(" WHERE "); first_main = false; } else { qb.push(" AND "); }
+            if first_main {
+                qb.push(" WHERE ");
+                first_main = false;
+            } else {
+                qb.push(" AND ");
+            }
             qb.push("environment = ").push_bind(env);
-            if first_count { count_qb.push(" WHERE "); first_count = false; } else { count_qb.push(" AND "); }
+            if first_count {
+                count_qb.push(" WHERE ");
+                first_count = false;
+            } else {
+                count_qb.push(" AND ");
+            }
             count_qb.push("environment = ").push_bind(env);
         }
         if let Some(df) = &filter.date_from {
-            if first_main { qb.push(" WHERE "); first_main = false; } else { qb.push(" AND "); }
+            if first_main {
+                qb.push(" WHERE ");
+                first_main = false;
+            } else {
+                qb.push(" AND ");
+            }
             qb.push("created_at >= ").push_bind(df);
-            if first_count { count_qb.push(" WHERE "); first_count = false; } else { count_qb.push(" AND "); }
+            if first_count {
+                count_qb.push(" WHERE ");
+                first_count = false;
+            } else {
+                count_qb.push(" AND ");
+            }
             count_qb.push("created_at >= ").push_bind(df);
         }
         if let Some(dt) = &filter.date_to {
-            if first_main { qb.push(" WHERE "); first_main = false; } else { qb.push(" AND "); }
+            if first_main {
+                qb.push(" WHERE ");
+                first_main = false;
+            } else {
+                qb.push(" AND ");
+            }
             qb.push("created_at <= ").push_bind(dt);
-            if first_count { count_qb.push(" WHERE "); first_count = false; } else { count_qb.push(" AND "); }
+            if first_count {
+                count_qb.push(" WHERE ");
+                first_count = false;
+            } else {
+                count_qb.push(" AND ");
+            }
             count_qb.push("created_at <= ").push_bind(dt);
         }
 
@@ -370,7 +459,9 @@ impl AuditLogRepository {
                 environment: row.environment.clone(),
             };
 
-            let ph = prev_hash.as_deref().unwrap_or("0000000000000000000000000000000000000000000000000000000000000000");
+            let ph = prev_hash
+                .as_deref()
+                .unwrap_or("0000000000000000000000000000000000000000000000000000000000000000");
             let content = crate::audit::redaction::entry_content(&pending, row.id, &row.created_at);
             let expected = crate::audit::redaction::compute_entry_hash(ph, &content);
 

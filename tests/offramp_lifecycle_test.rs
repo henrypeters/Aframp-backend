@@ -12,9 +12,9 @@ use uuid::Uuid;
 use std::time::Duration;
 use std::collections::HashMap;
 
-async fn setup_test_env() -> (PgPool, Arc<PaymentProviderFactory>, Arc<NotificationService>, StellarClient) {
+async fn setup_test_env() -> anyhow::Result<(PgPool, Arc<PaymentProviderFactory>, Arc<NotificationService>, StellarClient)> {
     let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/aframp_test".to_string());
-    let pool = PgPool::connect(&database_url).await.expect("Failed to connect to test database");
+    let pool = PgPool::connect(&database_url).await.map_err(|e| anyhow::anyhow!("Failed to connect to test database: {}", e))?;
 
     let factory_config = PaymentFactoryConfig {
         default_provider: ProviderName::Mock,
@@ -23,14 +23,14 @@ async fn setup_test_env() -> (PgPool, Arc<PaymentProviderFactory>, Arc<Notificat
     };
     let provider_factory = Arc::new(PaymentProviderFactory::with_config(factory_config));
     let notification_service = Arc::new(NotificationService::new());
-    let stellar_client = StellarClient::new(StellarConfig::default()).unwrap();
+    let stellar_client = StellarClient::new(StellarConfig::default()).map_err(|e| anyhow::anyhow!("Stellar client error: {}", e))?;
 
-    (pool, provider_factory, notification_service, stellar_client)
+    Ok((pool, provider_factory, notification_service, stellar_client))
 }
 
 #[tokio::test]
-async fn test_offramp_happy_path() {
-    let (pool, provider_factory, notification_service, stellar_client) = setup_test_env().await;
+async fn test_offramp_happy_path() -> anyhow::Result<()> {
+    let (pool, provider_factory, notification_service, stellar_client) = setup_test_env().await?;
     
     let config = OfframpProcessorConfig {
         poll_interval: Duration::from_millis(100),
@@ -70,7 +70,7 @@ async fn test_offramp_happy_path() {
         None,
         Some("WD-TEST1234"),
         metadata.to_json(),
-    ).await.unwrap();
+    ).await?;
 
     assert_eq!(tx.status, "pending_payment");
 
@@ -83,41 +83,42 @@ async fn test_offramp_happy_path() {
         &tx.transaction_id.to_string(),
         "cngn_received",
         updated_metadata.to_json()
-    ).await.unwrap();
+    ).await?;
 
     // Note: Stage 1 (process_received_payments) will try to fetch transaction operations from Stellar.
     // Since we provided a fake hash, it will fail unless we mock StellarClient or skip Stage 1.
     // For this integration test, let's manually advance to processing_withdrawal to test Stage 2 & 3.
     
-    tx_repo.update_status(&tx.transaction_id.to_string(), "processing_withdrawal").await.unwrap();
+    tx_repo.update_status(&tx.transaction_id.to_string(), "processing_withdrawal").await?;
 
     // 3. Run worker cycle: Stage 2 - Withdrawal Initiation
     // Stage 2 selects 'processing_withdrawal' and calls provider.process_withdrawal
     // Our Mock provider returns Success immediately.
-    worker.run_cycle().await.unwrap();
+    worker.run_cycle().await?;
     
-    let tx = tx_repo.find_by_id(&tx.transaction_id.to_string()).await.unwrap().unwrap();
+    let tx = tx_repo.find_by_id(&tx.transaction_id.to_string()).await?.ok_or_else(|| anyhow::anyhow!("Transaction not found"))?;
     assert_eq!(tx.status, "transfer_pending");
     
-    let tx_metadata = OfframpMetadata::from_json(&tx.metadata).unwrap();
+    let tx_metadata = OfframpMetadata::from_json(&tx.metadata).map_err(|e| anyhow::anyhow!("Failed to parse metadata: {}", e))?;
     assert_eq!(tx_metadata.provider_name, Some("mock".to_string()));
     assert!(tx_metadata.provider_reference.is_some());
 
     // 4. Run worker cycle: Stage 3 - Transfer Monitoring
     // Stage 3 selects 'transfer_pending' and calls provider.get_payment_status
     // Our Mock provider returns Success immediately.
-    worker.run_cycle().await.unwrap();
+    worker.run_cycle().await?;
     
-    let tx = tx_repo.find_by_id(&tx.transaction_id.to_string()).await.unwrap().unwrap();
+    let tx = tx_repo.find_by_id(&tx.transaction_id.to_string()).await?.ok_or_else(|| anyhow::anyhow!("Transaction not found"))?;
     assert_eq!(tx.status, "completed");
 
     // Clean up
     let _ = tx_repo.delete(&tx.transaction_id.to_string()).await;
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_offramp_refund_on_mismatch() {
-    let (pool, provider_factory, notification_service, stellar_client) = setup_test_env().await;
+async fn test_offramp_refund_on_mismatch() -> anyhow::Result<()> {
+    let (pool, provider_factory, notification_service, stellar_client) = setup_test_env().await?;
     
     let config = OfframpProcessorConfig {
         poll_interval: Duration::from_millis(100),
@@ -156,7 +157,7 @@ async fn test_offramp_refund_on_mismatch() {
         None,
         Some("WD-REFUND"),
         metadata.to_json(),
-    ).await.unwrap();
+    ).await?;
 
     // Stage 4 - Refund Processing
     // This will attempt to build and sign a Stellar transaction.
@@ -164,11 +165,12 @@ async fn test_offramp_refund_on_mismatch() {
     let _ = worker.run_cycle().await;
     
     // Even if it fails to submit to Stellar, it should update status to 'failed' in metadata if submission failed
-    let tx = tx_repo.find_by_id(&tx.transaction_id.to_string()).await.unwrap().unwrap();
+    let tx = tx_repo.find_by_id(&tx.transaction_id.to_string()).await?.ok_or_else(|| anyhow::anyhow!("Transaction not found"))?;
     
     // If we can't fully test Stellar refunds without real credentials, we at least verify the worker picks it up
     assert!(tx.status == "refunding" || tx.status == "failed" || tx.status == "refunded" || tx.status == "refund_initiated");
 
     // Clean up
     let _ = tx_repo.delete(&tx.transaction_id.to_string()).await;
+    Ok(())
 }

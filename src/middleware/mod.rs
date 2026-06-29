@@ -29,6 +29,9 @@ pub mod rate_limit_metrics;
 pub mod replay_prevention;
 
 #[cfg(feature = "database")]
+pub mod rbac;
+
+#[cfg(feature = "database")]
 pub mod request_integrity;
 
 #[cfg(feature = "database")]

@@ -55,12 +55,7 @@ pub struct ScopeDefinition {
 }
 
 impl ScopeDefinition {
-    pub fn new(
-        name: &str,
-        description: &str,
-        category: ScopeCategory,
-        is_sensitive: bool,
-    ) -> Self {
+    pub fn new(name: &str, description: &str, category: ScopeCategory, is_sensitive: bool) -> Self {
         Self {
             name: name.to_string(),
             description: description.to_string(),
@@ -350,7 +345,9 @@ mod tests {
         let catalog = ScopeCatalog::with_defaults();
         let wallet_scopes = catalog.by_category(ScopeCategory::Wallet);
         assert!(!wallet_scopes.is_empty());
-        assert!(wallet_scopes.iter().all(|s| s.category == ScopeCategory::Wallet));
+        assert!(wallet_scopes
+            .iter()
+            .all(|s| s.category == ScopeCategory::Wallet));
     }
 
     #[test]
@@ -364,12 +361,7 @@ mod tests {
     #[test]
     fn test_scope_catalog_add() {
         let mut catalog = ScopeCatalog::new();
-        let scope = ScopeDefinition::new(
-            "test:read",
-            "Test scope",
-            ScopeCategory::Wallet,
-            false,
-        );
+        let scope = ScopeDefinition::new("test:read", "Test scope", ScopeCategory::Wallet, false);
         assert!(catalog.add(scope.clone()).is_ok());
         assert!(catalog.add(scope).is_err()); // Duplicate
     }

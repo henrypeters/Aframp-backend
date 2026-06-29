@@ -47,7 +47,10 @@ async fn main() {
             if !result.tampered_entries.is_empty() {
                 println!("  tampered_entries: {}", result.tampered_entries.len());
                 for entry in result.tampered_entries {
-                    println!("    - line {} expected={} actual={}", entry.line_number, entry.expected_hash, entry.actual_hash);
+                    println!(
+                        "    - line {} expected={} actual={}",
+                        entry.line_number, entry.expected_hash, entry.actual_hash
+                    );
                 }
             }
             if result.valid {

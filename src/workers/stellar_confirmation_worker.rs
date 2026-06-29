@@ -4,11 +4,9 @@
 //! transitions state to `completed` or `failed`, fires webhook events on every
 //! transition, detects stale transactions, and exposes Prometheus metrics.
 
-use crate::chains::stellar::client::StellarClient;
+// REMOVED: use crate::chains::stellar::client::StellarClient;
 use crate::database::webhook_repository::WebhookRepository;
-use prometheus::{
-    register_counter_vec, register_gauge, CounterVec, Gauge, Registry,
-};
+use prometheus::{register_counter_vec, register_gauge, CounterVec, Gauge, Registry};
 use serde_json::{json, Value as JsonValue};
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -52,9 +50,10 @@ impl Default for StellarConfirmationConfig {
 impl StellarConfirmationConfig {
     pub fn from_env() -> Self {
         let mut c = Self::default();
-        c.poll_interval = Duration::from_secs(
-            env_u64("STELLAR_CONFIRM_POLL_INTERVAL_SECS", c.poll_interval.as_secs()),
-        );
+        c.poll_interval = Duration::from_secs(env_u64(
+            "STELLAR_CONFIRM_POLL_INTERVAL_SECS",
+            c.poll_interval.as_secs(),
+        ));
         c.confirmation_threshold =
             env_u64("STELLAR_CONFIRM_THRESHOLD", c.confirmation_threshold as u64) as u32;
         c.stale_timeout = Duration::from_secs(env_u64(
@@ -62,8 +61,10 @@ impl StellarConfirmationConfig {
             c.stale_timeout.as_secs(),
         ));
         c.batch_size = env_u64("STELLAR_CONFIRM_BATCH_SIZE", c.batch_size as u64) as i64;
-        c.monitoring_window_hours =
-            env_u64("STELLAR_CONFIRM_WINDOW_HOURS", c.monitoring_window_hours as u64) as i32;
+        c.monitoring_window_hours = env_u64(
+            "STELLAR_CONFIRM_WINDOW_HOURS",
+            c.monitoring_window_hours as u64,
+        ) as i32;
         c
     }
 }
@@ -211,9 +212,7 @@ impl StellarConfirmationWorker {
     async fn run_cycle(&self) -> anyhow::Result<()> {
         let txns = self.fetch_active_transactions().await?;
         let count = txns.len();
-        self.metrics
-            .active_transactions
-            .set(count as f64);
+        self.metrics.active_transactions.set(count as f64);
         self.metrics
             .transactions_checked
             .with_label_values(&["cycle"])
@@ -240,16 +239,13 @@ impl StellarConfirmationWorker {
             }
 
             // Query Horizon.
-            match self
-                .stellar
-                .get_transaction_by_hash(&stellar_hash)
-                .await
-            {
+            match self.stellar.get_transaction_by_hash(&stellar_hash).await {
                 Ok(record) => {
                     // Idempotency: only act when the current DB status is still active.
                     if record.successful {
                         let ledger = record.ledger.unwrap_or(0);
-                        if meets_confirmation_threshold(ledger, self.config.confirmation_threshold) {
+                        if meets_confirmation_threshold(ledger, self.config.confirmation_threshold)
+                        {
                             self.transition_completed(&tx_id, &stellar_hash, &tx.status, ledger)
                                 .await;
                         }
@@ -471,7 +467,14 @@ impl StellarConfirmationWorker {
         let repo = WebhookRepository::new(self.pool.clone());
 
         if let Err(e) = repo
-            .log_event(&event_id, "stellar", event_type, payload, None, parsed_tx_id)
+            .log_event(
+                &event_id,
+                "stellar",
+                event_type,
+                payload,
+                None,
+                parsed_tx_id,
+            )
             .await
         {
             warn!(
@@ -506,15 +509,9 @@ struct ActiveTransaction {
 // ---------------------------------------------------------------------------
 
 /// Returns `true` when `created_at` is older than `stale_timeout`.
-pub fn is_stale_by_age(
-    created_at: chrono::DateTime<chrono::Utc>,
-    stale_timeout: Duration,
-) -> bool {
+pub fn is_stale_by_age(created_at: chrono::DateTime<chrono::Utc>, stale_timeout: Duration) -> bool {
     let elapsed = chrono::Utc::now() - created_at;
-    elapsed
-        .to_std()
-        .map(|d| d > stale_timeout)
-        .unwrap_or(false)
+    elapsed.to_std().map(|d| d > stale_timeout).unwrap_or(false)
 }
 
 /// Returns `true` when `ledger` meets or exceeds `threshold`.

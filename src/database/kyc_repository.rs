@@ -1,9 +1,9 @@
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use uuid::Uuid;
-use bigdecimal::BigDecimal;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "kyc_tier", rename_all = "snake_case")]
@@ -131,7 +131,7 @@ pub struct KycTierDefinition {
     pub cooling_off_period_days: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct KycLimits {
     pub tier: KycTier,
     pub max_transaction_amount: BigDecimal,
@@ -201,7 +201,7 @@ pub struct KycAuditTrail {
     pub decisions: Vec<KycDecision>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct KycDecision {
     pub id: Uuid,
     pub kyc_record_id: Uuid,
@@ -214,7 +214,7 @@ pub struct KycDecision {
     pub new_tier: Option<KycTier>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct EnhancedDueDiligenceCase {
     pub id: Uuid,
     pub consumer_id: Uuid,
@@ -265,25 +265,23 @@ impl KycRepository {
     ) -> Result<KycRecord, sqlx::Error> {
         let id = Uuid::new_v4();
         let now = Utc::now();
-        
-        sqlx::query_as!(
-            KycRecord,
+
+        sqlx::query_as::<_, KycRecord>(
             r#"
             INSERT INTO kyc_records (
                 id, consumer_id, tier, status, created_at, updated_at,
                 enhanced_due_diligence_active, effective_tier
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
-            "#,
-            id,
-            consumer_id,
-            tier as KycTier,
-            KycStatus::Pending as KycStatus,
-            now,
-            now,
-            false,
-            tier as KycTier,
         )
+        .bind(id)
+        .bind(consumer_id)
+        .bind(tier.clone())
+        .bind(KycStatus::Pending)
+        .bind(now)
+        .bind(now)
+        .bind(false)
+        .bind(tier)
         .fetch_one(&self.pool)
         .await
     }
@@ -292,16 +290,14 @@ impl KycRepository {
         &self,
         consumer_id: Uuid,
     ) -> Result<Option<KycRecord>, sqlx::Error> {
-        sqlx::query_as!(
-            KycRecord,
+        sqlx::query_as::<_, KycRecord>(
             r#"
             SELECT * FROM kyc_records 
             WHERE consumer_id = $1 
             ORDER BY created_at DESC 
             LIMIT 1
-            "#,
-            consumer_id
         )
+        .bind(consumer_id)
         .fetch_optional(&self.pool)
         .await
     }
@@ -315,22 +311,20 @@ impl KycRepository {
     ) -> Result<KycRecord, sqlx::Error> {
         let now = Utc::now();
         
-        sqlx::query_as!(
-            KycRecord,
+        sqlx::query_as::<_, KycRecord>(
             r#"
             UPDATE kyc_records 
             SET status = $1, decision_reason = $2, reviewer_identity = $3, 
                 decision_timestamp = $4, updated_at = $5
             WHERE id = $6
             RETURNING *
-            "#,
-            status as KycStatus,
-            decision_reason,
-            reviewer_identity,
-            now,
-            now,
-            id
         )
+        .bind(status)
+        .bind(decision_reason)
+        .bind(reviewer_identity)
+        .bind(now)
+        .bind(now)
+        .bind(id)
         .fetch_one(&self.pool)
         .await
     }
@@ -342,18 +336,16 @@ impl KycRepository {
     ) -> Result<KycRecord, sqlx::Error> {
         let now = Utc::now();
         
-        sqlx::query_as!(
-            KycRecord,
+        sqlx::query_as::<_, KycRecord>(
             r#"
             UPDATE kyc_records 
             SET tier = $1, effective_tier = $1, updated_at = $2
             WHERE id = $3
             RETURNING *
-            "#,
-            tier as KycTier,
-            now,
-            id
         )
+        .bind(tier)
+        .bind(now)
+        .bind(id)
         .fetch_one(&self.pool)
         .await
     }
@@ -373,8 +365,7 @@ impl KycRepository {
         let id = Uuid::new_v4();
         let now = Utc::now();
         
-        sqlx::query_as!(
-            KycDocument,
+        sqlx::query_as::<_, KycDocument>(
             r#"
             INSERT INTO kyc_documents (
                 id, kyc_record_id, document_type, document_number, issuing_country,
@@ -382,19 +373,18 @@ impl KycRepository {
                 selfie_image_reference, created_at, updated_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING *
-            "#,
-            id,
-            kyc_record_id,
-            document_type as DocumentType,
-            document_number,
-            issuing_country,
-            expiry_date,
-            front_image_reference,
-            back_image_reference,
-            selfie_image_reference,
-            now,
-            now
         )
+        .bind(id)
+        .bind(kyc_record_id)
+        .bind(document_type)
+        .bind(document_number)
+        .bind(issuing_country)
+        .bind(expiry_date)
+        .bind(front_image_reference)
+        .bind(back_image_reference)
+        .bind(selfie_image_reference)
+        .bind(now)
+        .bind(now)
         .fetch_one(&self.pool)
         .await
     }
@@ -403,15 +393,13 @@ impl KycRepository {
         &self,
         kyc_record_id: Uuid,
     ) -> Result<Vec<KycDocument>, sqlx::Error> {
-        sqlx::query_as!(
-            KycDocument,
+        sqlx::query_as::<_, KycDocument>(
             r#"
             SELECT * FROM kyc_documents 
             WHERE kyc_record_id = $1 
             ORDER BY created_at ASC
-            "#,
-            kyc_record_id
         )
+        .bind(kyc_record_id)
         .fetch_all(&self.pool)
         .await
     }
@@ -429,24 +417,22 @@ impl KycRepository {
         let id = Uuid::new_v4();
         let now = Utc::now();
         
-        sqlx::query_as!(
-            KycEvent,
+        sqlx::query_as::<_, KycEvent>(
             r#"
             INSERT INTO kyc_events (
                 id, consumer_id, kyc_record_id, event_type, event_detail,
                 provider_response, metadata, timestamp
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
-            "#,
-            id,
-            consumer_id,
-            kyc_record_id,
-            event_type as KycEventType,
-            event_detail,
-            provider_response,
-            metadata,
-            now
         )
+        .bind(id)
+        .bind(consumer_id)
+        .bind(kyc_record_id)
+        .bind(event_type)
+        .bind(event_detail)
+        .bind(provider_response)
+        .bind(metadata)
+        .bind(now)
         .fetch_one(&self.pool)
         .await
     }
@@ -458,17 +444,15 @@ impl KycRepository {
     ) -> Result<Vec<KycEvent>, sqlx::Error> {
         let limit = limit.unwrap_or(100);
         
-        sqlx::query_as!(
-            KycEvent,
+        sqlx::query_as::<_, KycEvent>(
             r#"
             SELECT * FROM kyc_events 
             WHERE consumer_id = $1 
             ORDER BY timestamp DESC 
             LIMIT $2
-            "#,
-            consumer_id,
-            limit
         )
+        .bind(consumer_id)
+        .bind(limit)
         .fetch_all(&self.pool)
         .await
     }
@@ -500,8 +484,10 @@ impl KycRepository {
             1, // Default priority
             review_reason,
             provider_risk_score,
-                provider_flags.as_ref().map(|flags| serde_json::to_value(flags).unwrap()),
-            now
+            provider_flags
+                .as_ref()
+                .map(|flags| serde_json::to_value(flags).unwrap()),
+            now,
         )
         .fetch_one(&self.pool)
         .await
@@ -514,7 +500,7 @@ impl KycRepository {
     ) -> Result<Vec<ManualReviewQueue>, sqlx::Error> {
         let limit = limit.unwrap_or(50);
         let offset = offset.unwrap_or(0);
-        
+
         sqlx::query_as!(
             ManualReviewQueue,
             r#"
@@ -538,7 +524,7 @@ impl KycRepository {
     ) -> Result<KycVolumeTracker, sqlx::Error> {
         let now = Utc::now();
         let today = now.date_naive();
-        
+
         sqlx::query_as!(
             KycVolumeTracker,
             r#"
@@ -571,19 +557,18 @@ impl KycRepository {
     ) -> Result<Option<KycLimits>, sqlx::Error> {
         let now = Utc::now();
         let today = now.date_naive();
-        
-        sqlx::query_as!(
-            KycLimits,
+
+        sqlx::query_as::<_, KycLimits>(
             r#"
             SELECT 
                 kr.tier as tier,
                 tdl.max_transaction_amount,
                 tdl.daily_volume_limit,
                 tdl.monthly_volume_limit,
-                COALESCE(vt.daily_volume, '0'::BigDecimal) as daily_volume_used,
-                COALESCE(vt.monthly_volume, '0'::BigDecimal) as monthly_volume_used,
-                COALESCE(vt.last_updated, $3) as "last_daily_reset!",
-                COALESCE(vt.last_updated, $3) as "last_monthly_reset!"
+                COALESCE(vt.daily_volume, '0'::numeric) as daily_volume_used,
+                COALESCE(vt.monthly_volume, '0'::numeric) as monthly_volume_used,
+                COALESCE(vt.last_updated, $3) as last_daily_reset,
+                COALESCE(vt.last_updated, $3) as last_monthly_reset
             FROM kyc_records kr
             JOIN kyc_tier_definitions tdl ON kr.tier = tdl.tier
             LEFT JOIN kyc_volume_trackers vt ON kr.consumer_id = vt.consumer_id AND vt.date = $1
@@ -591,10 +576,10 @@ impl KycRepository {
             ORDER BY kr.created_at DESC
             LIMIT 1
             "#,
-            today,
-            consumer_id,
-            now
         )
+        .bind(today)
+        .bind(consumer_id)
+        .bind(now)
         .fetch_optional(&self.pool)
         .await
     }

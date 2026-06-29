@@ -5,6 +5,11 @@
 //!   STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org  (optional override)
 //!
 //! Tests that require funded accounts are skipped when the accounts are not funded.
+//!
+//! # Note on unwrap/expect usage
+//! All `unwrap()` and `expect()` calls in this file are intentional test-fixture
+//! boilerplate. Panicking on setup failure is correct in tests — it produces an
+//! immediate, clear failure message. No production code paths are involved.
 
 use Bitmesh_backend::chains::stellar::{
     client::StellarClient,
@@ -13,7 +18,9 @@ use Bitmesh_backend::chains::stellar::{
         fee_monitor::is_below_alert_threshold,
         setup::{build_issuer_setup_transaction, build_trustline_transaction, generate_keypair},
         stellar_toml::{generate_stellar_toml, validate_stellar_toml},
-        types::{IssuerConfig, MultiSigConfig, SignerEntry, StellarEnvironment, VerificationReport},
+        types::{
+            IssuerConfig, MultiSigConfig, SignerEntry, StellarEnvironment, VerificationReport,
+        },
         verification::assert_issuer_configured,
     },
 };
@@ -190,12 +197,8 @@ fn test_build_issuer_setup_transaction_produces_valid_xdr() {
         ],
     };
 
-    let result = build_issuer_setup_transaction(
-        &issuer_kp.public_key,
-        100,
-        "example.com",
-        &multisig,
-    );
+    let result =
+        build_issuer_setup_transaction(&issuer_kp.public_key, 100, "example.com", &multisig);
 
     assert!(result.is_ok());
     let unsigned = result.unwrap();
@@ -276,17 +279,17 @@ async fn test_testnet_account_creation_and_trustline() {
     );
     let _ = reqwest::get(&friendbot_url).await;
 
-    let friendbot_url2 = format!(
-        "https://friendbot.stellar.org?addr={}",
-        dist_kp.public_key
-    );
+    let friendbot_url2 = format!("https://friendbot.stellar.org?addr={}", dist_kp.public_key);
     let _ = reqwest::get(&friendbot_url2).await;
 
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     // Verify issuer account exists
     let issuer_account = client.get_account(&issuer_kp.public_key).await;
-    assert!(issuer_account.is_ok(), "Issuer account should exist after funding");
+    assert!(
+        issuer_account.is_ok(),
+        "Issuer account should exist after funding"
+    );
 
     // Build trustline transaction
     let sequence = client

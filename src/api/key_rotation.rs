@@ -15,8 +15,8 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use sqlx::PgPool;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::services::key_rotation::{KeyRotationService, RotationError};
@@ -91,12 +91,20 @@ fn map_err(e: RotationError) -> Response {
             "NO_ACTIVE_ROTATION",
             "No active rotation found for this key",
         ),
-        RotationError::LifetimeExceedsMax { requested, max, consumer_type } => {
+        RotationError::LifetimeExceedsMax {
+            requested,
+            max,
+            consumer_type,
+        } => {
             let msg = format!(
                 "Requested lifetime of {} days exceeds the maximum of {} days for consumer type '{}'",
                 requested, max, consumer_type
             );
-            err_resp(StatusCode::UNPROCESSABLE_ENTITY, "LIFETIME_EXCEEDS_MAX", &msg)
+            err_resp(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "LIFETIME_EXCEEDS_MAX",
+                &msg,
+            )
         }
         RotationError::MissingExpiry => err_resp(
             StatusCode::UNPROCESSABLE_ENTITY,

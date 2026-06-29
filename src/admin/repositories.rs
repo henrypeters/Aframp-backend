@@ -147,7 +147,11 @@ impl AdminAccountRepository {
         }))
     }
 
-    pub async fn update_role(&self, admin_id: Uuid, new_role: AdminRole) -> Result<(), DatabaseError> {
+    pub async fn update_role(
+        &self,
+        admin_id: Uuid,
+        new_role: AdminRole,
+    ) -> Result<(), DatabaseError> {
         sqlx::query!(
             "UPDATE admin_accounts SET role = $1, updated_at = NOW() WHERE id = $2",
             new_role as AdminRole,
@@ -188,7 +192,11 @@ impl AdminAccountRepository {
         Ok(())
     }
 
-    pub async fn update_password(&self, admin_id: Uuid, new_password: &str) -> Result<(), DatabaseError> {
+    pub async fn update_password(
+        &self,
+        admin_id: Uuid,
+        new_password: &str,
+    ) -> Result<(), DatabaseError> {
         let password_hash = bcrypt::hash(new_password, bcrypt::DEFAULT_COST)
             .map_err(|e| DatabaseError::Unknown(e.to_string()))?;
 
@@ -208,7 +216,11 @@ impl AdminAccountRepository {
         Ok(())
     }
 
-    pub async fn update_mfa_secret(&self, admin_id: Uuid, secret: &str) -> Result<(), DatabaseError> {
+    pub async fn update_mfa_secret(
+        &self,
+        admin_id: Uuid,
+        secret: &str,
+    ) -> Result<(), DatabaseError> {
         sqlx::query!(
             r#"
             UPDATE admin_accounts 
@@ -225,7 +237,11 @@ impl AdminAccountRepository {
         Ok(())
     }
 
-    pub async fn update_fido2_credentials(&self, admin_id: Uuid, credentials: serde_json::Value) -> Result<(), DatabaseError> {
+    pub async fn update_fido2_credentials(
+        &self,
+        admin_id: Uuid,
+        credentials: serde_json::Value,
+    ) -> Result<(), DatabaseError> {
         sqlx::query!(
             r#"
             UPDATE admin_accounts 
@@ -266,9 +282,13 @@ impl AdminAccountRepository {
         Ok(())
     }
 
-    pub async fn lock_account(&self, admin_id: Uuid, lock_duration_minutes: i32) -> Result<(), DatabaseError> {
+    pub async fn lock_account(
+        &self,
+        admin_id: Uuid,
+        lock_duration_minutes: i32,
+    ) -> Result<(), DatabaseError> {
         let locked_until = Utc::now() + chrono::Duration::minutes(lock_duration_minutes as i64);
-        
+
         sqlx::query!(
             r#"
             UPDATE admin_accounts 
@@ -301,7 +321,11 @@ impl AdminAccountRepository {
         Ok(())
     }
 
-    pub async fn update_last_login(&self, admin_id: Uuid, ip_address: &str) -> Result<(), DatabaseError> {
+    pub async fn update_last_login(
+        &self,
+        admin_id: Uuid,
+        ip_address: &str,
+    ) -> Result<(), DatabaseError> {
         sqlx::query!(
             r#"
             UPDATE admin_accounts 
@@ -318,7 +342,11 @@ impl AdminAccountRepository {
         Ok(())
     }
 
-    pub async fn list_all(&self, limit: i64, offset: i64) -> Result<Vec<AdminAccount>, DatabaseError> {
+    pub async fn list_all(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<AdminAccount>, DatabaseError> {
         let rows = sqlx::query!(
             r#"
             SELECT 
@@ -338,26 +366,29 @@ impl AdminAccountRepository {
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
-        Ok(rows.into_iter().map(|row| AdminAccount {
-            id: row.id,
-            full_name: row.full_name,
-            email: row.email,
-            password_hash: row.password_hash,
-            role: row.role,
-            status: row.status,
-            mfa_status: row.mfa_status,
-            mfa_secret: row.mfa_secret,
-            fido2_credentials: row.fido2_credentials,
-            last_login_at: row.last_login_at,
-            last_login_ip: row.last_login_ip,
-            failed_login_count: row.failed_login_count,
-            account_locked_until: row.account_locked_until,
-            password_changed_at: row.password_changed_at,
-            mfa_configured_at: row.mfa_configured_at,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            created_by: row.created_by,
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|row| AdminAccount {
+                id: row.id,
+                full_name: row.full_name,
+                email: row.email,
+                password_hash: row.password_hash,
+                role: row.role,
+                status: row.status,
+                mfa_status: row.mfa_status,
+                mfa_secret: row.mfa_secret,
+                fido2_credentials: row.fido2_credentials,
+                last_login_at: row.last_login_at,
+                last_login_ip: row.last_login_ip,
+                failed_login_count: row.failed_login_count,
+                account_locked_until: row.account_locked_until,
+                password_changed_at: row.password_changed_at,
+                mfa_configured_at: row.mfa_configured_at,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                created_by: row.created_by,
+            })
+            .collect())
     }
 
     pub async fn count_by_role(&self) -> Result<HashMap<AdminRole, i64>, DatabaseError> {
@@ -383,29 +414,34 @@ impl AdminAccountRepository {
             .map_err(DatabaseError::from_sqlx)?
             .unwrap_or(0);
 
-        let active_accounts = sqlx::query_scalar!("SELECT COUNT(*) FROM admin_accounts WHERE status = 'active'")
-            .fetch_one(&self.pool)
-            .await
-            .map_err(DatabaseError::from_sqlx)?
-            .unwrap_or(0);
+        let active_accounts =
+            sqlx::query_scalar!("SELECT COUNT(*) FROM admin_accounts WHERE status = 'active'")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(DatabaseError::from_sqlx)?
+                .unwrap_or(0);
 
-        let suspended_accounts = sqlx::query_scalar!("SELECT COUNT(*) FROM admin_accounts WHERE status = 'suspended'")
-            .fetch_one(&self.pool)
-            .await
-            .map_err(DatabaseError::from_sqlx)?
-            .unwrap_or(0);
+        let suspended_accounts =
+            sqlx::query_scalar!("SELECT COUNT(*) FROM admin_accounts WHERE status = 'suspended'")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(DatabaseError::from_sqlx)?
+                .unwrap_or(0);
 
-        let locked_accounts = sqlx::query_scalar!("SELECT COUNT(*) FROM admin_accounts WHERE status = 'locked'")
-            .fetch_one(&self.pool)
-            .await
-            .map_err(DatabaseError::from_sqlx)?
-            .unwrap_or(0);
+        let locked_accounts =
+            sqlx::query_scalar!("SELECT COUNT(*) FROM admin_accounts WHERE status = 'locked'")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(DatabaseError::from_sqlx)?
+                .unwrap_or(0);
 
-        let active_sessions = sqlx::query_scalar!("SELECT COUNT(*) FROM admin_sessions WHERE status = 'active' AND expires_at > NOW()")
-            .fetch_one(&self.pool)
-            .await
-            .map_err(DatabaseError::from_sqlx)?
-            .unwrap_or(0);
+        let active_sessions = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM admin_sessions WHERE status = 'active' AND expires_at > NOW()"
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(DatabaseError::from_sqlx)?
+        .unwrap_or(0);
 
         let recent_logins = sqlx::query_scalar!(
             "SELECT COUNT(*) FROM admin_accounts WHERE last_login_at > NOW() - INTERVAL '24 hours'"
@@ -415,11 +451,12 @@ impl AdminAccountRepository {
         .map_err(DatabaseError::from_sqlx)?
         .unwrap_or(0);
 
-        let failed_login_attempts = sqlx::query_scalar!("SELECT SUM(failed_login_count) FROM admin_accounts")
-            .fetch_one(&self.pool)
-            .await
-            .map_err(DatabaseError::from_sqlx)?
-            .unwrap_or(0);
+        let failed_login_attempts =
+            sqlx::query_scalar!("SELECT SUM(failed_login_count) FROM admin_accounts")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(DatabaseError::from_sqlx)?
+                .unwrap_or(0);
 
         let accounts_by_role = self.count_by_role().await?;
 
@@ -542,7 +579,11 @@ impl AdminSessionRepository {
         Ok(())
     }
 
-    pub async fn terminate_session(&self, session_id: Uuid, reason: &str) -> Result<(), DatabaseError> {
+    pub async fn terminate_session(
+        &self,
+        session_id: Uuid,
+        reason: &str,
+    ) -> Result<(), DatabaseError> {
         sqlx::query!(
             r#"
             UPDATE admin_sessions 
@@ -559,7 +600,11 @@ impl AdminSessionRepository {
         Ok(())
     }
 
-    pub async fn terminate_all_sessions(&self, admin_id: Uuid, exclude_session_id: Option<Uuid>) -> Result<(), DatabaseError> {
+    pub async fn terminate_all_sessions(
+        &self,
+        admin_id: Uuid,
+        exclude_session_id: Option<Uuid>,
+    ) -> Result<(), DatabaseError> {
         if let Some(exclude_id) = exclude_session_id {
             sqlx::query!(
                 r#"
@@ -590,7 +635,10 @@ impl AdminSessionRepository {
         Ok(())
     }
 
-    pub async fn get_active_sessions(&self, admin_id: Uuid) -> Result<Vec<ActiveAdminSession>, DatabaseError> {
+    pub async fn get_active_sessions(
+        &self,
+        admin_id: Uuid,
+    ) -> Result<Vec<ActiveAdminSession>, DatabaseError> {
         let rows = sqlx::query_as!(
             ActiveAdminSession,
             r#"
@@ -627,7 +675,11 @@ impl AdminSessionRepository {
         Ok(result.rows_affected())
     }
 
-    pub async fn enforce_concurrent_session_limit(&self, admin_id: Uuid, max_sessions: i32) -> Result<(), DatabaseError> {
+    pub async fn enforce_concurrent_session_limit(
+        &self,
+        admin_id: Uuid,
+        max_sessions: i32,
+    ) -> Result<(), DatabaseError> {
         sqlx::query!(
             r#"
             WITH ranked_sessions AS (

@@ -25,7 +25,7 @@ impl Default for GeolocationConfig {
     fn default() -> Self {
         Self {
             database_path: PathBuf::from("/var/lib/geoip/GeoLite2-Country.mmdb"),
-            update_interval_hours: 168, // 1 week
+            update_interval_hours: 168,  // 1 week
             redis_cache_ttl_secs: 86400, // 24 hours
             default_policy_for_unresolvable: "allowed".to_string(),
         }
@@ -79,7 +79,10 @@ impl GeolocationService {
     /// Initialize the geolocation database
     pub async fn initialize(&self) -> Result<(), AppError> {
         self.load_database().await?;
-        info!("Geolocation service initialized with database: {:?}", self.config.database_path);
+        info!(
+            "Geolocation service initialized with database: {:?}",
+            self.config.database_path
+        );
         Ok(())
     }
 
@@ -94,9 +97,9 @@ impl GeolocationService {
         }
 
         // Parse IP address
-        let ip_addr: IpAddr = ip.parse().map_err(|_| {
-            AppError::ValidationError(format!("Invalid IP address: {}", ip))
-        })?;
+        let ip_addr: IpAddr = ip
+            .parse()
+            .map_err(|_| AppError::ValidationError(format!("Invalid IP address: {}", ip)))?;
 
         // Check if IP is private/reserved
         if self.is_private_or_reserved_ip(ip_addr) {
@@ -127,10 +130,12 @@ impl GeolocationService {
 
         match reader.lookup::<geoip2::Country>(ip) {
             Ok(country) => {
-                let country_code = country.country
+                let country_code = country
+                    .country
                     .and_then(|c| c.iso_code)
                     .map(|code| code.to_string());
-                let country_name = country.country
+                let country_name = country
+                    .country
                     .and_then(|c| c.names)
                     .and_then(|names| names.get("en"))
                     .map(|name| name.to_string());
@@ -161,16 +166,23 @@ impl GeolocationService {
             )));
         }
 
-        let buffer = tokio::fs::read(&self.config.database_path).await
-            .map_err(|e| AppError::InternalError(format!("Failed to read geolocation database: {}", e)))?;
+        let buffer = tokio::fs::read(&self.config.database_path)
+            .await
+            .map_err(|e| {
+                AppError::InternalError(format!("Failed to read geolocation database: {}", e))
+            })?;
 
-        let reader = Reader::from_source(buffer)
-            .map_err(|e| AppError::InternalError(format!("Failed to load geolocation database: {}", e)))?;
+        let reader = Reader::from_source(buffer).map_err(|e| {
+            AppError::InternalError(format!("Failed to load geolocation database: {}", e))
+        })?;
 
         let mut writer = self.reader.write().await;
         *writer = Some(reader);
 
-        info!("Loaded geolocation database from {:?}", self.config.database_path);
+        info!(
+            "Loaded geolocation database from {:?}",
+            self.config.database_path
+        );
         Ok(())
     }
 
@@ -210,11 +222,18 @@ impl GeolocationService {
     }
 
     /// Cache geolocation result
-    async fn cache_result(&self, cache_key: &str, result: &GeolocationResult) -> Result<(), AppError> {
-        let json = serde_json::to_string(result)
-            .map_err(|e| AppError::InternalError(format!("Failed to serialize geolocation result: {}", e)))?;
+    async fn cache_result(
+        &self,
+        cache_key: &str,
+        result: &GeolocationResult,
+    ) -> Result<(), AppError> {
+        let json = serde_json::to_string(result).map_err(|e| {
+            AppError::InternalError(format!("Failed to serialize geolocation result: {}", e))
+        })?;
 
-        self.cache.set_ex(cache_key, &json, self.config.redis_cache_ttl_secs as usize).await?;
+        self.cache
+            .set_ex(cache_key, &json, self.config.redis_cache_ttl_secs as usize)
+            .await?;
         Ok(())
     }
 

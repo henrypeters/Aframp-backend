@@ -51,16 +51,66 @@ impl RuleStore {
 
     fn load_defaults(&mut self) {
         let defaults = vec![
-            MaskingRule::new("password", "credentials", MaskingStrategy::FullRedaction, vec!["log".into(), "response".into(), "trace".into()]),
-            MaskingRule::new("private_key", "crypto_key", MaskingStrategy::FullRedaction, vec!["log".into(), "response".into(), "trace".into()]),
-            MaskingRule::new("account_number", "financial", MaskingStrategy::PartialSuffix(4), vec!["response".into(), "log".into()]),
-            MaskingRule::new("phone_number", "pii", MaskingStrategy::PartialSuffix(3), vec!["response".into(), "log".into()]),
-            MaskingRule::new("email", "pii", MaskingStrategy::PartialPrefix(3), vec!["response".into(), "log".into()]),
-            MaskingRule::new("nin", "government_id", MaskingStrategy::FullRedaction, vec!["log".into(), "response".into(), "trace".into()]),
-            MaskingRule::new("bvn", "government_id", MaskingStrategy::FullRedaction, vec!["log".into(), "response".into(), "trace".into()]),
-            MaskingRule::new("token", "credentials", MaskingStrategy::FullRedaction, vec!["log".into(), "trace".into()]),
-            MaskingRule::new("api_key", "credentials", MaskingStrategy::FullRedaction, vec!["log".into(), "trace".into()]),
-            MaskingRule::new("card_number", "financial", MaskingStrategy::PartialSuffix(4), vec!["log".into(), "response".into()]),
+            MaskingRule::new(
+                "password",
+                "credentials",
+                MaskingStrategy::FullRedaction,
+                vec!["log".into(), "response".into(), "trace".into()],
+            ),
+            MaskingRule::new(
+                "private_key",
+                "crypto_key",
+                MaskingStrategy::FullRedaction,
+                vec!["log".into(), "response".into(), "trace".into()],
+            ),
+            MaskingRule::new(
+                "account_number",
+                "financial",
+                MaskingStrategy::PartialSuffix(4),
+                vec!["response".into(), "log".into()],
+            ),
+            MaskingRule::new(
+                "phone_number",
+                "pii",
+                MaskingStrategy::PartialSuffix(3),
+                vec!["response".into(), "log".into()],
+            ),
+            MaskingRule::new(
+                "email",
+                "pii",
+                MaskingStrategy::PartialPrefix(3),
+                vec!["response".into(), "log".into()],
+            ),
+            MaskingRule::new(
+                "nin",
+                "government_id",
+                MaskingStrategy::FullRedaction,
+                vec!["log".into(), "response".into(), "trace".into()],
+            ),
+            MaskingRule::new(
+                "bvn",
+                "government_id",
+                MaskingStrategy::FullRedaction,
+                vec!["log".into(), "response".into(), "trace".into()],
+            ),
+            MaskingRule::new(
+                "token",
+                "credentials",
+                MaskingStrategy::FullRedaction,
+                vec!["log".into(), "trace".into()],
+            ),
+            MaskingRule::new(
+                "api_key",
+                "credentials",
+                MaskingStrategy::FullRedaction,
+                vec!["log".into(), "trace".into()],
+            ),
+            MaskingRule::new(
+                "card_number",
+                "financial",
+                MaskingStrategy::PartialSuffix(4),
+                vec!["log".into(), "response".into()],
+            ),
         ];
         let mut map = self.rules.write().unwrap();
         for rule in defaults {
@@ -116,7 +166,12 @@ mod tests {
     #[test]
     fn test_add_and_get_rule() {
         let store = RuleStore::new();
-        let rule = MaskingRule::new("ssn", "government_id", MaskingStrategy::FullRedaction, vec!["log".into()]);
+        let rule = MaskingRule::new(
+            "ssn",
+            "government_id",
+            MaskingStrategy::FullRedaction,
+            vec!["log".into()],
+        );
         let id = store.add(rule);
         assert!(store.get(&id).is_some());
     }
@@ -124,7 +179,12 @@ mod tests {
     #[test]
     fn test_update_rule() {
         let store = RuleStore::new();
-        let rule = MaskingRule::new("test_field", "test", MaskingStrategy::FullRedaction, vec!["log".into()]);
+        let rule = MaskingRule::new(
+            "test_field",
+            "test",
+            MaskingStrategy::FullRedaction,
+            vec!["log".into()],
+        );
         let id = store.add(rule);
         let updated = MaskingRule {
             id: id.clone(),
@@ -135,7 +195,10 @@ mod tests {
             enabled: true,
         };
         assert!(store.update(&id, updated));
-        assert_eq!(store.get(&id).unwrap().strategy, MaskingStrategy::FormatPreserving);
+        assert_eq!(
+            store.get(&id).unwrap().strategy,
+            MaskingStrategy::FormatPreserving
+        );
     }
 
     #[test]

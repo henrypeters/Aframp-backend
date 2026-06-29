@@ -94,10 +94,7 @@ impl ApiKeyRepository {
     }
 
     /// Count active keys for a consumer (used to enforce per-consumer limit).
-    pub async fn count_active_for_consumer(
-        &self,
-        consumer_id: Uuid,
-    ) -> Result<i64, DatabaseError> {
+    pub async fn count_active_for_consumer(&self, consumer_id: Uuid) -> Result<i64, DatabaseError> {
         sqlx::query_scalar!(
             "SELECT COUNT(*) FROM api_keys WHERE consumer_id = $1 AND status = 'active'",
             consumer_id
@@ -178,10 +175,7 @@ impl ApiKeyRepository {
     }
 
     /// List all keys for a consumer (for admin/developer portal views).
-    pub async fn list_for_consumer(
-        &self,
-        consumer_id: Uuid,
-    ) -> Result<Vec<ApiKey>, DatabaseError> {
+    pub async fn list_for_consumer(&self, consumer_id: Uuid) -> Result<Vec<ApiKey>, DatabaseError> {
         sqlx::query_as::<_, ApiKey>(
             r#"
             SELECT

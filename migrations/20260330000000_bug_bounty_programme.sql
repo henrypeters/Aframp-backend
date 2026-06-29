@@ -6,7 +6,8 @@
 -- 1. ENUM TYPES
 -- ============================================================================
 
-DO $ BEGIN
+DO $$
+BEGIN
     CREATE TYPE bb_report_status AS ENUM (
         'new',
         'acknowledged',
@@ -19,9 +20,10 @@ DO $ BEGIN
     );
 EXCEPTION
     WHEN duplicate_object THEN NULL;
-END $;
+END $$;
 
-DO $ BEGIN
+DO $$
+BEGIN
     CREATE TYPE bb_severity AS ENUM (
         'critical',
         'high',
@@ -31,16 +33,17 @@ DO $ BEGIN
     );
 EXCEPTION
     WHEN duplicate_object THEN NULL;
-END $;
+END $$;
 
-DO $ BEGIN
+DO $$
+BEGIN
     CREATE TYPE bb_programme_phase AS ENUM (
         'private',
         'public'
     );
 EXCEPTION
     WHEN duplicate_object THEN NULL;
-END $;
+END $$;
 
 -- ============================================================================
 -- 2. BUG_BOUNTY_REPORTS TABLE
@@ -127,7 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_reward_records_researcher_id
     ON reward_records(researcher_id);
 
 CREATE INDEX IF NOT EXISTS idx_reward_records_month
-    ON reward_records(date_trunc('month', created_at));
+    ON reward_records(created_at);
 
 -- ============================================================================
 -- 5. RESEARCHER_INVITATIONS TABLE
@@ -171,12 +174,12 @@ WHERE NOT EXISTS (SELECT 1 FROM programme_state);
 
 -- Auto-update updated_at on bug_bounty_reports
 CREATE OR REPLACE FUNCTION update_bb_report_timestamp()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trg_bb_reports_updated ON bug_bounty_reports;
 CREATE TRIGGER trg_bb_reports_updated

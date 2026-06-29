@@ -5,18 +5,32 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "signer_role", rename_all = "snake_case")]
-pub enum SignerRole { Cfo, Cto, Cco, TreasuryManager, ExternalAuditor }
+pub enum SignerRole {
+    Cfo,
+    Cto,
+    Cco,
+    TreasuryManager,
+    ExternalAuditor,
+}
 
 impl SignerRole {
     pub fn max_weight(self) -> i16 {
-        match self { Self::Cfo | Self::Cco | Self::Cto => 2, _ => 1 }
+        match self {
+            Self::Cfo | Self::Cco | Self::Cto => 2,
+            _ => 1,
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "signer_status", rename_all = "snake_case")]
 pub enum SignerStatus {
-    PendingOnboarding, PendingIdentity, Active, Suspended, PendingRemoval, Removed,
+    PendingOnboarding,
+    PendingIdentity,
+    Active,
+    Suspended,
+    PendingRemoval,
+    Removed,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -104,7 +118,9 @@ pub struct RotateKeyRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SuspendSignerRequest { pub reason: String }
+pub struct SuspendSignerRequest {
+    pub reason: String,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateQuorumRequest {

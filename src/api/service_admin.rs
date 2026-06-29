@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{error, info};
 
-use crate::service_auth::{
+// REMOVED: use crate::service_auth::{
     AllowlistEntry, ServiceAllowlist, ServiceAllowlistRepository, ServiceIdentityInfo,
     ServiceRegistration, ServiceRegistry,
 };
@@ -157,8 +157,8 @@ pub async fn rotate_secret(
         .await
     {
         Ok(new_secret) => {
-            let grace_period_ends = chrono::Utc::now()
-                + chrono::Duration::seconds(grace_period_secs);
+            let grace_period_ends =
+                chrono::Utc::now() + chrono::Duration::seconds(grace_period_secs);
 
             info!(
                 service_name = %service_name,

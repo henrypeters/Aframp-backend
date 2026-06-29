@@ -151,7 +151,14 @@ struct ErrorBody {
 }
 
 fn err_resp(status: StatusCode, code: &str, msg: impl Into<String>) -> Response {
-    (status, Json(ErrorBody { code: code.to_string(), message: msg.into() })).into_response()
+    (
+        status,
+        Json(ErrorBody {
+            code: code.to_string(),
+            message: msg.into(),
+        }),
+    )
+        .into_response()
 }
 
 fn map_row(r: TxRow) -> TransactionRecord {
@@ -184,30 +191,45 @@ fn validate_query(q: &HistoryQuery) -> Result<i64, Response> {
 
     if let Some(ref t) = q.tx_type {
         if !["onramp", "offramp", "bill_payment"].contains(&t.as_str()) {
-            return Err(err_resp(StatusCode::BAD_REQUEST, "INVALID_TYPE",
-                "tx_type must be onramp, offramp, or bill_payment"));
+            return Err(err_resp(
+                StatusCode::BAD_REQUEST,
+                "INVALID_TYPE",
+                "tx_type must be onramp, offramp, or bill_payment",
+            ));
         }
     }
     if let Some(ref s) = q.status {
         if !["pending", "processing", "completed", "failed", "refunded"].contains(&s.as_str()) {
-            return Err(err_resp(StatusCode::BAD_REQUEST, "INVALID_STATUS",
-                "status must be pending, processing, completed, failed, or refunded"));
+            return Err(err_resp(
+                StatusCode::BAD_REQUEST,
+                "INVALID_STATUS",
+                "status must be pending, processing, completed, failed, or refunded",
+            ));
         }
     }
     if let (Some(from), Some(to)) = (q.date_from, q.date_to) {
         if from > to {
-            return Err(err_resp(StatusCode::BAD_REQUEST, "INVALID_DATE_RANGE",
-                "date_from must be before date_to"));
+            return Err(err_resp(
+                StatusCode::BAD_REQUEST,
+                "INVALID_DATE_RANGE",
+                "date_from must be before date_to",
+            ));
         }
         if (to - from) > Duration::days(MAX_DATE_RANGE_DAYS) {
-            return Err(err_resp(StatusCode::BAD_REQUEST, "DATE_RANGE_TOO_LARGE",
-                format!("date range cannot exceed {} days", MAX_DATE_RANGE_DAYS)));
+            return Err(err_resp(
+                StatusCode::BAD_REQUEST,
+                "DATE_RANGE_TOO_LARGE",
+                format!("date range cannot exceed {} days", MAX_DATE_RANGE_DAYS),
+            ));
         }
     }
     if let Some(ref sort) = q.sort {
         if !["created_asc", "created_desc", "amount_asc", "amount_desc"].contains(&sort.as_str()) {
-            return Err(err_resp(StatusCode::BAD_REQUEST, "INVALID_SORT",
-                "sort must be created_asc, created_desc, amount_asc, or amount_desc"));
+            return Err(err_resp(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SORT",
+                "sort must be created_asc, created_desc, amount_asc, or amount_desc",
+            ));
         }
     }
     Ok(limit)
@@ -218,15 +240,20 @@ fn validate_query(q: &HistoryQuery) -> Result<i64, Response> {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum SortMode { CreatedDesc, CreatedAsc, AmountDesc, AmountAsc }
+enum SortMode {
+    CreatedDesc,
+    CreatedAsc,
+    AmountDesc,
+    AmountAsc,
+}
 
 impl SortMode {
     fn from_str(s: &str) -> Self {
         match s {
-            "created_asc"  => Self::CreatedAsc,
-            "amount_desc"  => Self::AmountDesc,
-            "amount_asc"   => Self::AmountAsc,
-            _              => Self::CreatedDesc,
+            "created_asc" => Self::CreatedAsc,
+            "amount_desc" => Self::AmountDesc,
+            "amount_asc" => Self::AmountAsc,
+            _ => Self::CreatedDesc,
         }
     }
 }
@@ -242,13 +269,18 @@ async fn fetch_history(
     for_export: bool,
 ) -> Result<(Vec<TxRow>, i64), sqlx::Error> {
     let sort = SortMode::from_str(q.sort.as_deref().unwrap_or("created_desc"));
-    let effective_limit = if for_export { MAX_EXPORT_ROWS + 1 } else { limit + 1 };
+    let effective_limit = if for_export {
+        MAX_EXPORT_ROWS + 1
+    } else {
+        limit + 1
+    };
     let cursor = q.cursor.as_deref().and_then(decode_cursor);
 
     // Cursor boundary values — passed as bound parameters, never interpolated
     let cursor_created_at: Option<DateTime<Utc>> = cursor.as_ref().map(|c| c.created_at);
-    let cursor_id: Option<Uuid>                  = cursor.as_ref().map(|c| c.id);
-    let cursor_amount: Option<BigDecimal>        = cursor.as_ref()
+    let cursor_id: Option<Uuid> = cursor.as_ref().map(|c| c.id);
+    let cursor_amount: Option<BigDecimal> = cursor
+        .as_ref()
         .and_then(|c| c.amount.parse::<BigDecimal>().ok());
 
     // We use a single parameterised query with conditional cursor logic expressed
@@ -263,8 +295,9 @@ async fn fetch_history(
     // PostgreSQL row-value comparisons handle the composite keyset correctly.
 
     let rows = match sort {
-        SortMode::CreatedDesc => sqlx::query_as::<_, TxRow>(
-            r#"
+        SortMode::CreatedDesc => {
+            sqlx::query_as::<_, TxRow>(
+                r#"
             SELECT transaction_id, wallet_address, type, from_currency, to_currency,
                    from_amount, to_amount, cngn_amount, status, payment_provider,
                    payment_reference, blockchain_tx_hash, error_message, metadata,
@@ -280,7 +313,8 @@ async fn fetch_history(
               AND ($8::timestamptz IS NULL OR (created_at, transaction_id) < ($8, $9))
             ORDER BY created_at DESC, transaction_id DESC
             LIMIT $10
-            "#)
+            "#,
+            )
             .bind(&q.wallet_address)
             .bind(q.tx_type.as_deref())
             .bind(q.status.as_deref())
@@ -291,10 +325,13 @@ async fn fetch_history(
             .bind(cursor_created_at)
             .bind(cursor_id)
             .bind(effective_limit)
-            .fetch_all(pool).await?,
+            .fetch_all(pool)
+            .await?
+        }
 
-        SortMode::CreatedAsc => sqlx::query_as::<_, TxRow>(
-            r#"
+        SortMode::CreatedAsc => {
+            sqlx::query_as::<_, TxRow>(
+                r#"
             SELECT transaction_id, wallet_address, type, from_currency, to_currency,
                    from_amount, to_amount, cngn_amount, status, payment_provider,
                    payment_reference, blockchain_tx_hash, error_message, metadata,
@@ -310,7 +347,8 @@ async fn fetch_history(
               AND ($8::timestamptz IS NULL OR (created_at, transaction_id) > ($8, $9))
             ORDER BY created_at ASC, transaction_id ASC
             LIMIT $10
-            "#)
+            "#,
+            )
             .bind(&q.wallet_address)
             .bind(q.tx_type.as_deref())
             .bind(q.status.as_deref())
@@ -321,10 +359,13 @@ async fn fetch_history(
             .bind(cursor_created_at)
             .bind(cursor_id)
             .bind(effective_limit)
-            .fetch_all(pool).await?,
+            .fetch_all(pool)
+            .await?
+        }
 
-        SortMode::AmountDesc => sqlx::query_as::<_, TxRow>(
-            r#"
+        SortMode::AmountDesc => {
+            sqlx::query_as::<_, TxRow>(
+                r#"
             SELECT transaction_id, wallet_address, type, from_currency, to_currency,
                    from_amount, to_amount, cngn_amount, status, payment_provider,
                    payment_reference, blockchain_tx_hash, error_message, metadata,
@@ -340,7 +381,8 @@ async fn fetch_history(
               AND ($8::numeric IS NULL OR (from_amount, transaction_id) < ($8, $9))
             ORDER BY from_amount DESC, transaction_id DESC
             LIMIT $10
-            "#)
+            "#,
+            )
             .bind(&q.wallet_address)
             .bind(q.tx_type.as_deref())
             .bind(q.status.as_deref())
@@ -351,10 +393,13 @@ async fn fetch_history(
             .bind(cursor_amount)
             .bind(cursor_id)
             .bind(effective_limit)
-            .fetch_all(pool).await?,
+            .fetch_all(pool)
+            .await?
+        }
 
-        SortMode::AmountAsc => sqlx::query_as::<_, TxRow>(
-            r#"
+        SortMode::AmountAsc => {
+            sqlx::query_as::<_, TxRow>(
+                r#"
             SELECT transaction_id, wallet_address, type, from_currency, to_currency,
                    from_amount, to_amount, cngn_amount, status, payment_provider,
                    payment_reference, blockchain_tx_hash, error_message, metadata,
@@ -370,7 +415,8 @@ async fn fetch_history(
               AND ($8::numeric IS NULL OR (from_amount, transaction_id) > ($8, $9))
             ORDER BY from_amount ASC, transaction_id ASC
             LIMIT $10
-            "#)
+            "#,
+            )
             .bind(&q.wallet_address)
             .bind(q.tx_type.as_deref())
             .bind(q.status.as_deref())
@@ -381,7 +427,9 @@ async fn fetch_history(
             .bind(cursor_amount)
             .bind(cursor_id)
             .bind(effective_limit)
-            .fetch_all(pool).await?,
+            .fetch_all(pool)
+            .await?
+        }
     };
 
     // Count — same filters, no cursor, no limit
@@ -395,15 +443,17 @@ async fn fetch_history(
           AND ($5::timestamptz IS NULL OR created_at   <= $5)
           AND ($6::text        IS NULL OR from_currency = $6)
           AND ($7::text        IS NULL OR to_currency   = $7)
-        "#)
-        .bind(&q.wallet_address)
-        .bind(q.tx_type.as_deref())
-        .bind(q.status.as_deref())
-        .bind(q.date_from)
-        .bind(q.date_to)
-        .bind(q.from_currency.as_deref())
-        .bind(q.to_currency.as_deref())
-        .fetch_one(pool).await?;
+        "#,
+    )
+    .bind(&q.wallet_address)
+    .bind(q.tx_type.as_deref())
+    .bind(q.status.as_deref())
+    .bind(q.date_from)
+    .bind(q.date_to)
+    .bind(q.from_currency.as_deref())
+    .bind(q.to_currency.as_deref())
+    .fetch_one(pool)
+    .await?;
 
     Ok((rows, total))
 }
@@ -423,7 +473,7 @@ fn history_cache_key(q: &HistoryQuery, limit: i64) -> String {
         q.date_from.map(|d| d.timestamp()).unwrap_or(0),
         q.date_to.map(|d| d.timestamp()).unwrap_or(0),
         q.from_currency.as_deref().unwrap_or(""),
-        q.to_currency.as_deref().unwrap_or(""),   // was missing before
+        q.to_currency.as_deref().unwrap_or(""), // was missing before
         q.sort.as_deref().unwrap_or("created_desc"),
     )
 }
@@ -437,7 +487,11 @@ pub async fn get_transaction_history(
     Query(q): Query<HistoryQuery>,
 ) -> Response {
     if q.wallet_address.is_empty() {
-        return err_resp(StatusCode::BAD_REQUEST, "MISSING_WALLET", "wallet_address is required");
+        return err_resp(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WALLET",
+            "wallet_address is required",
+        );
     }
     let limit = match validate_query(&q) {
         Ok(l) => l,
@@ -460,15 +514,22 @@ pub async fn get_transaction_history(
         Ok(r) => r,
         Err(e) => {
             error!(error = %e, "fetch transaction history failed");
-            return err_resp(StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "failed to fetch history");
+            return err_resp(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DATABASE_ERROR",
+                "failed to fetch history",
+            );
         }
     };
 
     let has_more = rows.len() as i64 > limit;
-    if has_more { rows.truncate(limit as usize); }
+    if has_more {
+        rows.truncate(limit as usize);
+    }
 
     let next_cursor = if has_more {
-        rows.last().map(|r| encode_cursor(r.created_at, r.transaction_id, &r.from_amount))
+        rows.last()
+            .map(|r| encode_cursor(r.created_at, r.transaction_id, &r.from_amount))
     } else {
         None
     };
@@ -481,7 +542,10 @@ pub async fn get_transaction_history(
     };
 
     if let Some(ref cache) = state.cache {
-        if let Err(e) = cache.set(&cache_key, &response, Some(HISTORY_CACHE_TTL)).await {
+        if let Err(e) = cache
+            .set(&cache_key, &response, Some(HISTORY_CACHE_TTL))
+            .await
+        {
             debug!(error = %e, "cache set degraded");
         }
     }
@@ -498,7 +562,11 @@ pub async fn export_transaction_history(
     Query(q): Query<HistoryQuery>,
 ) -> Response {
     if q.wallet_address.is_empty() {
-        return err_resp(StatusCode::BAD_REQUEST, "MISSING_WALLET", "wallet_address is required");
+        return err_resp(
+            StatusCode::BAD_REQUEST,
+            "MISSING_WALLET",
+            "wallet_address is required",
+        );
     }
     // Export ignores cursor — always starts from the beginning of the filter set
     let export_q = HistoryQuery {
@@ -513,26 +581,44 @@ pub async fn export_transaction_history(
         to_currency: q.to_currency.clone(),
         sort: q.sort.clone(),
     };
-    if let Err(e) = validate_query(&export_q) { return e; }
+    if let Err(e) = validate_query(&export_q) {
+        return e;
+    }
 
     let (mut rows, _) = match fetch_history(&state.pool, &export_q, DEFAULT_PAGE_SIZE, true).await {
         Ok(r) => r,
         Err(e) => {
             error!(error = %e, "fetch transactions for export failed");
-            return err_resp(StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "failed to fetch transactions");
+            return err_resp(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DATABASE_ERROR",
+                "failed to fetch transactions",
+            );
         }
     };
 
     let truncated = rows.len() as i64 > MAX_EXPORT_ROWS;
-    if truncated { rows.truncate(MAX_EXPORT_ROWS as usize); }
+    if truncated {
+        rows.truncate(MAX_EXPORT_ROWS as usize);
+    }
 
     let mut wtr = csv::Writer::from_writer(vec![]);
     wtr.write_record(&[
-        "id", "type", "status", "from_currency", "to_currency",
-        "from_amount", "to_amount", "cngn_amount",
-        "payment_provider", "payment_reference", "blockchain_tx_hash",
-        "created_at", "updated_at",
-    ]).ok();
+        "id",
+        "type",
+        "status",
+        "from_currency",
+        "to_currency",
+        "from_amount",
+        "to_amount",
+        "cngn_amount",
+        "payment_provider",
+        "payment_reference",
+        "blockchain_tx_hash",
+        "created_at",
+        "updated_at",
+    ])
+    .ok();
 
     for row in &rows {
         wtr.write_record(&[
@@ -549,7 +635,8 @@ pub async fn export_transaction_history(
             row.blockchain_tx_hash.clone().unwrap_or_default(),
             row.created_at.to_rfc3339(),
             row.updated_at.to_rfc3339(),
-        ]).ok();
+        ])
+        .ok();
     }
 
     let csv_bytes = wtr.into_inner().unwrap_or_default();
@@ -564,14 +651,15 @@ pub async fn export_transaction_history(
         .unwrap_or_else(|_| HeaderValue::from_static("attachment; filename=\"transactions.csv\""));
 
     let mut resp = (StatusCode::OK, csv_bytes).into_response();
-    resp.headers_mut().insert(header::CONTENT_TYPE,
-        HeaderValue::from_static("text/csv; charset=utf-8"));
-    resp.headers_mut().insert(header::CONTENT_DISPOSITION, disposition_val);
+    resp.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/csv; charset=utf-8"),
+    );
+    resp.headers_mut()
+        .insert(header::CONTENT_DISPOSITION, disposition_val);
     if truncated {
-        resp.headers_mut().insert(
-            "x-export-truncated",
-            HeaderValue::from_static("true"),
-        );
+        resp.headers_mut()
+            .insert("x-export-truncated", HeaderValue::from_static("true"));
         resp.headers_mut().insert(
             "x-export-max-rows",
             HeaderValue::from_str(&MAX_EXPORT_ROWS.to_string())
@@ -593,9 +681,15 @@ mod tests {
     fn make_query(overrides: impl FnOnce(&mut HistoryQuery)) -> HistoryQuery {
         let mut q = HistoryQuery {
             wallet_address: "GTEST".to_string(),
-            cursor: None, limit: None, tx_type: None, status: None,
-            date_from: None, date_to: None,
-            from_currency: None, to_currency: None, sort: None,
+            cursor: None,
+            limit: None,
+            tx_type: None,
+            status: None,
+            date_from: None,
+            date_to: None,
+            from_currency: None,
+            to_currency: None,
+            sort: None,
         };
         overrides(&mut q);
         q
@@ -629,17 +723,26 @@ mod tests {
 
     #[test]
     fn test_default_limit() {
-        assert_eq!(validate_query(&make_query(|_| {})).unwrap(), DEFAULT_PAGE_SIZE);
+        assert_eq!(
+            validate_query(&make_query(|_| {})).unwrap(),
+            DEFAULT_PAGE_SIZE
+        );
     }
 
     #[test]
     fn test_limit_clamped_to_max() {
-        assert_eq!(validate_query(&make_query(|q| q.limit = Some(9999))).unwrap(), MAX_PAGE_SIZE);
+        assert_eq!(
+            validate_query(&make_query(|q| q.limit = Some(9999))).unwrap(),
+            MAX_PAGE_SIZE
+        );
     }
 
     #[test]
     fn test_limit_clamped_to_min() {
-        assert_eq!(validate_query(&make_query(|q| q.limit = Some(0))).unwrap(), 1);
+        assert_eq!(
+            validate_query(&make_query(|q| q.limit = Some(0))).unwrap(),
+            1
+        );
     }
 
     #[test]
@@ -671,8 +774,9 @@ mod tests {
         let now = Utc::now();
         assert!(validate_query(&make_query(|q| {
             q.date_from = Some(now);
-            q.date_to   = Some(now - Duration::days(1));
-        })).is_err());
+            q.date_to = Some(now - Duration::days(1));
+        }))
+        .is_err());
     }
 
     #[test]
@@ -680,8 +784,9 @@ mod tests {
         let now = Utc::now();
         assert!(validate_query(&make_query(|q| {
             q.date_from = Some(now - Duration::days(400));
-            q.date_to   = Some(now);
-        })).is_err());
+            q.date_to = Some(now);
+        }))
+        .is_err());
     }
 
     #[test]
@@ -689,8 +794,9 @@ mod tests {
         let now = Utc::now();
         assert!(validate_query(&make_query(|q| {
             q.date_from = Some(now - Duration::days(MAX_DATE_RANGE_DAYS));
-            q.date_to   = Some(now);
-        })).is_ok());
+            q.date_to = Some(now);
+        }))
+        .is_ok());
     }
 
     #[test]
@@ -740,8 +846,8 @@ mod tests {
 
     #[test]
     fn test_sort_mode_all_variants() {
-        assert_eq!(SortMode::from_str("created_asc"),  SortMode::CreatedAsc);
-        assert_eq!(SortMode::from_str("amount_desc"),  SortMode::AmountDesc);
-        assert_eq!(SortMode::from_str("amount_asc"),   SortMode::AmountAsc);
+        assert_eq!(SortMode::from_str("created_asc"), SortMode::CreatedAsc);
+        assert_eq!(SortMode::from_str("amount_desc"), SortMode::AmountDesc);
+        assert_eq!(SortMode::from_str("amount_asc"), SortMode::AmountAsc);
     }
 }

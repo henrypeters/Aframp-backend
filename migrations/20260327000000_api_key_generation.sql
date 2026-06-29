@@ -1,4 +1,3 @@
--- migrate:up
 -- API Key Generation & Issuance System (Issue #131)
 --
 -- Upgrades the api_keys table to support:

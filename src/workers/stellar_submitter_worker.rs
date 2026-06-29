@@ -1,13 +1,13 @@
-use crate::chains::stellar::client::StellarClient;
-use crate::chains::stellar::payment::{CngnMemo, CngnPaymentBuilder};
+// REMOVED: use crate::chains::stellar::client::StellarClient;
+// REMOVED: use crate::chains::stellar::payment::{CngnMemo, CngnPaymentBuilder};
 use crate::database::transaction_repository::TransactionRepository;
 use crate::services::mint_queue::{MintQueueService, MintRequest};
+use bigdecimal::BigDecimal;
 use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::watch;
-use tokio::time::{interval, Duration, sleep};
-use tracing::{debug, error, info, warn, instrument};
-use bigdecimal::BigDecimal;
+use tokio::time::{interval, sleep, Duration};
+use tracing::{debug, error, info, instrument, warn};
 
 pub struct SubmitterConfig {
     pub poll_interval: Duration,
@@ -126,24 +126,28 @@ impl StellarSubmitterWorker {
         let builder = CngnPaymentBuilder::new((*self.stellar).clone());
         let memo = CngnMemo::Text(format!("batch:{}", Uuid::new_v4()));
 
-        match builder.build_multi_payment(
-            &self.config.system_wallet_address,
-            &payments,
-            memo,
-            None
-        ).await {
+        match builder
+            .build_multi_payment(&self.config.system_wallet_address, &payments, memo, None)
+            .await
+        {
             Ok(draft) => {
                 match builder.sign_payment(draft, &self.config.system_wallet_secret) {
                     Ok(signed) => {
-                        match builder.submit_signed_payment(&signed.signed_envelope_xdr).await {
+                        match builder
+                            .submit_signed_payment(&signed.signed_envelope_xdr)
+                            .await
+                        {
                             Ok(result) => {
-                                let hash = result.get("hash").and_then(|h| h.as_str()).unwrap_or("");
+                                let hash =
+                                    result.get("hash").and_then(|h| h.as_str()).unwrap_or("");
                                 info!(hash = %hash, "Batch submitted successfully");
-                                
+
                                 // Update status for all transactions in batch
                                 for req in &valid_requests {
                                     let next_status = match req.mint_type {
-                                        crate::services::mint_queue::MintType::Refund => "refunding",
+                                        crate::services::mint_queue::MintType::Refund => {
+                                            "refunding"
+                                        }
                                         _ => "processing",
                                     };
 

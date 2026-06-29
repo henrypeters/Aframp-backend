@@ -102,7 +102,10 @@ impl GeoRestrictionService {
         }
 
         // Resolve geolocation
-        let geo_result = self.geolocation.resolve_country(&context.ip_address).await?;
+        let geo_result = self
+            .geolocation
+            .resolve_country(&context.ip_address)
+            .await?;
 
         // Get country code or use default policy
         let country_code = match geo_result.country_code {
@@ -120,14 +123,17 @@ impl GeoRestrictionService {
         }
 
         // Evaluate policy hierarchy
-        let result = self.evaluate_policy_hierarchy(&country_code, context).await?;
+        let result = self
+            .evaluate_policy_hierarchy(&country_code, context)
+            .await?;
 
         // Cache the result
         self.cache_policy_result(&cache_key, &result).await;
 
         // Audit the decision if configured
         if self.config.audit_all_decisions {
-            self.audit_decision(&country_code, context, &result, &geo_result).await?;
+            self.audit_decision(&country_code, context, &result, &geo_result)
+                .await?;
         }
 
         Ok(result)
@@ -141,7 +147,11 @@ impl GeoRestrictionService {
     ) -> Result<PolicyResult, AppError> {
         // 1. Check consumer-specific override
         if let Some(consumer_id) = context.consumer_id {
-            if let Some(override_policy) = self.repository.get_consumer_override(consumer_id, country_code).await? {
+            if let Some(override_policy) = self
+                .repository
+                .get_consumer_override(consumer_id, country_code)
+                .await?
+            {
                 if !override_policy.is_expired() {
                     return self.map_policy_to_result(&override_policy.policy_type, context);
                 }
@@ -155,7 +165,11 @@ impl GeoRestrictionService {
 
         // 3. Check region policy
         if let Some(region) = self.get_region_for_country(country_code).await? {
-            if let Some(region_policy) = self.repository.get_region_policy(&region.region_code).await? {
+            if let Some(region_policy) = self
+                .repository
+                .get_region_policy(&region.region_code)
+                .await?
+            {
                 return self.map_policy_to_result(&region_policy.policy_type, context);
             }
         }
@@ -165,12 +179,19 @@ impl GeoRestrictionService {
     }
 
     /// Get region grouping for a country
-    async fn get_region_for_country(&self, country_code: &str) -> Result<Option<RegionGrouping>, AppError> {
+    async fn get_region_for_country(
+        &self,
+        country_code: &str,
+    ) -> Result<Option<RegionGrouping>, AppError> {
         self.repository.get_region_for_country(country_code).await
     }
 
     /// Map policy type string to PolicyResult enum
-    fn map_policy_to_result(&self, policy_type: &str, context: &PolicyContext) -> Result<PolicyResult, AppError> {
+    fn map_policy_to_result(
+        &self,
+        policy_type: &str,
+        context: &PolicyContext,
+    ) -> Result<PolicyResult, AppError> {
         match policy_type {
             "allowed" => Ok(PolicyResult::Allowed),
             "restricted" => {
@@ -182,14 +203,21 @@ impl GeoRestrictionService {
             }
             "blocked" => Ok(PolicyResult::Blocked),
             _ => {
-                warn!("Unknown policy type: {}, defaulting to allowed", policy_type);
+                warn!(
+                    "Unknown policy type: {}, defaulting to allowed",
+                    policy_type
+                );
                 Ok(PolicyResult::Allowed)
             }
         }
     }
 
     /// Handle unresolvable IP addresses
-    async fn handle_unresolvable_ip(&self, default_policy: &str, context: &PolicyContext) -> Result<PolicyResult, AppError> {
+    async fn handle_unresolvable_ip(
+        &self,
+        default_policy: &str,
+        context: &PolicyContext,
+    ) -> Result<PolicyResult, AppError> {
         match default_policy {
             "allowed" => Ok(PolicyResult::Allowed),
             "restricted" => {
@@ -209,7 +237,10 @@ impl GeoRestrictionService {
         format!(
             "geo_policy:{}:{}:{}:{}",
             country_code,
-            context.consumer_id.map(|id| id.to_string()).unwrap_or_else(|| "none".to_string()),
+            context
+                .consumer_id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "none".to_string()),
             context.transaction_type.as_deref().unwrap_or("none"),
             context.enhanced_verification
         )
@@ -259,13 +290,18 @@ impl GeoRestrictionService {
             PolicyResult::RequiresVerification => "requires_verification",
         };
 
-        self.repository.log_audit_event(
-            context.consumer_id,
-            &context.ip_address,
-            country_code,
-            decision_str,
-            &format!("Transaction type: {:?}, Enhanced verification: {}", context.transaction_type, context.enhanced_verification),
-        ).await?;
+        self.repository
+            .log_audit_event(
+                context.consumer_id,
+                &context.ip_address,
+                country_code,
+                decision_str,
+                &format!(
+                    "Transaction type: {:?}, Enhanced verification: {}",
+                    context.transaction_type, context.enhanced_verification
+                ),
+            )
+            .await?;
 
         info!(
             consumer_id = ?context.consumer_id,
@@ -297,7 +333,9 @@ impl GeoRestrictionService {
         policy_type: &str,
         updated_by: Uuid,
     ) -> Result<(), AppError> {
-        self.repository.update_country_policy(country_code, policy_type, updated_by).await?;
+        self.repository
+            .update_country_policy(country_code, policy_type, updated_by)
+            .await?;
         self.clear_policy_cache().await;
         Ok(())
     }
@@ -311,25 +349,32 @@ impl GeoRestrictionService {
         expires_at: Option<chrono::DateTime<chrono::Utc>>,
         created_by: Uuid,
     ) -> Result<(), AppError> {
-        self.repository.create_consumer_override(
-            consumer_id,
-            country_code,
-            policy_type,
-            expires_at,
-            created_by,
-        ).await?;
+        self.repository
+            .create_consumer_override(
+                consumer_id,
+                country_code,
+                policy_type,
+                expires_at,
+                created_by,
+            )
+            .await?;
         self.clear_policy_cache().await;
         Ok(())
     }
 
     /// Get consumer overrides (for admin API)
-    pub async fn get_consumer_overrides(&self, consumer_id: Uuid) -> Result<Vec<ConsumerGeoOverride>, AppError> {
+    pub async fn get_consumer_overrides(
+        &self,
+        consumer_id: Uuid,
+    ) -> Result<Vec<ConsumerGeoOverride>, AppError> {
         self.repository.get_consumer_overrides(consumer_id).await
     }
 
     /// Delete consumer override (for admin API)
     pub async fn delete_consumer_override(&self, override_id: Uuid) -> Result<(), AppError> {
-        self.repository.delete_consumer_override(override_id).await?;
+        self.repository
+            .delete_consumer_override(override_id)
+            .await?;
         self.clear_policy_cache().await;
         Ok(())
     }
@@ -338,7 +383,10 @@ impl GeoRestrictionService {
     pub async fn cleanup_expired_overrides(&self) -> Result<(), AppError> {
         let deleted_count = self.repository.cleanup_expired_overrides().await?;
         if deleted_count > 0 {
-            info!("Cleaned up {} expired geo-restriction overrides", deleted_count);
+            info!(
+                "Cleaned up {} expired geo-restriction overrides",
+                deleted_count
+            );
             self.clear_policy_cache().await;
         }
         Ok(())

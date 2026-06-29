@@ -7,9 +7,9 @@ use std::time::{Duration, Instant};
 use tokio::time::timeout;
 use tracing::{error, info};
 
-use crate::cache::RedisCache;
 use crate::cache::warmer::WarmingState;
-use crate::chains::stellar::client::StellarClient;
+use crate::cache::RedisCache;
+// REMOVED: use crate::chains::stellar::client::StellarClient;
 
 /// Health status response
 #[derive(Debug, Serialize, Clone)]
@@ -91,6 +91,8 @@ pub struct HealthChecker {
     stellar_client: Option<StellarClient>,
     /// Readiness gate: unhealthy until cache warming completes.
     pub warming_state: Option<WarmingState>,
+    /// Optional replication monitor for circuit-breaker-aware lag checks.
+    pub replication_monitor: Option<crate::database::replication_monitor::ReplicationMonitor>,
 }
 
 impl HealthChecker {
@@ -104,12 +106,22 @@ impl HealthChecker {
             cache,
             stellar_client,
             warming_state: None,
+            replication_monitor: None,
         }
     }
 
     /// Attach a warming state so the readiness probe blocks until warming is done.
     pub fn with_warming_state(mut self, state: WarmingState) -> Self {
         self.warming_state = Some(state);
+        self
+    }
+
+    /// Attach a replication monitor for circuit-breaker-aware lag checks.
+    pub fn with_replication_monitor(
+        mut self,
+        monitor: crate::database::replication_monitor::ReplicationMonitor,
+    ) -> Self {
+        self.replication_monitor = Some(monitor);
         self
     }
 
@@ -255,10 +267,9 @@ impl HealthChecker {
                 );
                 health_status.status = HealthState::Unhealthy;
             } else {
-                health_status.checks.insert(
-                    "cache_warming".to_string(),
-                    ComponentHealth::up(None),
-                );
+                health_status
+                    .checks
+                    .insert("cache_warming".to_string(), ComponentHealth::up(None));
             }
         }
 
@@ -342,4 +353,131 @@ mod tests {
         assert_eq!(warning_health.response_time_ms, Some(500));
         assert_eq!(warning_health.details, Some("Slow response".to_string()));
     }
+}
+
+// ---------------------------------------------------------------------------
+// Edge / replica health (Issue #348)
+// ---------------------------------------------------------------------------
+
+/// Maximum tolerated replication lag before the health endpoint returns 503.
+/// DNS failover is triggered when this threshold is breached.
+pub const REPLICATION_LAG_THRESHOLD_SECS: i64 = 5;
+
+/// Check replication lag on the read replica.
+///
+/// Queries `pg_stat_replication` on the primary (via `DATABASE_URL`) and
+/// returns the lag in seconds.  Returns `None` when no replica is configured.
+pub async fn check_replication_lag(
+    primary_pool: &sqlx::PgPool,
+) -> Result<Option<i64>, Box<dyn std::error::Error + Send + Sync>> {
+    // pg_stat_replication is only populated on the primary.
+    let row: Option<(Option<f64>,)> = sqlx::query_as(
+        "SELECT EXTRACT(EPOCH FROM write_lag)::float8 \
+         FROM pg_stat_replication \
+         ORDER BY write_lag DESC NULLS LAST \
+         LIMIT 1",
+    )
+    .fetch_optional(primary_pool)
+    .await?;
+
+    Ok(row.and_then(|(lag,)| lag.map(|l| l as i64)))
+}
+
+/// Axum handler: `GET /health/edge`
+///
+/// Returns 200 when the gateway is healthy and replication lag is within
+/// threshold.  Returns 503 when lag exceeds `REPLICATION_LAG_THRESHOLD_SECS`,
+/// signalling the DNS load balancer to fail over to the next closest region.
+pub async fn edge_health_handler(
+    axum::extract::State(checker): axum::extract::State<std::sync::Arc<HealthChecker>>,
+) -> impl axum::response::IntoResponse {
+    use axum::http::StatusCode;
+    use serde_json::json;
+
+    let region = crate::gateway::region::current_region();
+
+    // Run the standard health check first.
+    let status = checker.check_health().await;
+    if !status.is_healthy() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(json!({
+                "status": "unhealthy",
+                "region": region,
+                "reason": "dependency_failure"
+            })),
+        );
+    }
+
+    // Use the ReplicationMonitor if available; fall back to a direct query.
+    if let Some(monitor) = &checker.replication_monitor {
+        let lag_secs = monitor.lag_secs();
+        let breaker_open = monitor.is_open();
+
+        // Update circuit-breaker metric on every health probe.
+        crate::database::metrics::set_circuit_breaker(
+            &crate::gateway::region::current_region(),
+            breaker_open,
+        );
+
+        if lag_secs > REPLICATION_LAG_THRESHOLD_SECS || breaker_open {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                axum::Json(json!({
+                    "status": "unhealthy",
+                    "region": region,
+                    "reason": "replication_lag",
+                    "lag_secs": lag_secs,
+                    "threshold_secs": REPLICATION_LAG_THRESHOLD_SECS,
+                    "circuit_breaker_open": breaker_open
+                })),
+            );
+        }
+
+        return (
+            StatusCode::OK,
+            axum::Json(json!({
+                "status": "healthy",
+                "region": region,
+                "replication_lag_secs": lag_secs,
+                "circuit_breaker_open": breaker_open
+            })),
+        );
+    }
+
+    // Fallback: direct pg_stat_replication query.
+    if let Some(pool) = &checker.db_pool {
+        match check_replication_lag(pool).await {
+            Ok(Some(lag)) if lag > REPLICATION_LAG_THRESHOLD_SECS => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    axum::Json(json!({
+                        "status": "unhealthy",
+                        "region": region,
+                        "reason": "replication_lag",
+                        "lag_secs": lag,
+                        "threshold_secs": REPLICATION_LAG_THRESHOLD_SECS
+                    })),
+                );
+            }
+            Ok(lag) => {
+                return (
+                    StatusCode::OK,
+                    axum::Json(json!({
+                        "status": "healthy",
+                        "region": region,
+                        "replication_lag_secs": lag
+                    })),
+                );
+            }
+            Err(e) => {
+                tracing::warn!("Could not query replication lag: {e}");
+            }
+        }
+    }
+
+    (
+        StatusCode::OK,
+        axum::Json(json!({ "status": "healthy", "region": region })),
+    )
 }

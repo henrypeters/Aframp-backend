@@ -18,10 +18,19 @@ use crate::masking::engine::mask_json_value;
 
 /// Fields that must never appear in consumer-facing error responses.
 const INTERNAL_ERROR_FIELDS: &[&str] = &[
-    "stack_trace", "stacktrace", "stack", "backtrace",
-    "db_error", "database_error", "sql", "query",
-    "provider_error", "provider_response", "internal_detail",
-    "cause", "source",
+    "stack_trace",
+    "stacktrace",
+    "stack",
+    "backtrace",
+    "db_error",
+    "database_error",
+    "sql",
+    "query",
+    "provider_error",
+    "provider_response",
+    "internal_detail",
+    "cause",
+    "source",
 ];
 
 /// Redact internal fields from an error response body.
@@ -45,10 +54,7 @@ pub fn safe_error_response(
     let is_production = env::var("APP_ENV")
         .map(|e| e == "production")
         .unwrap_or(false);
-    let debug_mode = !is_production
-        && env::var("DEBUG_MODE")
-            .map(|v| v == "true")
-            .unwrap_or(false);
+    let debug_mode = !is_production && env::var("DEBUG_MODE").map(|v| v == "true").unwrap_or(false);
 
     let mut resp = json!({
         "error": {
@@ -71,9 +77,7 @@ pub fn safe_error_response(
 pub fn validate_debug_mode_disabled_in_production() -> Result<(), String> {
     let app_env = env::var("APP_ENV").unwrap_or_else(|_| "development".into());
     if app_env == "production" {
-        let debug = env::var("DEBUG_MODE")
-            .map(|v| v == "true")
-            .unwrap_or(false);
+        let debug = env::var("DEBUG_MODE").map(|v| v == "true").unwrap_or(false);
         if debug {
             return Err("DEBUG_MODE must be false in production".to_string());
         }
@@ -166,7 +170,12 @@ mod tests {
     fn test_safe_error_response_no_debug_in_production() {
         std::env::set_var("APP_ENV", "production");
         std::env::set_var("DEBUG_MODE", "false");
-        let resp = safe_error_response(500, "INTERNAL_ERROR", "Service unavailable", Some("db timeout"));
+        let resp = safe_error_response(
+            500,
+            "INTERNAL_ERROR",
+            "Service unavailable",
+            Some("db timeout"),
+        );
         assert!(resp["error"].get("debug").is_none());
         std::env::remove_var("APP_ENV");
         std::env::remove_var("DEBUG_MODE");

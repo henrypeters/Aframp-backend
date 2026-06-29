@@ -9,7 +9,7 @@
 //! - GET    /api/mint/requests/:id/audit    — full audit trail
 
 use crate::api::mint::models::{
-    ApproveMintRequest, ApprovalEntry, AuditEntry, ListMintRequestsQuery, ListMintRequestsResponse,
+    ApprovalEntry, ApproveMintRequest, AuditEntry, ListMintRequestsQuery, ListMintRequestsResponse,
     MintActionResponse, MintRequestDetail, RejectMintRequest, SubmitMintRequest,
     SubmitMintResponse,
 };
@@ -66,12 +66,18 @@ fn workflow_err_to_response(e: WorkflowError) -> Response {
         WorkflowError::AlreadyActed { approver_id } => (
             StatusCode::CONFLICT,
             "ALREADY_ACTED",
-            format!("Approver '{}' has already acted on this request", approver_id),
+            format!(
+                "Approver '{}' has already acted on this request",
+                approver_id
+            ),
         ),
         WorkflowError::TerminalState { status } => (
             StatusCode::CONFLICT,
             "TERMINAL_STATE",
-            format!("Request is in terminal state '{}' and cannot be modified", status),
+            format!(
+                "Request is in terminal state '{}' and cannot be modified",
+                status
+            ),
         ),
         WorkflowError::MissingReasonCode => (
             StatusCode::BAD_REQUEST,
@@ -212,10 +218,7 @@ pub async fn approve_mint_request(
                 Json(MintActionResponse {
                     mint_request_id: req.id,
                     status: req.status.clone(),
-                    message: format!(
-                        "Approval recorded. Status: {}",
-                        req.status
-                    ),
+                    message: format!("Approval recorded. Status: {}", req.status),
                     approvals_received,
                     approvals_required,
                 }),
@@ -264,10 +267,7 @@ pub async fn reject_mint_request(
                 Json(MintActionResponse {
                     mint_request_id: req.id,
                     status: req.status,
-                    message: format!(
-                        "Request rejected. Reason: {}",
-                        body.reason_code
-                    ),
+                    message: format!("Request rejected. Reason: {}", body.reason_code),
                     approvals_received: 0,
                     approvals_required: req.required_approvals as usize,
                 }),

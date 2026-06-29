@@ -1,4 +1,4 @@
-use crate::chains::stellar::client::{HorizonTransactionRecord, StellarClient};
+// REMOVED: use crate::chains::stellar::client::{HorizonTransactionRecord, StellarClient};
 use crate::database::repository::Repository;
 use crate::database::transaction_repository::TransactionRepository;
 use crate::database::webhook_repository::WebhookRepository;
@@ -315,8 +315,11 @@ impl TransactionMonitorWorker {
         let tx_repo = TransactionRepository::new(self.pool.clone());
 
         if record.successful {
-            let current_status = tx_repo.find_status_by_id(transaction_id).await.unwrap_or_default();
-            
+            let current_status = tx_repo
+                .find_status_by_id(transaction_id)
+                .await
+                .unwrap_or_default();
+
             let next_status = match current_status.as_str() {
                 "burning" => "burned",
                 "refunding" => "refunded",
@@ -491,7 +494,11 @@ impl TransactionMonitorWorker {
                     metadata["incoming_ledger"] = json!(tx.ledger);
                     metadata["incoming_confirmed_at"] = json!(chrono::Utc::now().to_rfc3339());
 
-                    let next_status = if is_offramp || is_bill || db_tx.r#type == "offramp" || db_tx.r#type == "bill_payment" {
+                    let next_status = if is_offramp
+                        || is_bill
+                        || db_tx.r#type == "offramp"
+                        || db_tx.r#type == "bill_payment"
+                    {
                         "cngn_received"
                     } else {
                         "completed"
@@ -509,14 +516,18 @@ impl TransactionMonitorWorker {
                     if is_bill || db_tx.r#type == "bill_payment" {
                         use crate::database::bill_payment_repository::BillPaymentRepository;
                         let bill_repo = BillPaymentRepository::new(self.pool.clone());
-                        if let Ok(Some(bill)) = bill_repo.find_by_transaction_id(db_tx.transaction_id).await {
-                            let _ = bill_repo.update_processing_status(
-                                bill.id,
-                                "cngn_received",
-                                None,
-                                None,
-                                None
-                            ).await;
+                        if let Ok(Some(bill)) =
+                            bill_repo.find_by_transaction_id(db_tx.transaction_id).await
+                        {
+                            let _ = bill_repo
+                                .update_processing_status(
+                                    bill.id,
+                                    "cngn_received",
+                                    None,
+                                    None,
+                                    None,
+                                )
+                                .await;
                         }
                     }
 

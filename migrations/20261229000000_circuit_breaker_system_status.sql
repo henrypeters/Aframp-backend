@@ -3,7 +3,7 @@
 
 -- Create system status table with single row constraint
 CREATE TABLE IF NOT EXISTS system_status (
-    id SERIAL PRIMARY KEY DEFAULT 1,
+    id INTEGER PRIMARY KEY DEFAULT 1,
     status TEXT NOT NULL CHECK (status IN ('OPERATIONAL', 'PARTIAL_HALT', 'EMERGENCY_STOP')),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     triggered_at TIMESTAMP WITH TIME ZONE,

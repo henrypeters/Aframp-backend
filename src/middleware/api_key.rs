@@ -252,7 +252,11 @@ pub async fn scope_guard(
             auth
         }
 
-        LookupResult::Expired { key_id, consumer_id, expires_at } => {
+        LookupResult::Expired {
+            key_id,
+            consumer_id,
+            expires_at,
+        } => {
             warn!(
                 consumer_id = %consumer_id,
                 key_id = %key_id,
@@ -342,7 +346,9 @@ pub async fn scope_guard(
 
     if let Some(warning) = grace_warning {
         if let Ok(val) = HeaderValue::from_str(&warning) {
-            response.headers_mut().insert("X-Key-Deprecation-Warning", val);
+            response
+                .headers_mut()
+                .insert("X-Key-Deprecation-Warning", val);
         }
     }
 

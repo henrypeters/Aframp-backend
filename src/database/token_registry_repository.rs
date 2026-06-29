@@ -11,7 +11,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 use super::error::{DatabaseError, DatabaseErrorKind, DbResult};
-use crate::database::Repository;
+use sqlx::PgPool;
 
 // ── Token registry entity ────────────────────────────────────────────────────
 
@@ -45,11 +45,11 @@ pub struct CreateTokenRegistryRequest {
 // ── Token registry repository ────────────────────────────────────────────────
 
 pub struct TokenRegistryRepository {
-    db: Repository,
+    db: PgPool,
 }
 
 impl TokenRegistryRepository {
-    pub fn new(db: Repository) -> Self {
+    pub fn new(db: PgPool) -> Self {
         Self { db }
     }
 
@@ -80,7 +80,7 @@ impl TokenRegistryRepository {
         .bind::<Option<DateTime<Utc>>>(None)
         .bind(now)
         .bind(now)
-        .fetch_one(self.db.pool())
+        .fetch_one(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -89,26 +89,24 @@ impl TokenRegistryRepository {
 
     /// Find token by JTI
     pub async fn find_by_jti(&self, jti: &str) -> DbResult<Option<TokenRegistry>> {
-        let token = sqlx::query_as::<_, TokenRegistry>(
-            "SELECT * FROM token_registry WHERE jti = $1",
-        )
-        .bind(jti)
-        .fetch_optional(self.db.pool())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+        let token =
+            sqlx::query_as::<_, TokenRegistry>("SELECT * FROM token_registry WHERE jti = $1")
+                .bind(jti)
+                .fetch_optional(&self.db)
+                .await
+                .map_err(DatabaseError::from_sqlx)?;
 
         Ok(token)
     }
 
     /// Find token by ID
     pub async fn find_by_id(&self, id: &str) -> DbResult<Option<TokenRegistry>> {
-        let token = sqlx::query_as::<_, TokenRegistry>(
-            "SELECT * FROM token_registry WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(self.db.pool())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+        let token =
+            sqlx::query_as::<_, TokenRegistry>("SELECT * FROM token_registry WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.db)
+                .await
+                .map_err(DatabaseError::from_sqlx)?;
 
         Ok(token)
     }
@@ -131,7 +129,7 @@ impl TokenRegistryRepository {
         .bind(consumer_id)
         .bind(limit)
         .bind(offset)
-        .fetch_all(self.db.pool())
+        .fetch_all(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -149,7 +147,7 @@ impl TokenRegistryRepository {
             "#,
         )
         .bind(consumer_id)
-        .fetch_one(self.db.pool())
+        .fetch_one(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -170,7 +168,7 @@ impl TokenRegistryRepository {
         .bind(now)
         .bind(now)
         .bind(jti)
-        .execute(self.db.pool())
+        .execute(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -179,13 +177,12 @@ impl TokenRegistryRepository {
 
     /// Check if token is revoked
     pub async fn is_revoked(&self, jti: &str) -> DbResult<bool> {
-        let result = sqlx::query_scalar::<_, bool>(
-            "SELECT revoked FROM token_registry WHERE jti = $1",
-        )
-        .bind(jti)
-        .fetch_optional(self.db.pool())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+        let result =
+            sqlx::query_scalar::<_, bool>("SELECT revoked FROM token_registry WHERE jti = $1")
+                .bind(jti)
+                .fetch_optional(&self.db)
+                .await
+                .map_err(DatabaseError::from_sqlx)?;
 
         Ok(result.unwrap_or(false))
     }
@@ -204,7 +201,7 @@ impl TokenRegistryRepository {
         .bind(now)
         .bind(now)
         .bind(consumer_id)
-        .execute(self.db.pool())
+        .execute(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -213,13 +210,11 @@ impl TokenRegistryRepository {
 
     /// Delete expired tokens (cleanup)
     pub async fn delete_expired(&self, before: DateTime<Utc>) -> DbResult<u64> {
-        let result = sqlx::query(
-            "DELETE FROM token_registry WHERE expires_at < $1",
-        )
-        .bind(before)
-        .execute(self.db.pool())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+        let result = sqlx::query("DELETE FROM token_registry WHERE expires_at < $1")
+            .bind(before)
+            .execute(&self.db)
+            .await
+            .map_err(DatabaseError::from_sqlx)?;
 
         Ok(result.rows_affected())
     }
@@ -236,7 +231,7 @@ impl TokenRegistryRepository {
             FROM token_registry
             "#,
         )
-        .fetch_one(self.db.pool())
+        .fetch_one(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 

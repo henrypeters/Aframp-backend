@@ -28,11 +28,11 @@ pub struct MpesaKenyaConfig {
     pub consumer_key: String,
     pub consumer_secret: String,
     pub passkey: String,
-    pub shortcode: String,           // B2C initiator shortcode
-    pub initiator_name: String,      // Daraja initiator name
-    pub initiator_password: String,  // Daraja initiator credential
-    pub result_url: String,          // Webhook callback URL
-    pub queue_timeout_url: String,   // Timeout callback URL
+    pub shortcode: String,          // B2C initiator shortcode
+    pub initiator_name: String,     // Daraja initiator name
+    pub initiator_password: String, // Daraja initiator credential
+    pub result_url: String,         // Webhook callback URL
+    pub queue_timeout_url: String,  // Timeout callback URL
     pub base_url: String,
     pub timeout_secs: u64,
     pub max_retries: u32,
@@ -68,8 +68,9 @@ impl MpesaKenyaConfig {
             initiator_password: std::env::var("MPESA_KE_INITIATOR_PASSWORD").unwrap_or_default(),
             result_url: std::env::var("MPESA_KE_RESULT_URL")
                 .unwrap_or_else(|_| "https://api.aframp.com/webhooks/mpesa_kenya".to_string()),
-            queue_timeout_url: std::env::var("MPESA_KE_TIMEOUT_URL")
-                .unwrap_or_else(|_| "https://api.aframp.com/webhooks/mpesa_kenya/timeout".to_string()),
+            queue_timeout_url: std::env::var("MPESA_KE_TIMEOUT_URL").unwrap_or_else(|_| {
+                "https://api.aframp.com/webhooks/mpesa_kenya/timeout".to_string()
+            }),
             base_url: std::env::var("MPESA_KE_BASE_URL")
                 .unwrap_or_else(|_| "https://sandbox.safaricom.co.ke".to_string()),
             timeout_secs: std::env::var("MPESA_KE_TIMEOUT_SECS")
@@ -134,10 +135,8 @@ pub struct MpesaKenyaProvider {
 
 impl MpesaKenyaProvider {
     pub fn new(config: MpesaKenyaConfig) -> PaymentResult<Self> {
-        let http = PaymentHttpClient::new(
-            Duration::from_secs(config.timeout_secs),
-            config.max_retries,
-        )?;
+        let http =
+            PaymentHttpClient::new(Duration::from_secs(config.timeout_secs), config.max_retries)?;
         Ok(Self { config, http })
     }
 
@@ -152,7 +151,10 @@ impl MpesaKenyaProvider {
     /// Fetch a short-lived OAuth2 bearer token from Safaricom Daraja.
     async fn get_access_token(&self) -> PaymentResult<String> {
         use base64::{engine::general_purpose::STANDARD, Engine};
-        let credentials = format!("{}:{}", self.config.consumer_key, self.config.consumer_secret);
+        let credentials = format!(
+            "{}:{}",
+            self.config.consumer_key, self.config.consumer_secret
+        );
         let encoded = STANDARD.encode(credentials.as_bytes());
 
         let resp: MpesaTokenResponse = self
@@ -294,14 +296,12 @@ impl PaymentProvider for MpesaKenyaProvider {
             });
         }
 
-        let phone = request
-            .recipient
-            .phone_number
-            .as_deref()
-            .ok_or_else(|| PaymentError::ValidationError {
+        let phone = request.recipient.phone_number.as_deref().ok_or_else(|| {
+            PaymentError::ValidationError {
                 message: "recipient.phone_number is required for M-Pesa disbursement".to_string(),
                 field: Some("recipient.phone_number".to_string()),
-            })?;
+            }
+        })?;
 
         let normalised_phone = Self::normalise_phone(phone);
         if normalised_phone.len() != 12 || !normalised_phone.starts_with("254") {
@@ -369,9 +369,7 @@ impl PaymentProvider for MpesaKenyaProvider {
         Ok(WithdrawalResponse {
             status: PaymentState::Processing,
             transaction_reference: request.transaction_reference,
-            provider_reference: raw
-                .originator_conversation_i_d
-                .or(raw.conversation_i_d),
+            provider_reference: raw.originator_conversation_i_d.or(raw.conversation_i_d),
             amount_debited: Some(request.amount),
             fees_charged: None,
             estimated_completion_seconds: Some(30),
@@ -412,10 +410,11 @@ impl PaymentProvider for MpesaKenyaProvider {
     }
 
     fn parse_webhook_event(&self, payload: &[u8]) -> PaymentResult<WebhookEvent> {
-        let parsed: JsonValue =
-            serde_json::from_slice(payload).map_err(|e| PaymentError::WebhookVerificationError {
+        let parsed: JsonValue = serde_json::from_slice(payload).map_err(|e| {
+            PaymentError::WebhookVerificationError {
                 message: format!("invalid M-Pesa webhook JSON: {}", e),
-            })?;
+            }
+        })?;
 
         // Daraja B2C result envelope:
         // { "Result": { "ResultCode": 0, "ResultDesc": "...",
@@ -516,7 +515,9 @@ pub async fn validate_mpesa_recipient(
         return Ok(RecipientValidationResult {
             valid: false,
             normalised_phone: normalised,
-            reason: Some("Phone number format invalid for Kenya (expected 254XXXXXXXXX)".to_string()),
+            reason: Some(
+                "Phone number format invalid for Kenya (expected 254XXXXXXXXX)".to_string(),
+            ),
         });
     }
 
@@ -527,24 +528,84 @@ pub async fn validate_mpesa_recipient(
     let local = &normalised[3..]; // strip "254"
     let is_safaricom = matches!(
         &local[..3],
-        "700" | "701" | "702" | "703" | "704" | "705" | "706" | "707" | "708" | "709"
-            | "710" | "711" | "712" | "713" | "714" | "715" | "716" | "717" | "718" | "719"
-            | "720" | "721" | "722" | "723" | "724" | "725" | "726" | "727" | "728" | "729"
-            | "740" | "741" | "742" | "743" | "745" | "748"
-            | "757" | "758" | "759"
-            | "768" | "769"
-            | "790" | "791" | "792" | "793" | "794" | "795" | "796" | "797" | "798" | "799"
-            | "110" | "111" | "112" | "113" | "114" | "115" | "116" | "117" | "118" | "119"
-            | "100" | "101" | "102" | "103" | "104" | "105" | "106" | "107" | "108" | "109"
+        "700"
+            | "701"
+            | "702"
+            | "703"
+            | "704"
+            | "705"
+            | "706"
+            | "707"
+            | "708"
+            | "709"
+            | "710"
+            | "711"
+            | "712"
+            | "713"
+            | "714"
+            | "715"
+            | "716"
+            | "717"
+            | "718"
+            | "719"
+            | "720"
+            | "721"
+            | "722"
+            | "723"
+            | "724"
+            | "725"
+            | "726"
+            | "727"
+            | "728"
+            | "729"
+            | "740"
+            | "741"
+            | "742"
+            | "743"
+            | "745"
+            | "748"
+            | "757"
+            | "758"
+            | "759"
+            | "768"
+            | "769"
+            | "790"
+            | "791"
+            | "792"
+            | "793"
+            | "794"
+            | "795"
+            | "796"
+            | "797"
+            | "798"
+            | "799"
+            | "110"
+            | "111"
+            | "112"
+            | "113"
+            | "114"
+            | "115"
+            | "116"
+            | "117"
+            | "118"
+            | "119"
+            | "100"
+            | "101"
+            | "102"
+            | "103"
+            | "104"
+            | "105"
+            | "106"
+            | "107"
+            | "108"
+            | "109"
     );
 
     if !is_safaricom {
         return Ok(RecipientValidationResult {
             valid: false,
             normalised_phone: normalised,
-            reason: Some(
-                "Phone number does not appear to be a Safaricom Kenya number".to_string(),
-            ),
+            reason: Some("Phone number does not appear to be a Safaricom Kenya number".to_string()),
         });
     }
 
@@ -568,17 +629,35 @@ mod tests {
 
     #[test]
     fn normalise_phone_handles_all_formats() {
-        assert_eq!(MpesaKenyaProvider::normalise_phone("0712345678"), "254712345678");
-        assert_eq!(MpesaKenyaProvider::normalise_phone("254712345678"), "254712345678");
-        assert_eq!(MpesaKenyaProvider::normalise_phone("+254712345678"), "254712345678");
-        assert_eq!(MpesaKenyaProvider::normalise_phone("712345678"), "254712345678");
+        assert_eq!(
+            MpesaKenyaProvider::normalise_phone("0712345678"),
+            "254712345678"
+        );
+        assert_eq!(
+            MpesaKenyaProvider::normalise_phone("254712345678"),
+            "254712345678"
+        );
+        assert_eq!(
+            MpesaKenyaProvider::normalise_phone("+254712345678"),
+            "254712345678"
+        );
+        assert_eq!(
+            MpesaKenyaProvider::normalise_phone("712345678"),
+            "254712345678"
+        );
     }
 
     #[test]
     fn result_code_mapping() {
-        assert_eq!(MpesaKenyaProvider::map_result_code(0), PaymentState::Success);
+        assert_eq!(
+            MpesaKenyaProvider::map_result_code(0),
+            PaymentState::Success
+        );
         assert_eq!(MpesaKenyaProvider::map_result_code(1), PaymentState::Failed);
-        assert_eq!(MpesaKenyaProvider::map_result_code(1032), PaymentState::Unknown);
+        assert_eq!(
+            MpesaKenyaProvider::map_result_code(1032),
+            PaymentState::Unknown
+        );
     }
 
     #[test]
@@ -618,7 +697,10 @@ mod tests {
             .parse_webhook_event(payload.to_string().as_bytes())
             .unwrap();
 
-        assert_eq!(event.transaction_reference.as_deref(), Some("aframp-tx-001"));
+        assert_eq!(
+            event.transaction_reference.as_deref(),
+            Some("aframp-tx-001")
+        );
         assert_eq!(event.provider_reference.as_deref(), Some("OEI2AK4Q16"));
         assert!(matches!(event.status, Some(PaymentState::Success)));
     }

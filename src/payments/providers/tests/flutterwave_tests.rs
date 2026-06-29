@@ -250,14 +250,8 @@ async fn verify_payment_parses_successful_response() {
         .expect("verification should succeed");
 
     assert_eq!(response.status, PaymentState::Success);
-    assert_eq!(
-        response.provider_reference.as_deref(),
-        Some("FLW-MOCK-123")
-    );
-    assert_eq!(
-        response.payment_method,
-        Some(PaymentMethod::Card)
-    );
+    assert_eq!(response.provider_reference.as_deref(), Some("FLW-MOCK-123"));
+    assert_eq!(response.payment_method, Some(PaymentMethod::Card));
 }
 
 #[tokio::test]
@@ -539,14 +533,8 @@ fn parse_webhook_event_maps_all_fields_correctly() {
         .expect("should parse successfully");
 
     assert_eq!(event.event_type, "charge.completed");
-    assert_eq!(
-        event.transaction_reference.as_deref(),
-        Some("txn_flw_001")
-    );
-    assert_eq!(
-        event.provider_reference.as_deref(),
-        Some("FLW-MOCK-789")
-    );
+    assert_eq!(event.transaction_reference.as_deref(), Some("txn_flw_001"));
+    assert_eq!(event.provider_reference.as_deref(), Some("FLW-MOCK-789"));
     assert!(matches!(event.status, Some(PaymentState::Success)));
 }
 
@@ -558,9 +546,7 @@ fn parse_webhook_event_maps_failed_status() {
         "data": { "status": "failed", "tx_ref": "txn_flw_002" }
     }"#;
 
-    let event = provider
-        .parse_webhook_event(payload)
-        .expect("should parse");
+    let event = provider.parse_webhook_event(payload).expect("should parse");
 
     assert!(matches!(event.status, Some(PaymentState::Failed)));
 }

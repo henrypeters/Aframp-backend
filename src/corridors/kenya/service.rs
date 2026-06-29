@@ -1,11 +1,11 @@
 //! Kenya corridor service — orchestrates the full NG→KE transfer flow.
 
-use crate::compliance_registry::repository::ComplianceRegistryRepository;
+// REMOVED: use crate::compliance_registry::repository::ComplianceRegistryRepository;
 use crate::corridors::kenya::models::*;
+use crate::payments::provider::PaymentProvider;
 use crate::payments::providers::mpesa_kenya::{
     validate_mpesa_recipient, MpesaKenyaConfig, MpesaKenyaProvider,
 };
-use crate::payments::provider::PaymentProvider;
 use crate::payments::types::{Money, WithdrawalMethod, WithdrawalRecipient, WithdrawalRequest};
 use crate::services::exchange_rate::ExchangeRateService;
 use crate::services::fee_calculation::FeeCalculationService;
@@ -330,12 +330,9 @@ impl KenyaCorridorService {
         let provider = MpesaKenyaProvider::new(self.mpesa_config.clone())
             .map_err(|e| KenyaCorridorError::Internal(e.to_string()))?;
 
-        let phone = req
-            .recipient_phone
-            .as_deref()
-            .ok_or_else(|| {
-                KenyaCorridorError::Internal("No phone number for M-Pesa disbursement".to_string())
-            })?;
+        let phone = req.recipient_phone.as_deref().ok_or_else(|| {
+            KenyaCorridorError::Internal("No phone number for M-Pesa disbursement".to_string())
+        })?;
 
         let wd_req = WithdrawalRequest {
             amount: Money {
@@ -364,7 +361,9 @@ impl KenyaCorridorService {
             .await
             .map_err(|e| KenyaCorridorError::DisbursementFailed(e.to_string()))?;
 
-        Ok(resp.provider_reference.unwrap_or_else(|| transfer_id.to_string()))
+        Ok(resp
+            .provider_reference
+            .unwrap_or_else(|| transfer_id.to_string()))
     }
 
     /// Persist the transfer record to the database.

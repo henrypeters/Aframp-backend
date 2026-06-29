@@ -1,3 +1,5 @@
+#![cfg(feature = "database")]
+
 //! Consumer Usage Analytics System Demo
 //!
 //! Demonstrates:
@@ -7,7 +9,7 @@
 //! - Report generation
 //! - Consumer and admin analytics endpoints
 
-use Bitmesh_backend::analytics::{
+use aframp_backend::analytics::{
     anomaly::{AnomalyDetector, AnomalyDetectionConfig},
     health::HealthScoreCalculator,
     models::SnapshotPeriod,

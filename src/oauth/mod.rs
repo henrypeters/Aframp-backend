@@ -35,7 +35,10 @@ pub use keys::RsaKeyPair;
 pub use types::OAuthError;
 
 #[cfg(feature = "database")]
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 #[cfg(feature = "database")]
 use std::sync::Arc;
 
@@ -56,9 +59,18 @@ pub fn oauth_router(state: Arc<OAuthState>) -> Router {
         // JWKS
         .route("/oauth/.well-known/jwks.json", get(handlers::jwks))
         // Discovery
-        .route("/oauth/.well-known/openid-configuration", get(handlers::discovery))
+        .route(
+            "/oauth/.well-known/openid-configuration",
+            get(handlers::discovery),
+        )
         // Client registration
-        .route("/api/admin/oauth/clients", post(handlers::admin_register_client))
-        .route("/api/developer/oauth/clients", post(handlers::developer_register_client))
+        .route(
+            "/api/admin/oauth/clients",
+            post(handlers::admin_register_client),
+        )
+        .route(
+            "/api/developer/oauth/clients",
+            post(handlers::developer_register_client),
+        )
         .with_state(state)
 }

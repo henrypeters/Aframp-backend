@@ -7,8 +7,13 @@ use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
 #[cfg(feature = "cache")]
-use crate::cache::cache::Cache;
+use crate::cache::{
+    cache::Cache,
+    invalidation::{InvalidationEvent, InvalidationPipeline},
+};
 use crate::cache::cache::RedisCache;
+#[cfg(feature = "cache")]
+use std::sync::Arc;
 #[cfg(feature = "cache")]
 use tracing::debug;
 
@@ -29,6 +34,8 @@ pub struct ExchangeRateRepository {
     pool: PgPool,
     #[cfg(feature = "cache")]
     cache: Option<RedisCache>,
+    #[cfg(feature = "cache")]
+    pipeline: Option<Arc<InvalidationPipeline>>,
 }
 
 impl ExchangeRateRepository {
@@ -38,6 +45,8 @@ impl ExchangeRateRepository {
             pool,
             #[cfg(feature = "cache")]
             cache: None,
+            #[cfg(feature = "cache")]
+            pipeline: None,
         }
     }
 
@@ -47,6 +56,7 @@ impl ExchangeRateRepository {
         Self {
             pool,
             cache: Some(cache),
+            pipeline: None,
         }
     }
 
@@ -54,6 +64,13 @@ impl ExchangeRateRepository {
     #[cfg(feature = "cache")]
     pub fn enable_cache(&mut self, cache: RedisCache) {
         self.cache = Some(cache);
+    }
+
+    /// Attach a centralized invalidation pipeline (replaces inline cache delete on write).
+    #[cfg(feature = "cache")]
+    pub fn with_pipeline(mut self, pipeline: Arc<InvalidationPipeline>) -> Self {
+        self.pipeline = Some(pipeline);
+        self
     }
 
     /// Get current exchange rate between two currencies
@@ -156,23 +173,23 @@ impl ExchangeRateRepository {
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
-        // Invalidate cache for this currency pair
+        // Invalidate cache via pipeline (preferred) or inline fallback
         #[cfg(feature = "cache")]
-        if let Some(ref cache) = self.cache {
-            let cache_key = CurrencyPairKey::new(from_currency, to_currency);
-            if let Err(e) = <RedisCache as Cache<ExchangeRate>>::delete::<'_, '_, '_>(
-                cache,
-                &cache_key.to_string(),
-            )
-            .await
-            {
-                debug!("Failed to invalidate cache for exchange rate: {}", e);
-                // Don't fail the operation if cache invalidation fails
-            } else {
-                debug!(
-                    "Invalidated cache for exchange rate: {} -> {}",
-                    from_currency, to_currency
-                );
+        {
+            let from = from_currency.to_string();
+            let to = to_currency.to_string();
+            if let Some(ref pipeline) = self.pipeline {
+                pipeline.process(InvalidationEvent::ExchangeRateUpdated { from, to }).await;
+            } else if let Some(ref cache) = self.cache {
+                let cache_key = CurrencyPairKey::new(from_currency, to_currency);
+                if let Err(e) = <RedisCache as Cache<ExchangeRate>>::delete(
+                    cache,
+                    &cache_key.to_string(),
+                ).await {
+                    debug!("Failed to invalidate cache for exchange rate: {}", e);
+                } else {
+                    debug!("Invalidated cache for exchange rate: {} -> {}", from_currency, to_currency);
+                }
             }
         }
 

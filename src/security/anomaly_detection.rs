@@ -5,14 +5,14 @@
 
 use crate::database::repository::Repository;
 use crate::database::transaction_repository::TransactionRepository;
-use crate::security::alerts::{ AlertService, AlertConfig };
-use serde::{ Deserialize, Serialize };
+use crate::security::alerts::{AlertConfig, AlertService};
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{ Duration, Instant };
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{ error, info, warn };
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -200,10 +200,7 @@ impl AnomalyDetectionService {
         wallet_events.retain(|(timestamp, _)| *timestamp >= cutoff);
 
         // Check velocity limit
-        let total_in_window: u64 = wallet_events
-            .iter()
-            .map(|(_, amount)| *amount)
-            .sum();
+        let total_in_window: u64 = wallet_events.iter().map(|(_, amount)| *amount).sum();
 
         if total_in_window > self.config.velocity_limit_ngn {
             drop(tracker); // Release lock before triggering circuit breaker
@@ -223,7 +220,7 @@ impl AnomalyDetectionService {
     /// Detect unknown origin mints (on-chain without DB approval)
     pub async fn detect_unknown_origin_mints(
         &self,
-        on_chain_mints: Vec<OnChainMint>
+        on_chain_mints: Vec<OnChainMint>,
     ) -> anyhow::Result<()> {
         let tx_repo = TransactionRepository::new(self.pool.clone());
 
@@ -255,7 +252,7 @@ impl AnomalyDetectionService {
     pub async fn check_reserve_ratio(
         &self,
         bank_reserves: u64,
-        on_chain_supply: u64
+        on_chain_supply: u64,
     ) -> anyhow::Result<()> {
         if bank_reserves < on_chain_supply {
             let delta = (on_chain_supply as f64) - (bank_reserves as f64);
@@ -282,8 +279,9 @@ impl AnomalyDetectionService {
         // Only allow escalation, not de-escalation
         let new_status = match (&state.status, &anomaly) {
             (SystemStatus::Operational, _) => SystemStatus::PartialHalt,
-            (SystemStatus::PartialHalt, AnomalyType::UnknownOrigin { .. }) =>
-                SystemStatus::EmergencyStop,
+            (SystemStatus::PartialHalt, AnomalyType::UnknownOrigin { .. }) => {
+                SystemStatus::EmergencyStop
+            }
             (SystemStatus::PartialHalt, _) => SystemStatus::EmergencyStop,
             (SystemStatus::EmergencyStop, _) => SystemStatus::EmergencyStop, // Already at max
         };
@@ -319,7 +317,8 @@ impl AnomalyDetectionService {
 
         // Get all transactions that are not in final states
         let pending_transactions = tx_repo
-            .find_all_by_status(&["pending", "processing", "pending_payment"]).await
+            .find_all_by_status(&["pending", "processing", "pending_payment"])
+            .await
             .map_err(|e| {
                 error!(error = %e, "Failed to fetch pending transactions for halt");
                 e
@@ -336,20 +335,20 @@ impl AnomalyDetectionService {
             };
 
             // Update transaction status with halt metadata
-            let halt_metadata =
-                serde_json::json!({
+            let halt_metadata = serde_json::json!({
                 "halted_at": chrono::Utc::now().to_rfc3339(),
                 "previous_status": transaction.status,
                 "halt_reason": "Circuit breaker triggered",
                 "system_status": self.get_system_status().await.to_string(),
             });
 
-            if
-                let Err(e) = tx_repo.update_status_with_metadata(
+            if let Err(e) = tx_repo
+                .update_status_with_metadata(
                     &transaction.transaction_id.to_string(),
                     new_status,
-                    halt_metadata
-                ).await
+                    halt_metadata,
+                )
+                .await
             {
                 error!(
                     transaction_id = %transaction.transaction_id,
@@ -362,7 +361,10 @@ impl AnomalyDetectionService {
             halted_count += 1;
         }
 
-        info!(halted_count = halted_count, "Successfully halted pending transactions");
+        info!(
+            halted_count = halted_count,
+            "Successfully halted pending transactions"
+        );
 
         Ok(halted_count)
     }
@@ -371,7 +373,7 @@ impl AnomalyDetectionService {
     pub async fn manual_emergency_stop(
         &self,
         reason: &str,
-        authorized_by: &str
+        authorized_by: &str,
     ) -> anyhow::Result<()> {
         let mut state = self.state.write().await;
 
@@ -385,11 +387,13 @@ impl AnomalyDetectionService {
         state.audit_required = true;
 
         // Persist state
-        self.persist_system_status(&SystemStatus::EmergencyStop).await?;
+        self.persist_system_status(&SystemStatus::EmergencyStop)
+            .await?;
 
         // Send critical alerts
         let anomaly = state.last_anomaly.as_ref().unwrap();
-        self.send_alerts(anomaly, &SystemStatus::EmergencyStop).await?;
+        self.send_alerts(anomaly, &SystemStatus::EmergencyStop)
+            .await?;
 
         error!(
             reason = %reason,
@@ -405,7 +409,7 @@ impl AnomalyDetectionService {
         &self,
         auditor_1: &str,
         auditor_2: &str,
-        reset_reason: &str
+        reset_reason: &str,
     ) -> anyhow::Result<()> {
         let mut state = self.state.write().await;
 
@@ -421,7 +425,8 @@ impl AnomalyDetectionService {
         state.audit_required = false;
 
         // Persist state
-        self.persist_system_status(&SystemStatus::Operational).await?;
+        self.persist_system_status(&SystemStatus::Operational)
+            .await?;
 
         info!(
             auditor_1 = %auditor_1,
@@ -443,18 +448,18 @@ impl AnomalyDetectionService {
     // ---------------------------------------------------------------------------
 
     async fn persist_system_status(&self, status: &SystemStatus) -> anyhow::Result<()> {
-        sqlx
-            ::query(
-                r#"
+        sqlx::query(
+            r#"
             INSERT INTO system_status (status, updated_at)
             VALUES ($1, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 status = EXCLUDED.status,
                 updated_at = EXCLUDED.updated_at
             "#,
-                status.to_string()
-            )
-            .execute(&self.pool).await?;
+            status.to_string(),
+        )
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
@@ -462,10 +467,12 @@ impl AnomalyDetectionService {
     async fn send_alerts(
         &self,
         anomaly: &AnomalyType,
-        status: &SystemStatus
+        status: &SystemStatus,
     ) -> anyhow::Result<()> {
         // Use the integrated alert service
-        self.alert_service.send_circuit_breaker_alert(anomaly, status).await
+        self.alert_service
+            .send_circuit_breaker_alert(anomaly, status)
+            .await
     }
 }
 
@@ -498,13 +505,11 @@ impl CircuitBreakerMiddleware {
     pub async fn check_operation_allowed(&self) -> Result<(), crate::error::AppError> {
         if !self.anomaly_service.is_operational().await {
             let status = self.anomaly_service.get_system_status().await;
-            return Err(
-                crate::error::AppError::new(
-                    crate::error::AppErrorKind::Domain(crate::error::DomainError::SystemHalted {
-                        status: status.to_string(),
-                    })
-                )
-            );
+            return Err(crate::error::AppError::new(
+                crate::error::AppErrorKind::Domain(crate::error::DomainError::SystemHalted {
+                    status: status.to_string(),
+                }),
+            ));
         }
         Ok(())
     }

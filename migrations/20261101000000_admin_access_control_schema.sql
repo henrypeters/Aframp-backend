@@ -77,7 +77,7 @@ CREATE TABLE admin_role_permissions (
     role admin_role NOT NULL REFERENCES admin_roles(id) ON DELETE CASCADE,
     permission_id UUID NOT NULL REFERENCES admin_permissions(id) ON DELETE CASCADE,
     granted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    granted_by UUID REFERENCES admin_accounts(id),
+    granted_by UUID,
     PRIMARY KEY (role, permission_id)
 );
 
@@ -331,11 +331,27 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER generate_audit_hash_trigger BEFORE INSERT ON admin_audit_trail
     FOR EACH ROW EXECUTE FUNCTION generate_audit_hash();
 
--- Add constraint to ensure hash chain integrity
-ALTER TABLE admin_audit_trail ADD CONSTRAINT check_hash_chain 
-    CHECK (previous_entry_hash IS NULL OR sequence_number = 1 OR 
-           previous_entry_hash = (SELECT current_entry_hash FROM admin_audit_trail t2 
-                                 WHERE t2.sequence_number = admin_audit_trail.sequence_number - 1));
+-- Hash chain integrity enforced by trigger (PostgreSQL does not allow subqueries in CHECK)
+CREATE OR REPLACE FUNCTION check_audit_hash_chain()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.sequence_number > 1 AND NEW.previous_entry_hash IS NOT NULL THEN
+        -- Enforce chain linkage at application/trigger level; CHECK constraints cannot use subqueries
+        IF NOT EXISTS (
+            SELECT 1 FROM admin_audit_trail
+            WHERE sequence_number = NEW.sequence_number - 1
+              AND current_entry_hash = NEW.previous_entry_hash
+        ) THEN
+            RAISE EXCEPTION 'Hash chain integrity violation at sequence %', NEW.sequence_number;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS check_hash_chain_trigger ON admin_audit_trail;
+CREATE TRIGGER check_hash_chain_trigger BEFORE INSERT ON admin_audit_trail
+    FOR EACH ROW EXECUTE FUNCTION check_audit_hash_chain();
 
 -- Create view for active admin sessions with admin details
 CREATE VIEW admin_active_sessions AS

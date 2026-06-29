@@ -207,10 +207,7 @@ impl UnsupportedCorridorError {
     pub fn new(src: &str, dst: &str) -> Self {
         Self {
             code: "CORRIDOR_NOT_SUPPORTED",
-            message: format!(
-                "No active payment corridor exists for {} → {}",
-                src, dst
-            ),
+            message: format!("No active payment corridor exists for {} → {}", src, dst),
             source_country: src.to_string(),
             destination_country: dst.to_string(),
         }

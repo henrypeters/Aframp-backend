@@ -149,7 +149,9 @@ pub fn concat_ct_tag(envelope: &EncryptedEnvelope) -> Result<Vec<u8>, Encryption
         .decode(&envelope.tag)
         .map_err(|_| EncryptionError::MalformedEnvelope("invalid base64 tag".into()))?;
     if tag.len() != 16 {
-        return Err(EncryptionError::MalformedEnvelope("tag must be 16 bytes".into()));
+        return Err(EncryptionError::MalformedEnvelope(
+            "tag must be 16 bytes".into(),
+        ));
     }
     ct.extend_from_slice(&tag);
     Ok(ct)

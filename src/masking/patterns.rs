@@ -37,9 +37,7 @@ fn re_credit_card() -> &'static Regex {
 
 fn re_api_key() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| {
-        Regex::new(r"(?i)(?:api[_-]?key|apikey)[=:\s]+[A-Za-z0-9_\-]{16,}").unwrap()
-    })
+    R.get_or_init(|| Regex::new(r"(?i)(?:api[_-]?key|apikey)[=:\s]+[A-Za-z0-9_\-]{16,}").unwrap())
 }
 
 fn re_bvn() -> &'static Regex {
@@ -49,9 +47,7 @@ fn re_bvn() -> &'static Regex {
 
 fn re_email() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| {
-        Regex::new(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b").unwrap()
-    })
+    R.get_or_init(|| Regex::new(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b").unwrap())
 }
 
 fn re_nin() -> &'static Regex {
@@ -66,14 +62,46 @@ struct Pattern {
 }
 
 static PATTERNS: &[Pattern] = &[
-    Pattern { name: "jwt",            placeholder: "[JWT-REDACTED]",            get: re_jwt },
-    Pattern { name: "pem_private_key",placeholder: "[PRIVKEY-REDACTED]",        get: re_pem_private_key },
-    Pattern { name: "stellar_secret", placeholder: "[STELLAR-SECRET-REDACTED]", get: re_stellar_secret },
-    Pattern { name: "credit_card",    placeholder: "[CARD-REDACTED]",           get: re_credit_card },
-    Pattern { name: "api_key",        placeholder: "[APIKEY-REDACTED]",         get: re_api_key },
-    Pattern { name: "bvn",            placeholder: "[BVN-REDACTED]",            get: re_bvn },
-    Pattern { name: "email",          placeholder: "[EMAIL-REDACTED]",          get: re_email },
-    Pattern { name: "nin",            placeholder: "[NIN-REDACTED]",            get: re_nin },
+    Pattern {
+        name: "jwt",
+        placeholder: "[JWT-REDACTED]",
+        get: re_jwt,
+    },
+    Pattern {
+        name: "pem_private_key",
+        placeholder: "[PRIVKEY-REDACTED]",
+        get: re_pem_private_key,
+    },
+    Pattern {
+        name: "stellar_secret",
+        placeholder: "[STELLAR-SECRET-REDACTED]",
+        get: re_stellar_secret,
+    },
+    Pattern {
+        name: "credit_card",
+        placeholder: "[CARD-REDACTED]",
+        get: re_credit_card,
+    },
+    Pattern {
+        name: "api_key",
+        placeholder: "[APIKEY-REDACTED]",
+        get: re_api_key,
+    },
+    Pattern {
+        name: "bvn",
+        placeholder: "[BVN-REDACTED]",
+        get: re_bvn,
+    },
+    Pattern {
+        name: "email",
+        placeholder: "[EMAIL-REDACTED]",
+        get: re_email,
+    },
+    Pattern {
+        name: "nin",
+        placeholder: "[NIN-REDACTED]",
+        get: re_nin,
+    },
 ];
 
 /// Scan a log message string and replace all sensitive patterns with placeholders.
@@ -149,7 +177,11 @@ mod tests {
         let secret = "SCZANGBAYHTNYVSK3JYHXPJZXJZXJZXJZXJZXJZXJZXJZXJZXJZXJZXJ";
         let msg = format!("secret={}", secret);
         let (out, detected) = scan_and_redact(&msg);
-        assert!(detected.contains(&"stellar_secret"), "detected: {:?}", detected);
+        assert!(
+            detected.contains(&"stellar_secret"),
+            "detected: {:?}",
+            detected
+        );
         assert!(!out.contains("SCZANGBA"));
     }
 

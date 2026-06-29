@@ -103,11 +103,7 @@ fn extract_bearer(req: &Request) -> Result<&str, JwtError> {
 
 /// Validates the `Authorization: Bearer <token>` header.
 /// On success, injects `TokenClaims` into request extensions.
-pub async fn require_auth(
-    State(auth): State<AuthState>,
-    mut req: Request,
-    next: Next,
-) -> Response {
+pub async fn require_auth(State(auth): State<AuthState>, mut req: Request, next: Next) -> Response {
     let token = match extract_bearer(&req) {
         Ok(t) => t,
         Err(e) => return jwt_error_response(e),
@@ -165,7 +161,5 @@ pub async fn require_admin(
 /// Convenience function for handlers to pull the authenticated wallet address
 /// from request extensions (set by `require_auth`).
 pub fn wallet_from_extensions(req: &Request) -> Option<String> {
-    req.extensions()
-        .get::<TokenClaims>()
-        .map(|c| c.sub.clone())
+    req.extensions().get::<TokenClaims>().map(|c| c.sub.clone())
 }

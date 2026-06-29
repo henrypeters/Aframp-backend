@@ -1,4 +1,4 @@
-use crate::database::kyc_repository::{KycTier, DocumentType, KycTierDefinition};
+use crate::database::kyc_repository::{DocumentType, KycTier, KycTierDefinition};
 use bigdecimal::BigDecimal;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -129,8 +129,14 @@ impl KycTierRequirements {
             KycTier::Enhanced,
         ];
 
-        let current_index = tier_order.iter().position(|&t| t == current_tier).unwrap_or(0);
-        let target_index = tier_order.iter().position(|&t| t == target_tier).unwrap_or(0);
+        let current_index = tier_order
+            .iter()
+            .position(|&t| t == current_tier)
+            .unwrap_or(0);
+        let target_index = tier_order
+            .iter()
+            .position(|&t| t == target_tier)
+            .unwrap_or(0);
 
         if target_index <= current_index {
             return false;
@@ -294,12 +300,9 @@ impl VolumeTracker {
         Self { consumer_id }
     }
 
-    pub async fn reset_daily_counters(
-        &self,
-        pool: &sqlx::PgPool,
-    ) -> Result<(), sqlx::Error> {
+    pub async fn reset_daily_counters(&self, pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
         let today = chrono::Utc::now().date_naive();
-        
+
         sqlx::query!(
             r#"
             INSERT INTO kyc_volume_trackers (consumer_id, date, daily_volume, monthly_volume, transaction_count, last_updated)
@@ -318,12 +321,9 @@ impl VolumeTracker {
         Ok(())
     }
 
-    pub async fn reset_monthly_counters(
-        &self,
-        pool: &sqlx::PgPool,
-    ) -> Result<(), sqlx::Error> {
+    pub async fn reset_monthly_counters(&self, pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
         let today = chrono::Utc::now().date_naive();
-        
+
         sqlx::query!(
             r#"
             INSERT INTO kyc_volume_trackers (consumer_id, date, daily_volume, monthly_volume, transaction_count, last_updated)
@@ -346,11 +346,11 @@ impl VolumeTracker {
         pool: &sqlx::PgPool,
     ) -> Result<(BigDecimal, BigDecimal), sqlx::Error> {
         let today = chrono::Utc::now().date_naive();
-        
+
         let result = sqlx::query!(
             r#"
-            SELECT COALESCE(daily_volume, '0'::BigDecimal) as daily_volume,
-                   COALESCE(monthly_volume, '0'::BigDecimal) as monthly_volume
+            SELECT COALESCE(daily_volume, '0'::numeric) as daily_volume,
+                   COALESCE(monthly_volume, '0'::numeric) as monthly_volume
             FROM kyc_volume_trackers
             WHERE consumer_id = $1 AND date = $2
             "#,
@@ -362,7 +362,10 @@ impl VolumeTracker {
 
         match result {
             Some(record) => Ok((record.daily_volume, record.monthly_volume)),
-            None => Ok((BigDecimal::from_str("0").unwrap(), BigDecimal::from_str("0").unwrap())),
+            None => Ok((
+                BigDecimal::from_str("0").unwrap(),
+                BigDecimal::from_str("0").unwrap(),
+            )),
         }
     }
 }
@@ -376,8 +379,9 @@ mod tests {
     #[test]
     fn test_tier_validation_basic() {
         let submitted_docs = vec![DocumentType::NationalId];
-        let result = KycTierRequirements::validate_tier_requirements(KycTier::Basic, &submitted_docs);
-        
+        let result =
+            KycTierRequirements::validate_tier_requirements(KycTier::Basic, &submitted_docs);
+
         assert!(result.is_valid);
         assert!(result.missing_documents.is_empty());
     }
@@ -385,8 +389,9 @@ mod tests {
     #[test]
     fn test_tier_validation_missing_docs() {
         let submitted_docs = vec![DocumentType::NationalId];
-        let result = KycTierRequirements::validate_tier_requirements(KycTier::Standard, &submitted_docs);
-        
+        let result =
+            KycTierRequirements::validate_tier_requirements(KycTier::Standard, &submitted_docs);
+
         assert!(!result.is_valid);
         assert!(!result.missing_documents.is_empty());
     }
@@ -397,7 +402,7 @@ mod tests {
         let amount = BigDecimal::from_str("500.00").unwrap();
         let daily_used = BigDecimal::from_str("1000.00").unwrap();
         let monthly_used = BigDecimal::from_str("10000.00").unwrap();
-        
+
         let result = enforcer.check_transaction_limits(amount, daily_used, monthly_used);
         assert!(result.is_allowed);
     }
@@ -408,7 +413,7 @@ mod tests {
         let amount = BigDecimal::from_str("2000.00").unwrap(); // Exceeds single transaction limit
         let daily_used = BigDecimal::from_str("0.00").unwrap();
         let monthly_used = BigDecimal::from_str("0.00").unwrap();
-        
+
         let result = enforcer.check_transaction_limits(amount, daily_used, monthly_used);
         assert!(!result.is_allowed);
         assert!(!result.violations.is_empty());

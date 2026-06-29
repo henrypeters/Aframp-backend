@@ -113,8 +113,12 @@ pub struct RevocationListParams {
     pub page_size: i64,
 }
 
-fn default_page() -> i64 { 1 }
-fn default_page_size() -> i64 { 20 }
+fn default_page() -> i64 {
+    1
+}
+fn default_page_size() -> i64 {
+    20
+}
 
 #[derive(Debug, Serialize)]
 pub struct RevocationListResponse {
@@ -131,7 +135,14 @@ pub struct ErrorBody {
 }
 
 fn err(status: StatusCode, code: &str, message: impl Into<String>) -> Response {
-    (status, Json(ErrorBody { code: code.to_string(), message: message.into() })).into_response()
+    (
+        status,
+        Json(ErrorBody {
+            code: code.to_string(),
+            message: message.into(),
+        }),
+    )
+        .into_response()
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -149,7 +160,11 @@ pub async fn consumer_revoke_key(
     Json(body): Json<RevokeKeyRequest>,
 ) -> Response {
     if body.reason.trim().is_empty() {
-        return err(StatusCode::BAD_REQUEST, "MISSING_REASON", "reason is required");
+        return err(
+            StatusCode::BAD_REQUEST,
+            "MISSING_REASON",
+            "reason is required",
+        );
     }
 
     let consumer_id = params.consumer_id;
@@ -201,7 +216,11 @@ pub async fn admin_revoke_key(
     Json(body): Json<AdminRevokeKeyRequest>,
 ) -> Response {
     if body.reason.trim().is_empty() {
-        return err(StatusCode::BAD_REQUEST, "MISSING_REASON", "reason is required");
+        return err(
+            StatusCode::BAD_REQUEST,
+            "MISSING_REASON",
+            "reason is required",
+        );
     }
 
     let revocation_type: &'static str = match body.revocation_type.as_str() {
@@ -255,7 +274,11 @@ pub async fn admin_revoke_all_consumer_keys(
     Json(body): Json<RevokeAllRequest>,
 ) -> Response {
     if body.reason.trim().is_empty() {
-        return err(StatusCode::BAD_REQUEST, "MISSING_REASON", "reason is required");
+        return err(
+            StatusCode::BAD_REQUEST,
+            "MISSING_REASON",
+            "reason is required",
+        );
     }
 
     match state
@@ -300,7 +323,11 @@ pub async fn admin_blacklist_consumer(
     Json(body): Json<BlacklistConsumerRequest>,
 ) -> Response {
     if body.reason.trim().is_empty() {
-        return err(StatusCode::BAD_REQUEST, "MISSING_REASON", "reason is required");
+        return err(
+            StatusCode::BAD_REQUEST,
+            "MISSING_REASON",
+            "reason is required",
+        );
     }
 
     match state

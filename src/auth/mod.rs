@@ -13,34 +13,36 @@
 #[cfg(feature = "database")]
 pub mod handlers;
 #[cfg(feature = "database")]
+pub mod jwks_service;
+#[cfg(feature = "database")]
 pub mod jwt;
 #[cfg(feature = "database")]
 pub mod middleware;
+#[cfg(test)]
+pub mod oauth_tests;
 #[cfg(feature = "database")]
 pub mod oauth_token_service;
 #[cfg(feature = "database")]
 pub mod oauth_token_validator;
 #[cfg(feature = "database")]
-pub mod jwks_service;
+pub mod refresh_token_service;
+#[cfg(test)]
+pub mod refresh_token_tests;
 #[cfg(feature = "database")]
-pub mod token_limiter;
+pub mod refresh_token_validator;
 #[cfg(feature = "database")]
 pub mod scope_catalog;
 #[cfg(feature = "database")]
 pub mod scope_hierarchy;
-#[cfg(feature = "database")]
-pub mod refresh_token_service;
-#[cfg(feature = "database")]
-pub mod refresh_token_validator;
-#[cfg(test)]
-pub mod oauth_tests;
 #[cfg(test)]
 pub mod scope_tests;
-#[cfg(test)]
-pub mod refresh_token_tests;
+#[cfg(feature = "database")]
+pub mod token_limiter;
 
 #[cfg(feature = "database")]
 pub use handlers::AuthHandlerState;
+#[cfg(feature = "database")]
+pub use jwks_service::{JwksError, JwksKey, JwksService};
 #[cfg(feature = "database")]
 pub use jwt::{JwtConfig, JwtError, Scope, TokenClaims, TokenType};
 #[cfg(feature = "database")]
@@ -53,22 +55,20 @@ pub use oauth_token_service::{
 #[cfg(feature = "database")]
 pub use oauth_token_validator::{OAuthTokenValidator, TokenValidationError, ValidationContext};
 #[cfg(feature = "database")]
-pub use jwks_service::{JwksError, JwksKey, JwksService};
-#[cfg(feature = "database")]
-pub use token_limiter::{RateLimitConfig, RateLimitError, TokenRateLimiter};
-#[cfg(feature = "database")]
-pub use scope_catalog::{ScopeCatalog, ScopeCategory, ScopeDefinition};
-#[cfg(feature = "database")]
-pub use scope_hierarchy::ScopeHierarchy;
-#[cfg(feature = "database")]
 pub use refresh_token_service::{
     RefreshTokenError, RefreshTokenMetadata, RefreshTokenRequest, RefreshTokenResponse,
     RefreshTokenService, RefreshTokenStatus,
 };
 #[cfg(feature = "database")]
 pub use refresh_token_validator::{
-    RefreshTokenValidator, RefreshTokenValidationContext, RefreshTokenValidationResult,
+    RefreshTokenValidationContext, RefreshTokenValidationResult, RefreshTokenValidator,
 };
+#[cfg(feature = "database")]
+pub use scope_catalog::{ScopeCatalog, ScopeCategory, ScopeDefinition};
+#[cfg(feature = "database")]
+pub use scope_hierarchy::ScopeHierarchy;
+#[cfg(feature = "database")]
+pub use token_limiter::{RateLimitConfig, RateLimitError, TokenRateLimiter};
 
 #[cfg(feature = "database")]
 use axum::{routing::post, Router};

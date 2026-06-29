@@ -1,4 +1,3 @@
--- migrate:up
 -- Adaptive Rate Limiting Schema (Issue #XXX)
 --
 -- Tables:
