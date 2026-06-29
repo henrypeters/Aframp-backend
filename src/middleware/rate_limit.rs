@@ -5,6 +5,15 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+
+/// Convert an integer to a `HeaderValue`. Integer `to_string()` only produces
+/// ASCII digits (and a leading `-` for negatives), which are always valid header
+/// value bytes, so this conversion is infallible in practice.
+#[inline]
+fn int_header(n: i64) -> HeaderValue {
+    // SAFETY: i64::to_string() produces only ASCII digits / '-', all valid header chars.
+    HeaderValue::from_str(&n.to_string()).unwrap_or_else(|_| HeaderValue::from_static("0"))
+}
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File, net::SocketAddr, sync::Arc};
 use uuid::Uuid;
@@ -182,11 +191,11 @@ pub async fn rate_limit_middleware(
         });
 
         let mut res = (StatusCode::TOO_MANY_REQUESTS, Json(response_body)).into_response();
-        res.headers_mut().insert("X-RateLimit-Limit", HeaderValue::from_str(&limit_conf.limit.to_string()).unwrap());
+        res.headers_mut().insert("X-RateLimit-Limit", int_header(limit_conf.limit));
         res.headers_mut().insert("X-RateLimit-Remaining", HeaderValue::from_static("0"));
-        res.headers_mut().insert("X-RateLimit-Reset", HeaderValue::from_str(&reset_at.to_string()).unwrap());
-        res.headers_mut().insert("X-RateLimit-Used", HeaderValue::from_str(&count.to_string()).unwrap());
-        res.headers_mut().insert("Retry-After", HeaderValue::from_str(&retry_after.to_string()).unwrap());
+        res.headers_mut().insert("X-RateLimit-Reset", int_header(reset_at));
+        res.headers_mut().insert("X-RateLimit-Used", int_header(count));
+        res.headers_mut().insert("Retry-After", int_header(retry_after));
 
         return Err(res);
     }
@@ -206,10 +215,10 @@ pub async fn rate_limit_middleware(
     let mut res = next.run(req).await.into_response();
 
     // Inject successful Rate Limit headers
-    res.headers_mut().insert("X-RateLimit-Limit", HeaderValue::from_str(&limit_conf.limit.to_string()).unwrap());
-    res.headers_mut().insert("X-RateLimit-Remaining", HeaderValue::from_str(&(remaining - 1).max(0).to_string()).unwrap());
-    res.headers_mut().insert("X-RateLimit-Reset", HeaderValue::from_str(&reset_at.to_string()).unwrap());
-    res.headers_mut().insert("X-RateLimit-Used", HeaderValue::from_str(&(count + 1).to_string()).unwrap());
+    res.headers_mut().insert("X-RateLimit-Limit", int_header(limit_conf.limit));
+    res.headers_mut().insert("X-RateLimit-Remaining", int_header((remaining - 1).max(0)));
+    res.headers_mut().insert("X-RateLimit-Reset", int_header(reset_at));
+    res.headers_mut().insert("X-RateLimit-Used", int_header(count + 1));
 
     Ok(res)
 }
