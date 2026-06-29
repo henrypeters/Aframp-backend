@@ -5,6 +5,8 @@ use async_trait::async_trait;
 use chrono::Utc;
 use tracing::warn;
 
+pub type DynPriceAdapter = Box<dyn PriceAdapter + Send + Sync>;
+
 #[async_trait]
 pub trait PriceAdapter: Send + Sync {
     fn name(&self) -> &str;
