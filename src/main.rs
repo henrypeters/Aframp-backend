@@ -1166,16 +1166,16 @@ async fn main() -> anyhow::Result<()> {
     // ── Oracle Price Feed (Issue #1.02 — Sensory System) ─────────────────────
     let oracle_routes = {
         use oracle::{
-            adapters::{BandProtocolAdapter, BinanceAdapter, CoinbaseAdapter},
+            adapters::{BandProtocolAdapter, BinanceAdapter, CoinbaseAdapter, DynPriceAdapter},
             service::OracleService,
         };
 
         let pair = std::env::var("ORACLE_PAIR").unwrap_or_else(|_| "XLM/USD".to_string());
 
-        let adapters: Vec<Box<dyn oracle::adapters::PriceAdapter>> = vec![
-            Box::new(BinanceAdapter::new()),
-            Box::new(CoinbaseAdapter::new()),
-            Box::new(BandProtocolAdapter::new()),
+        let adapters: Vec<DynPriceAdapter> = vec![
+            Box::new(BinanceAdapter::new()) as DynPriceAdapter,
+            Box::new(CoinbaseAdapter::new()) as DynPriceAdapter,
+            Box::new(BandProtocolAdapter::new()) as DynPriceAdapter,
         ];
 
         let svc = std::sync::Arc::new(OracleService::new(adapters, pair.clone(), db_pool.clone()));
