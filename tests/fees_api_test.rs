@@ -1,5 +1,6 @@
 //! Integration tests for GET /api/fees endpoint
 
+use anyhow::{Context, Result};
 use axum::{body::Body, routing::get, Router};
 use http::{Request, StatusCode};
 use sqlx::PgPool;
@@ -9,16 +10,16 @@ use tower::util::ServiceExt;
 use Bitmesh_backend::api::fees::{get_fees, FeesState};
 use Bitmesh_backend::services::fee_calculation::FeeCalculationService;
 
-async fn setup_test_db() -> PgPool {
+async fn setup_test_db() -> Result<PgPool> {
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost/aframp_test".to_string());
 
     PgPool::connect(&database_url)
         .await
-        .expect("Failed to connect to test database")
+        .context("failed to connect to test database")
 }
 
-async fn seed_fee_structures(pool: &PgPool) {
+async fn seed_fee_structures(pool: &PgPool) -> Result<()> {
     sqlx::query("DELETE FROM fee_structures WHERE transaction_type LIKE 'test_%' OR transaction_type IN ('onramp', 'offramp', 'bill_payment')")
         .execute(pool)
         .await
@@ -84,11 +85,27 @@ fn build_fees_app(pool: PgPool) -> Router {
         .with_state(state)
 }
 
+/// Build a GET request for the given URI.
+fn get(uri: &str) -> Result<Request<Body>> {
+    Request::builder()
+        .uri(uri)
+        .body(Body::empty())
+        .context("failed to build request")
+}
+
+/// Deserialize the response body as JSON.
+async fn json_body(resp: axum::response::Response) -> Result<serde_json::Value> {
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .context("failed to read response body")?;
+    serde_json::from_slice(&bytes).context("response body is not valid JSON")
+}
+
 #[tokio::test]
 #[ignore] // Requires DATABASE_URL and test database
-async fn test_fees_no_params_returns_full_structure() {
-    let pool = setup_test_db().await;
-    seed_fee_structures(&pool).await;
+async fn test_fees_no_params_returns_full_structure() -> Result<()> {
+    let pool = setup_test_db().await?;
+    seed_fee_structures(&pool).await?;
     let app = build_fees_app(pool);
 
     let response = app
@@ -115,13 +132,14 @@ async fn test_fees_no_params_returns_full_structure() {
         .expect("fee_structure field missing from JSON response");
     assert!(structure.get("onramp").is_some());
     assert!(structure.get("offramp").is_some());
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore] // Requires DATABASE_URL and test database
-async fn test_fees_amount_type_provider_returns_calculated() {
-    let pool = setup_test_db().await;
-    seed_fee_structures(&pool).await;
+async fn test_fees_amount_type_provider_returns_calculated() -> Result<()> {
+    let pool = setup_test_db().await?;
+    seed_fee_structures(&pool).await?;
     let app = build_fees_app(pool);
 
     let response = app
@@ -167,13 +185,14 @@ async fn test_fees_amount_type_provider_returns_calculated() {
         "expected total ~290, got {}",
         total
     );
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore] // Requires DATABASE_URL and test database
-async fn test_fees_amount_type_no_provider_returns_comparison() {
-    let pool = setup_test_db().await;
-    seed_fee_structures(&pool).await;
+async fn test_fees_amount_type_no_provider_returns_comparison() -> Result<()> {
+    let pool = setup_test_db().await?;
+    seed_fee_structures(&pool).await?;
     let app = build_fees_app(pool);
 
     let response = app
@@ -198,13 +217,14 @@ async fn test_fees_amount_type_no_provider_returns_comparison() {
     assert_eq!(json.get("type").and_then(|v| v.as_str()), Some("onramp"));
     assert!(json.get("comparison").is_some());
     assert!(json.get("cheapest_provider").is_some());
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore] // Requires DATABASE_URL and test database
-async fn test_fees_amount_without_type_returns_400_missing_type() {
-    let pool = setup_test_db().await;
-    seed_fee_structures(&pool).await;
+async fn test_fees_amount_without_type_returns_400_missing_type() -> Result<()> {
+    let pool = setup_test_db().await?;
+    seed_fee_structures(&pool).await?;
     let app = build_fees_app(pool);
 
     let response = app
@@ -230,13 +250,14 @@ async fn test_fees_amount_without_type_returns_400_missing_type() {
         error.get("code").and_then(|v| v.as_str()),
         Some("MISSING_TYPE")
     );
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore] // Requires DATABASE_URL and test database
-async fn test_fees_invalid_type_returns_400() {
-    let pool = setup_test_db().await;
-    seed_fee_structures(&pool).await;
+async fn test_fees_invalid_type_returns_400() -> Result<()> {
+    let pool = setup_test_db().await?;
+    seed_fee_structures(&pool).await?;
     let app = build_fees_app(pool);
 
     let response = app
@@ -262,13 +283,14 @@ async fn test_fees_invalid_type_returns_400() {
         error.get("code").and_then(|v| v.as_str()),
         Some("INVALID_TYPE")
     );
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore] // Requires DATABASE_URL and test database
-async fn test_fees_invalid_provider_returns_400() {
-    let pool = setup_test_db().await;
-    seed_fee_structures(&pool).await;
+async fn test_fees_invalid_provider_returns_400() -> Result<()> {
+    let pool = setup_test_db().await?;
+    seed_fee_structures(&pool).await?;
     let app = build_fees_app(pool);
 
     let response = app
@@ -294,13 +316,14 @@ async fn test_fees_invalid_provider_returns_400() {
         error.get("code").and_then(|v| v.as_str()),
         Some("INVALID_PROVIDER")
     );
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore] // Requires DATABASE_URL and test database
-async fn test_fees_zero_amount_returns_400() {
-    let pool = setup_test_db().await;
-    seed_fee_structures(&pool).await;
+async fn test_fees_zero_amount_returns_400() -> Result<()> {
+    let pool = setup_test_db().await?;
+    seed_fee_structures(&pool).await?;
     let app = build_fees_app(pool);
 
     let response = app
@@ -326,13 +349,14 @@ async fn test_fees_zero_amount_returns_400() {
         error.get("code").and_then(|v| v.as_str()),
         Some("INVALID_AMOUNT")
     );
+    Ok(())
 }
 
 #[tokio::test]
 #[ignore] // Requires DATABASE_URL and test database
-async fn test_fees_fee_values_match_fee_calculation_service() {
-    let pool = setup_test_db().await;
-    seed_fee_structures(&pool).await;
+async fn test_fees_fee_values_match_fee_calculation_service() -> Result<()> {
+    let pool = setup_test_db().await?;
+    seed_fee_structures(&pool).await?;
 
     let service = FeeCalculationService::new(pool.clone());
     let amount = sqlx::types::BigDecimal::from_str("10000")
@@ -340,7 +364,7 @@ async fn test_fees_fee_values_match_fee_calculation_service() {
     let breakdown = service
         .calculate_fees("onramp", amount, Some("flutterwave"), Some("card"))
         .await
-        .expect("calculate_fees failed");
+        .context("calculate_fees failed")?;
 
     let app = build_fees_app(pool);
     let response = app
@@ -387,4 +411,5 @@ async fn test_fees_fee_values_match_fee_calculation_service() {
         api_net,
         svc_net
     );
+    Ok(())
 }
