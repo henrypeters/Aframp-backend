@@ -150,96 +150,108 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_testnet_key_has_correct_prefix() {
-        let key = generate_api_key(KeyEnvironment::Testnet).unwrap();
+    fn test_testnet_key_has_correct_prefix() -> Result<(), String> {
+        let key = generate_api_key(KeyEnvironment::Testnet)?;
         assert!(key.plaintext_key.starts_with("aframp_test_"));
         assert_eq!(key.key_id_prefix, "aframp_test_");
         assert_eq!(key.environment, KeyEnvironment::Testnet);
+        Ok(())
     }
 
     #[test]
-    fn test_mainnet_key_has_correct_prefix() {
-        let key = generate_api_key(KeyEnvironment::Mainnet).unwrap();
+    fn test_mainnet_key_has_correct_prefix() -> Result<(), String> {
+        let key = generate_api_key(KeyEnvironment::Mainnet)?;
         assert!(key.plaintext_key.starts_with("aframp_live_"));
         assert_eq!(key.key_id_prefix, "aframp_live_");
         assert_eq!(key.environment, KeyEnvironment::Mainnet);
+        Ok(())
     }
 
     #[test]
-    fn test_key_length_provides_sufficient_entropy() {
-        let key = generate_api_key(KeyEnvironment::Testnet).unwrap();
+    fn test_key_length_provides_sufficient_entropy() -> Result<(), String> {
+        let key = generate_api_key(KeyEnvironment::Testnet)?;
         // prefix (12) + 32 random chars = 44 total
         assert_eq!(key.plaintext_key.len(), 44);
+        Ok(())
     }
 
     #[test]
-    fn test_key_prefix_is_first_8_chars() {
-        let key = generate_api_key(KeyEnvironment::Testnet).unwrap();
+    fn test_key_prefix_is_first_8_chars() -> Result<(), String> {
+        let key = generate_api_key(KeyEnvironment::Testnet)?;
         assert_eq!(key.key_prefix, &key.plaintext_key[..8]);
+        Ok(())
     }
 
     #[test]
-    fn test_hash_is_argon2id_format() {
-        let key = generate_api_key(KeyEnvironment::Testnet).unwrap();
+    fn test_hash_is_argon2id_format() -> Result<(), String> {
+        let key = generate_api_key(KeyEnvironment::Testnet)?;
         assert!(key.key_hash.starts_with("$argon2id$"));
+        Ok(())
     }
 
     #[test]
-    fn test_hash_is_not_plaintext() {
-        let key = generate_api_key(KeyEnvironment::Testnet).unwrap();
+    fn test_hash_is_not_plaintext() -> Result<(), String> {
+        let key = generate_api_key(KeyEnvironment::Testnet)?;
         assert_ne!(key.key_hash, key.plaintext_key);
         assert!(!key.key_hash.contains(&key.plaintext_key));
+        Ok(())
     }
 
     #[test]
-    fn test_verify_correct_key() {
-        let key = generate_api_key(KeyEnvironment::Testnet).unwrap();
+    fn test_verify_correct_key() -> Result<(), String> {
+        let key = generate_api_key(KeyEnvironment::Testnet)?;
         assert!(verify_api_key(&key.plaintext_key, &key.key_hash));
+        Ok(())
     }
 
     #[test]
-    fn test_verify_wrong_key_rejected() {
-        let key = generate_api_key(KeyEnvironment::Testnet).unwrap();
+    fn test_verify_wrong_key_rejected() -> Result<(), String> {
+        let key = generate_api_key(KeyEnvironment::Testnet)?;
         assert!(!verify_api_key(
             "aframp_test_wrongkeyvalue12345678",
             &key.key_hash
         ));
+        Ok(())
     }
 
     #[test]
-    fn test_verify_empty_key_rejected() {
-        let key = generate_api_key(KeyEnvironment::Testnet).unwrap();
+    fn test_verify_empty_key_rejected() -> Result<(), String> {
+        let key = generate_api_key(KeyEnvironment::Testnet)?;
         assert!(!verify_api_key("", &key.key_hash));
+        Ok(())
     }
 
     #[test]
-    fn test_two_keys_are_unique() {
-        let k1 = generate_api_key(KeyEnvironment::Testnet).unwrap();
-        let k2 = generate_api_key(KeyEnvironment::Testnet).unwrap();
+    fn test_two_keys_are_unique() -> Result<(), String> {
+        let k1 = generate_api_key(KeyEnvironment::Testnet)?;
+        let k2 = generate_api_key(KeyEnvironment::Testnet)?;
         assert_ne!(k1.plaintext_key, k2.plaintext_key);
         assert_ne!(k1.key_hash, k2.key_hash);
+        Ok(())
     }
 
     #[test]
-    fn test_environment_scoping() {
-        let test_key = generate_api_key(KeyEnvironment::Testnet).unwrap();
-        let live_key = generate_api_key(KeyEnvironment::Mainnet).unwrap();
+    fn test_environment_scoping() -> Result<(), String> {
+        let test_key = generate_api_key(KeyEnvironment::Testnet)?;
+        let live_key = generate_api_key(KeyEnvironment::Mainnet)?;
         // A testnet key must not verify against a mainnet hash and vice versa
         // (they're different strings so hashes will differ)
         assert!(!verify_api_key(&test_key.plaintext_key, &live_key.key_hash));
         assert!(!verify_api_key(&live_key.plaintext_key, &test_key.key_hash));
+        Ok(())
     }
 
     #[test]
-    fn test_parse_environment() {
+    fn test_parse_environment() -> Result<(), String> {
         assert_eq!(
-            KeyEnvironment::from_str("testnet").unwrap(),
+            KeyEnvironment::from_str("testnet")?,
             KeyEnvironment::Testnet
         );
         assert_eq!(
-            KeyEnvironment::from_str("mainnet").unwrap(),
+            KeyEnvironment::from_str("mainnet")?,
             KeyEnvironment::Mainnet
         );
         assert!(KeyEnvironment::from_str("staging").is_err());
+        Ok(())
     }
 }
