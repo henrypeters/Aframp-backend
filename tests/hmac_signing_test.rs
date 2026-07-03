@@ -53,8 +53,11 @@ fn signed_request_with_body(body: &[u8], algorithm: HmacAlgorithm) -> Request<Bo
         ("x-aframp-key-id", KEY_ID),
         ("x-aframp-timestamp", timestamp),
     ];
-    let sig = sign_request(algorithm, "POST", "/transfer", "", headers, body, SECRET).unwrap();
+    // Test invariant: signing with valid inputs must succeed
+    let sig = sign_request(algorithm, "POST", "/transfer", "", headers, body, SECRET)
+        .expect("Test setup: HMAC signing should succeed with valid inputs");
 
+    // Test invariant: building a request with valid components must succeed
     Request::builder()
         .method("POST")
         .uri("/transfer")
@@ -63,17 +66,35 @@ fn signed_request_with_body(body: &[u8], algorithm: HmacAlgorithm) -> Request<Bo
         .header("x-aframp-timestamp", timestamp)
         .header("x-aframp-signature", sig)
         .body(Body::from(body.to_vec()))
-        .unwrap()
+        .expect("Test setup: request builder should succeed with valid headers")
 }
 
 async fn response_code(router: Router, req: Request<Body>) -> StatusCode {
-    router.oneshot(req).await.unwrap().status()
+    // Test invariant: router must respond (failures indicate infrastructure issues, not test logic)
+    router
+        .oneshot(req)
+        .await
+        .expect("Test infrastructure: router should respond")
+        .status()
 }
 
 async fn response_error_code(router: Router, req: Request<Body>) -> String {
-    let resp = router.oneshot(req).await.unwrap();
-    let bytes = to_bytes(resp.into_body(), 4096).await.unwrap();
-    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    // Test invariant: router must respond
+    let resp = router
+        .oneshot(req)
+        .await
+        .expect("Test infrastructure: router should respond");
+    
+    // Test invariant: response body should be readable
+    let bytes = to_bytes(resp.into_body(), 4096)
+        .await
+        .expect("Test infrastructure: response body should be readable");
+    
+    // Test invariant: error responses should be valid JSON
+    let json: serde_json::Value = serde_json::from_slice(&bytes)
+        .expect("Test infrastructure: error response should be valid JSON");
+    
+    // Gracefully handle missing error code field (return empty string rather than panic)
     json["error"]["code"].as_str().unwrap_or("").to_string()
 }
 
@@ -125,7 +146,8 @@ async fn tampered_body_is_rejected() {
         headers,
         br#"{"amount":"100"}"#,
         SECRET,
-    ).unwrap();
+    )
+    .expect("Test setup: HMAC signing should succeed");
 
     let req = Request::builder()
         .method("POST")
@@ -135,7 +157,7 @@ async fn tampered_body_is_rejected() {
         .header("x-aframp-timestamp", timestamp)
         .header("x-aframp-signature", sig)
         .body(Body::from(br#"{"amount":"9999"}"#.to_vec()))
-        .unwrap();
+        .expect("Test setup: request builder should succeed");
 
     let code = response_error_code(router, req).await;
     assert_eq!(code, "SIGNATURE_MISMATCH");
@@ -164,7 +186,9 @@ async fn tampered_key_id_header_is_rejected() {
         headers,
         body,
         SECRET,
-    ).unwrap();
+    )
+    .expect("Test setup: HMAC signing should succeed");
+    
     let req = Request::builder()
         .method("POST")
         .uri("/transfer")
@@ -173,7 +197,7 @@ async fn tampered_key_id_header_is_rejected() {
         .header("x-aframp-timestamp", timestamp)
         .header("x-aframp-signature", sig)
         .body(Body::from(body.to_vec()))
-        .unwrap();
+        .expect("Test setup: request builder should succeed");
 
     // key_EVIL is unknown → UNKNOWN_KEY_ID
     let code = response_error_code(router, req).await;
@@ -198,7 +222,8 @@ async fn tampered_timestamp_header_is_rejected() {
         headers,
         body,
         SECRET,
-    ).unwrap();
+    )
+    .expect("Test setup: HMAC signing should succeed");
 
     // Send with a different timestamp (tampered)
     let req = Request::builder()
@@ -209,7 +234,7 @@ async fn tampered_timestamp_header_is_rejected() {
         .header("x-aframp-timestamp", "9999999999") // tampered
         .header("x-aframp-signature", sig)
         .body(Body::from(body.to_vec()))
-        .unwrap();
+        .expect("Test setup: request builder should succeed");
 
     let code = response_error_code(router, req).await;
     assert_eq!(code, "SIGNATURE_MISMATCH");
@@ -229,7 +254,7 @@ async fn missing_signature_header_is_rejected() {
         .header("x-aframp-key-id", KEY_ID)
         .header("x-aframp-timestamp", "1700000000")
         .body(Body::empty())
-        .unwrap();
+        .expect("Test setup: request builder should succeed");
 
     let code = response_error_code(router, req).await;
     assert_eq!(code, "MISSING_SIGNATURE");
@@ -248,7 +273,7 @@ async fn missing_key_id_header_is_rejected() {
             "algorithm=HMAC-SHA256,timestamp=1700000000,signature=abc",
         )
         .body(Body::empty())
-        .unwrap();
+        .expect("Test setup: request builder should succeed");
 
     let code = response_error_code(router, req).await;
     assert_eq!(code, "MISSING_KEY_ID");
@@ -265,7 +290,7 @@ async fn malformed_signature_header_is_rejected() {
         .header("x-aframp-timestamp", "1700000000")
         .header("x-aframp-signature", "not-a-valid-format")
         .body(Body::empty())
-        .unwrap();
+        .expect("Test setup: request builder should succeed");
 
     let code = response_error_code(router, req).await;
     assert_eq!(code, "INVALID_SIGNATURE_FORMAT");
@@ -285,7 +310,7 @@ async fn unknown_key_id_is_rejected() {
             "algorithm=HMAC-SHA256,timestamp=1700000000,signature=abc",
         )
         .body(Body::empty())
-        .unwrap();
+        .expect("Test setup: request builder should succeed");
 
     let code = response_error_code(router, req).await;
     assert_eq!(code, "UNKNOWN_KEY_ID");
@@ -305,7 +330,7 @@ async fn unsigned_request_passes_when_enforcement_disabled() {
         .header("x-aframp-key-id", KEY_ID)
         .header("x-aframp-timestamp", "1700000000")
         .body(Body::empty())
-        .unwrap();
+        .expect("Test setup: request builder should succeed");
 
     assert_eq!(response_code(router, req).await, StatusCode::OK);
 }
@@ -335,9 +360,15 @@ async fn sha512_signature_rejected_when_header_claims_sha256() {
         headers,
         body,
         SECRET,
-    ).unwrap();
+    )
+    .expect("Test setup: HMAC signing should succeed");
+    
     // Extract just the hex part and repackage with wrong algorithm label
-    let hex_part = real_sig.split("signature=").nth(1).unwrap();
+    let hex_part = real_sig
+        .split("signature=")
+        .nth(1)
+        .expect("Test setup: signature string should contain 'signature=' field");
+    
     let spoofed_header = format!(
         "algorithm=HMAC-SHA256,timestamp={},signature={}",
         timestamp, hex_part
@@ -351,7 +382,7 @@ async fn sha512_signature_rejected_when_header_claims_sha256() {
         .header("x-aframp-timestamp", timestamp)
         .header("x-aframp-signature", spoofed_header)
         .body(Body::from(body.to_vec()))
-        .unwrap();
+        .expect("Test setup: request builder should succeed");
 
     let code = response_error_code(router, req).await;
     assert_eq!(code, "SIGNATURE_MISMATCH");
