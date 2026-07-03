@@ -27,7 +27,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -95,7 +95,7 @@ jobs:
           components: clippy
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -171,7 +171,7 @@ jobs:
           fetch-depth: 0  # Full history for first-time git history scan
 
       - name: Run gitleaks on full git history
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
@@ -280,7 +280,7 @@ jobs:
     if: always() && github.ref == 'refs/heads/main'
     steps:
       - name: Download all scan reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
 
       - name: Ingest findings via API
         run: |

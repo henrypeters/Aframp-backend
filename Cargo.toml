@@ -92,7 +92,7 @@ bigdecimal   = { version = "0.4",  features = ["serde"], optional = true }
 rust_decimal = { version = "1.36", optional = true }
 rust_decimal_macros = { version = "1.36", optional = true }
 regex        = { version = "1.12.2", optional = true }
-chrono-tz    = "0.9"
+chrono-tz    = "0.10"
 
 # --- Crypto ---
 hmac           = { version = "0.12", optional = true }
@@ -162,7 +162,7 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "fmt"]
 
 # --- OpenTelemetry ---
 opentelemetry                    = { version = "0.22", features = ["trace"], optional = true }
-opentelemetry_sdk                = { version = "0.22", features = ["rt-tokio", "trace"], optional = true }
+opentelemetry_sdk                = { version = "0.32", features = ["rt-tokio", "trace"], optional = true }
 opentelemetry-otlp               = { version = "0.15", features = ["tonic", "trace", "grpc-tonic"], optional = true }
 opentelemetry-semantic-conventions = { version = "0.14", optional = true }
 opentelemetry-http               = { version = "0.11", optional = true }
