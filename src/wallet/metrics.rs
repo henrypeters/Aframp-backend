@@ -50,11 +50,17 @@ impl WalletMetrics {
             "Wallet activations on Stellar",
         ))?;
         let recovery_initiations = CounterVec::new(
-            Opts::new("wallet_recovery_initiations_total", "Recovery initiations by method"),
+            Opts::new(
+                "wallet_recovery_initiations_total",
+                "Recovery initiations by method",
+            ),
             &["method"],
         )?;
         let recovery_successes = CounterVec::new(
-            Opts::new("wallet_recovery_successes_total", "Successful recoveries by method"),
+            Opts::new(
+                "wallet_recovery_successes_total",
+                "Successful recoveries by method",
+            ),
             &["method"],
         )?;
         let recovery_failures = Counter::with_opts(Opts::new(
@@ -70,11 +76,17 @@ impl WalletMetrics {
             "Backup confirmations recorded",
         ))?;
         let statement_generations = CounterVec::new(
-            Opts::new("wallet_statement_generations_total", "Statement generations by type"),
+            Opts::new(
+                "wallet_statement_generations_total",
+                "Statement generations by type",
+            ),
             &["statement_type"],
         )?;
         let history_sync_events = CounterVec::new(
-            Opts::new("wallet_history_sync_events_total", "History sync events by source"),
+            Opts::new(
+                "wallet_history_sync_events_total",
+                "History sync events by source",
+            ),
             &["source"],
         )?;
         let deduplication_events = Counter::with_opts(Opts::new(

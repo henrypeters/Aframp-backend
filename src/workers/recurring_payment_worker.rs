@@ -98,7 +98,11 @@ impl RecurringPaymentWorker {
     async fn run_cycle(&self) {
         let now = Utc::now();
 
-        let due = match self.repo.fetch_due_schedules(now, self.config.batch_size).await {
+        let due = match self
+            .repo
+            .fetch_due_schedules(now, self.config.batch_size)
+            .await
+        {
             Ok(schedules) => schedules,
             Err(e) => {
                 error!(error = %e, "Failed to fetch due recurring schedules");
@@ -175,13 +179,7 @@ impl RecurringPaymentWorker {
                     // Record failure — idempotency guard still applies.
                     match self
                         .repo
-                        .insert_execution(
-                            schedule_id,
-                            scheduled_at,
-                            "failed",
-                            None,
-                            Some(&reason),
-                        )
+                        .insert_execution(schedule_id, scheduled_at, "failed", None, Some(&reason))
                         .await
                     {
                         Ok(None) => {

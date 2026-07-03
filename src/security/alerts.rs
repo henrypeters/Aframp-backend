@@ -81,7 +81,7 @@ impl AlertService {
         system_status: &SystemStatus,
     ) -> anyhow::Result<()> {
         let (severity, title, message) = self.format_circuit_breaker_alert(anomaly, system_status);
-        
+
         let alert = AlertMessage {
             title,
             message,
@@ -93,7 +93,7 @@ impl AlertService {
 
         // Send to all enabled channels
         let mut errors = Vec::new();
-        
+
         for channel in &self.config.enabled_channels {
             if let Err(e) = self.send_to_channel(&alert, channel).await {
                 warn!(channel = ?channel, error = %e, "Failed to send alert to channel");
@@ -190,19 +190,34 @@ impl AlertService {
         metadata.insert("alert_type".to_string(), "circuit_breaker".to_string());
 
         match anomaly {
-            AnomalyType::VelocityExceeded { amount, window, limit } => {
+            AnomalyType::VelocityExceeded {
+                amount,
+                window,
+                limit,
+            } => {
                 metadata.insert("anomaly_type".to_string(), "velocity_exceeded".to_string());
                 metadata.insert("amount".to_string(), amount.to_string());
                 metadata.insert("window_seconds".to_string(), window.as_secs().to_string());
                 metadata.insert("limit".to_string(), limit.to_string());
             }
-            AnomalyType::NegativeDelta { bank_reserves, on_chain_supply, delta_percentage } => {
+            AnomalyType::NegativeDelta {
+                bank_reserves,
+                on_chain_supply,
+                delta_percentage,
+            } => {
                 metadata.insert("anomaly_type".to_string(), "negative_delta".to_string());
                 metadata.insert("bank_reserves".to_string(), bank_reserves.to_string());
                 metadata.insert("on_chain_supply".to_string(), on_chain_supply.to_string());
-                metadata.insert("delta_percentage".to_string(), format!("{:.6}", delta_percentage));
+                metadata.insert(
+                    "delta_percentage".to_string(),
+                    format!("{:.6}", delta_percentage),
+                );
             }
-            AnomalyType::UnknownOrigin { tx_hash, amount, wallet } => {
+            AnomalyType::UnknownOrigin {
+                tx_hash,
+                amount,
+                wallet,
+            } => {
                 metadata.insert("anomaly_type".to_string(), "unknown_origin".to_string());
                 metadata.insert("transaction_hash".to_string(), tx_hash.clone());
                 metadata.insert("amount".to_string(), amount.to_string());
@@ -285,10 +300,10 @@ impl AlertService {
         };
 
         let color = match alert.severity {
-            AlertSeverity::Critical => "#ff0000",      // Red
-            AlertSeverity::High => "#ff6600",        // Orange
-            AlertSeverity::Medium => "#ffaa00",       // Yellow
-            AlertSeverity::Low => "#00ff00",          // Green
+            AlertSeverity::Critical => "#ff0000", // Red
+            AlertSeverity::High => "#ff6600",     // Orange
+            AlertSeverity::Medium => "#ffaa00",   // Yellow
+            AlertSeverity::Low => "#00ff00",      // Green
         };
 
         let payload = serde_json::json!({
@@ -331,10 +346,7 @@ impl AlertService {
         if response.status().is_success() {
             info!("Slack alert sent successfully");
         } else {
-            warn!(
-                status = response.status(),
-                "Slack alert failed with status"
-            );
+            warn!(status = response.status(), "Slack alert failed with status");
         }
 
         Ok(())

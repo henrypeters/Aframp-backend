@@ -140,11 +140,11 @@ pub enum WorkflowError {
 impl From<WorkflowError> for AppError {
     fn from(e: WorkflowError) -> Self {
         match e {
-            WorkflowError::NotFound { id } => AppError::new(AppErrorKind::Domain(
-                DomainError::TransactionNotFound {
+            WorkflowError::NotFound { id } => {
+                AppError::new(AppErrorKind::Domain(DomainError::TransactionNotFound {
                     transaction_id: id.to_string(),
-                },
-            )),
+                }))
+            }
             // InvalidTransition → 409 Conflict
             WorkflowError::InvalidTransition { from, to } => {
                 AppError::new(AppErrorKind::Domain(DomainError::DuplicateTransaction {
@@ -191,14 +191,12 @@ impl From<WorkflowError> for AppError {
                     reason,
                 }))
             }
-            WorkflowError::Database(msg) => {
-                AppError::new(AppErrorKind::Infrastructure(
-                    crate::error::InfrastructureError::Database {
-                        message: msg,
-                        is_retryable: false,
-                    },
-                ))
-            }
+            WorkflowError::Database(msg) => AppError::new(AppErrorKind::Infrastructure(
+                crate::error::InfrastructureError::Database {
+                    message: msg,
+                    is_retryable: false,
+                },
+            )),
         }
     }
 }
@@ -515,10 +513,7 @@ impl MintApprovalService {
 
         if request.status != "approved" {
             return Err(WorkflowError::ExecutionNotAllowed {
-                reason: format!(
-                    "Request status is '{}', must be 'approved'",
-                    request.status
-                ),
+                reason: format!("Request status is '{}', must be 'approved'", request.status),
             });
         }
 
@@ -755,7 +750,10 @@ mod tests {
 
     #[test]
     fn test_valid_transitions() {
-        assert!(is_valid_transition("pending_approval", "partially_approved"));
+        assert!(is_valid_transition(
+            "pending_approval",
+            "partially_approved"
+        ));
         assert!(is_valid_transition("pending_approval", "approved"));
         assert!(is_valid_transition("pending_approval", "rejected"));
         assert!(is_valid_transition("partially_approved", "approved"));

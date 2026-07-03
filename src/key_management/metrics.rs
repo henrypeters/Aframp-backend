@@ -135,7 +135,11 @@ pub fn set_days_until_rotation(key_id: &str, key_type: &str, days: f64) {
 
 pub fn set_reencryption_progress(table_name: &str, processed: i64, total: i64) {
     if let Some(g) = REENCRYPTION_PROGRESS.get() {
-        let ratio = if total > 0 { processed as f64 / total as f64 } else { 1.0 };
+        let ratio = if total > 0 {
+            processed as f64 / total as f64
+        } else {
+            1.0
+        };
         g.with_label_values(&[table_name]).set(ratio);
     }
 }

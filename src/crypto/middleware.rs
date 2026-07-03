@@ -94,7 +94,11 @@ pub async fn decryption_middleware(
     let body_bytes = match to_bytes(body, 4 * 1024 * 1024).await {
         Ok(b) => b,
         Err(_) => {
-            return error_response(StatusCode::BAD_REQUEST, "body_read_error", "Failed to read request body")
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "body_read_error",
+                "Failed to read request body",
+            )
         }
     };
 
@@ -128,7 +132,8 @@ pub async fn decryption_middleware(
         }
     };
 
-    next.run(Request::from_parts(parts, Body::from(new_body_bytes))).await
+    next.run(Request::from_parts(parts, Body::from(new_body_bytes)))
+        .await
 }
 
 // ---------------------------------------------------------------------------
@@ -146,19 +151,20 @@ fn decrypt_fields(
             for key in keys {
                 let field_value = map.get_mut(&key).unwrap();
                 if EncryptedEnvelope::is_envelope(field_value) {
-                    let envelope: EncryptedEnvelope =
-                        match serde_json::from_value(field_value.clone()) {
-                            Ok(e) => e,
-                            Err(_) => {
-                                metrics::inc_decryption_failure(&key, "malformed_envelope");
-                                error!(field = %key, consumer_id = %consumer_id, "Malformed encrypted envelope");
-                                return Err(error_response(
-                                    StatusCode::BAD_REQUEST,
-                                    "malformed_envelope",
-                                    format!("Malformed encrypted envelope for field '{key}'"),
-                                ));
-                            }
-                        };
+                    let envelope: EncryptedEnvelope = match serde_json::from_value(
+                        field_value.clone(),
+                    ) {
+                        Ok(e) => e,
+                        Err(_) => {
+                            metrics::inc_decryption_failure(&key, "malformed_envelope");
+                            error!(field = %key, consumer_id = %consumer_id, "Malformed encrypted envelope");
+                            return Err(error_response(
+                                StatusCode::BAD_REQUEST,
+                                "malformed_envelope",
+                                format!("Malformed encrypted envelope for field '{key}'"),
+                            ));
+                        }
+                    };
 
                     let plaintext = decrypt_envelope(&envelope, state, &key, consumer_id)?;
                     // NEVER log plaintext
@@ -187,7 +193,11 @@ fn decrypt_envelope(
 ) -> Result<Zeroizing<Vec<u8>>, Response> {
     if let Err(e) = envelope.validate_algorithms() {
         metrics::inc_decryption_failure(field_name, "unsupported_algorithm");
-        return Err(error_response(StatusCode::BAD_REQUEST, "unsupported_algorithm", e.to_string()));
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "unsupported_algorithm",
+            e.to_string(),
+        ));
     }
 
     let key_version = match state.key_store.get_for_decryption(&envelope.kid) {
@@ -198,7 +208,9 @@ fn decrypt_envelope(
             return Err(error_response(
                 StatusCode::BAD_REQUEST,
                 "retired_key_version",
-                format!("Key version '{kid}' has been retired. Refresh the public key and re-encrypt."),
+                format!(
+                    "Key version '{kid}' has been retired. Refresh the public key and re-encrypt."
+                ),
             ));
         }
         Err(EncryptionError::KeyVersionNotFound(kid)) => {
@@ -212,7 +224,11 @@ fn decrypt_envelope(
         Err(e) => {
             metrics::inc_decryption_failure(field_name, "key_lookup_error");
             error!(error = %e, "Key lookup error");
-            return Err(error_response(StatusCode::INTERNAL_SERVER_ERROR, "key_lookup_error", "Internal key lookup error"));
+            return Err(error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "key_lookup_error",
+                "Internal key lookup error",
+            ));
         }
     };
 
@@ -235,7 +251,11 @@ fn decrypt_envelope(
         Ok(n) => n,
         Err(e) => {
             metrics::inc_decryption_failure(field_name, "malformed_nonce");
-            return Err(error_response(StatusCode::BAD_REQUEST, "malformed_nonce", e.to_string()));
+            return Err(error_response(
+                StatusCode::BAD_REQUEST,
+                "malformed_nonce",
+                e.to_string(),
+            ));
         }
     };
 
@@ -243,7 +263,11 @@ fn decrypt_envelope(
         Ok(b) => b,
         Err(e) => {
             metrics::inc_decryption_failure(field_name, "malformed_ciphertext");
-            return Err(error_response(StatusCode::BAD_REQUEST, "malformed_ciphertext", e.to_string()));
+            return Err(error_response(
+                StatusCode::BAD_REQUEST,
+                "malformed_ciphertext",
+                e.to_string(),
+            ));
         }
     };
 

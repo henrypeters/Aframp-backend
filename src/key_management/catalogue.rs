@@ -161,10 +161,14 @@ impl KeyCatalogueRepository {
     }
 
     pub async fn get_by_key_id(&self, key_id: &str) -> Result<PlatformKey, CatalogueError> {
-        sqlx::query_as!(PlatformKey, "SELECT * FROM platform_keys WHERE key_id = $1", key_id)
-            .fetch_optional(&self.pool)
-            .await?
-            .ok_or_else(|| CatalogueError::NotFound(key_id.to_string()))
+        sqlx::query_as!(
+            PlatformKey,
+            "SELECT * FROM platform_keys WHERE key_id = $1",
+            key_id
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| CatalogueError::NotFound(key_id.to_string()))
     }
 
     pub async fn get_by_uuid(&self, id: Uuid) -> Result<PlatformKey, CatalogueError> {
@@ -189,11 +193,10 @@ impl KeyCatalogueRepository {
         .fetch_all(&self.pool)
         .await?;
 
-        let total: i64 =
-            sqlx::query_scalar!("SELECT COUNT(*) FROM platform_keys")
-                .fetch_one(&self.pool)
-                .await?
-                .unwrap_or(0);
+        let total: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM platform_keys")
+            .fetch_one(&self.pool)
+            .await?
+            .unwrap_or(0);
 
         Ok((rows, total))
     }
@@ -231,11 +234,7 @@ impl KeyCatalogueRepository {
         Ok(())
     }
 
-    pub async fn mark_rotated(
-        &self,
-        id: Uuid,
-        rotation_days: i64,
-    ) -> Result<(), CatalogueError> {
+    pub async fn mark_rotated(&self, id: Uuid, rotation_days: i64) -> Result<(), CatalogueError> {
         let next = Utc::now() + Duration::days(rotation_days);
         sqlx::query!(
             "UPDATE platform_keys SET last_rotated_at = now(), next_rotation_at = $1 WHERE id = $2",

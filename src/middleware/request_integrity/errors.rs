@@ -50,7 +50,11 @@ struct IntegrityErrorDetail {
 }
 
 impl IntegrityError {
-    pub fn structural(code: impl Into<String>, message: impl Into<String>, field: Option<String>) -> Self {
+    pub fn structural(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        field: Option<String>,
+    ) -> Self {
         Self {
             layer: IntegrityLayer::Structural,
             status: StatusCode::BAD_REQUEST,
@@ -61,7 +65,11 @@ impl IntegrityError {
         }
     }
 
-    pub fn field(code: impl Into<String>, message: impl Into<String>, field: Option<String>) -> Self {
+    pub fn field(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        field: Option<String>,
+    ) -> Self {
         Self {
             layer: IntegrityLayer::Field,
             status: StatusCode::BAD_REQUEST,
@@ -72,7 +80,11 @@ impl IntegrityError {
         }
     }
 
-    pub fn consistency(code: impl Into<String>, message: impl Into<String>, field: Option<String>) -> Self {
+    pub fn consistency(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        field: Option<String>,
+    ) -> Self {
         Self {
             layer: IntegrityLayer::Consistency,
             status: StatusCode::UNPROCESSABLE_ENTITY,
@@ -89,15 +101,15 @@ impl IntegrityError {
     }
 
     pub fn invalid_json(reason: String) -> Self {
-        Self::structural(
-            "INVALID_JSON_BODY",
-            "Request body is not valid JSON",
-            None,
-        )
-        .with_details(json!({ "reason": reason }))
+        Self::structural("INVALID_JSON_BODY", "Request body is not valid JSON", None)
+            .with_details(json!({ "reason": reason }))
     }
 
-    pub fn payload_too_large(endpoint: IntegrityEndpoint, max_body_size: usize, reason: String) -> Self {
+    pub fn payload_too_large(
+        endpoint: IntegrityEndpoint,
+        max_body_size: usize,
+        reason: String,
+    ) -> Self {
         Self {
             layer: IntegrityLayer::Structural,
             status: StatusCode::PAYLOAD_TOO_LARGE,
@@ -130,4 +142,3 @@ impl IntegrityError {
             .into_response()
     }
 }
-

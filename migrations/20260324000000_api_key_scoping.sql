@@ -1,4 +1,3 @@
--- migrate:up
 -- API Key Scoping & Permission Model (Issue #132)
 --
 -- Tables:

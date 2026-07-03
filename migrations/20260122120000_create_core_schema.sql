@@ -1,4 +1,3 @@
--- migrate:up
 -- Foundational schema for Aframp core entities: users, wallets, transactions, AFRI trustlines.
 -- Notes:
 -- - Monetary values use NUMERIC (never FLOAT/DOUBLE).

@@ -19,8 +19,7 @@ async fn test_db_pool() -> sqlx::PgPool {
 
 async fn test_redis() -> Bitmesh_backend::cache::RedisCache {
     use Bitmesh_backend::cache::{init_cache_pool, CacheConfig, RedisCache};
-    let url = std::env::var("REDIS_URL")
-        .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
     let pool = init_cache_pool(CacheConfig {
         redis_url: url,
         ..Default::default()
@@ -65,7 +64,12 @@ async fn test_automatic_mode_transition_to_elevated() {
         cfg.rolling_window_size,
     ));
     let repo = AdaptiveRateLimitRepository::new(pool.clone());
-    let engine = Arc::new(AdaptiveRateLimitEngine::new(cfg.clone(), signals.clone(), cache, repo));
+    let engine = Arc::new(AdaptiveRateLimitEngine::new(
+        cfg.clone(),
+        signals.clone(),
+        cache,
+        repo,
+    ));
 
     // Initially normal
     assert_eq!(engine.current_mode().await, AdaptationMode::Normal);
@@ -160,12 +164,21 @@ async fn test_multiplier_tier_ordering_in_elevated_mode() {
     let std_id = uuid::Uuid::new_v4();
     let low_id = uuid::Uuid::new_v4();
 
-    let high_m = engine.effective_multiplier(high_id, ConsumerPriorityTier::High).await;
-    let std_m = engine.effective_multiplier(std_id, ConsumerPriorityTier::Standard).await;
-    let low_m = engine.effective_multiplier(low_id, ConsumerPriorityTier::Low).await;
+    let high_m = engine
+        .effective_multiplier(high_id, ConsumerPriorityTier::High)
+        .await;
+    let std_m = engine
+        .effective_multiplier(std_id, ConsumerPriorityTier::Standard)
+        .await;
+    let low_m = engine
+        .effective_multiplier(low_id, ConsumerPriorityTier::Low)
+        .await;
 
     // High priority protected
-    assert!((high_m - 1.0).abs() < 1e-9, "high priority should be 1.0 in elevated mode");
+    assert!(
+        (high_m - 1.0).abs() < 1e-9,
+        "high priority should be 1.0 in elevated mode"
+    );
     // Standard < high
     assert!(std_m < high_m);
     // Low < standard
@@ -219,10 +232,8 @@ async fn test_hysteresis_prevents_immediate_relaxation() {
 #[tokio::test]
 async fn test_worker_starts_and_stops_cleanly() {
     use Bitmesh_backend::adaptive_rate_limit::{
-        engine::AdaptiveRateLimitEngine,
-        repository::AdaptiveRateLimitRepository,
-        signals::SignalCollector,
-        worker::AdaptiveRateLimitWorker,
+        engine::AdaptiveRateLimitEngine, repository::AdaptiveRateLimitRepository,
+        signals::SignalCollector, worker::AdaptiveRateLimitWorker,
     };
 
     let pool = test_db_pool().await;
@@ -235,7 +246,12 @@ async fn test_worker_starts_and_stops_cleanly() {
         cfg.rolling_window_size,
     ));
     let repo = AdaptiveRateLimitRepository::new(pool.clone());
-    let engine = Arc::new(AdaptiveRateLimitEngine::new(cfg, signals, cache, repo.clone()));
+    let engine = Arc::new(AdaptiveRateLimitEngine::new(
+        cfg,
+        signals,
+        cache,
+        repo.clone(),
+    ));
 
     let worker = AdaptiveRateLimitWorker::new(engine, repo);
     let (shutdown_tx, shutdown_rx) = watch::channel(false);

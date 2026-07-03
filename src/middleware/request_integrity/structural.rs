@@ -11,8 +11,12 @@ const MAX_MEMO_STRING: usize = 128;
 
 pub fn endpoint_max_body_size(endpoint: IntegrityEndpoint) -> usize {
     match endpoint {
-        IntegrityEndpoint::OnrampInitiate | IntegrityEndpoint::OfframpInitiate => MAX_SMALL_BODY_BYTES,
-        IntegrityEndpoint::BatchCngnTransfer | IntegrityEndpoint::BatchFiatPayout => MAX_BATCH_BODY_BYTES,
+        IntegrityEndpoint::OnrampInitiate | IntegrityEndpoint::OfframpInitiate => {
+            MAX_SMALL_BODY_BYTES
+        }
+        IntegrityEndpoint::BatchCngnTransfer | IntegrityEndpoint::BatchFiatPayout => {
+            MAX_BATCH_BODY_BYTES
+        }
     }
 }
 
@@ -67,9 +71,13 @@ fn validate_offramp_initiate(payload: &Value) -> Result<(), IntegrityError> {
     reject_unknown_fields(obj, &["quote_id", "wallet_address", "bank_details"])?;
     required_string(obj, "quote_id", MAX_STANDARD_STRING)?;
     required_string(obj, "wallet_address", 56)?;
-    let bank_details = obj
-        .get("bank_details")
-        .ok_or_else(|| IntegrityError::structural("MISSING_REQUIRED_FIELD", "Field 'bank_details' is required", Some("bank_details".to_string())))?;
+    let bank_details = obj.get("bank_details").ok_or_else(|| {
+        IntegrityError::structural(
+            "MISSING_REQUIRED_FIELD",
+            "Field 'bank_details' is required",
+            Some("bank_details".to_string()),
+        )
+    })?;
     let bank_obj = expect_object(bank_details, "bank_details")?;
     reject_unknown_fields(bank_obj, &["bank_code", "account_number", "account_name"])?;
     required_string(bank_obj, "bank_code", 8)?;
@@ -82,9 +90,13 @@ fn validate_batch_cngn(payload: &Value) -> Result<(), IntegrityError> {
     let obj = expect_object(payload, "request")?;
     reject_unknown_fields(obj, &["source_wallet", "transfers"])?;
     required_string(obj, "source_wallet", 56)?;
-    let transfers = obj
-        .get("transfers")
-        .ok_or_else(|| IntegrityError::structural("MISSING_REQUIRED_FIELD", "Field 'transfers' is required", Some("transfers".to_string())))?;
+    let transfers = obj.get("transfers").ok_or_else(|| {
+        IntegrityError::structural(
+            "MISSING_REQUIRED_FIELD",
+            "Field 'transfers' is required",
+            Some("transfers".to_string()),
+        )
+    })?;
     let items = expect_array(transfers, "transfers")?;
     for (index, item) in items.iter().enumerate() {
         let item_obj = expect_object(item, &format!("transfers[{index}]"))?;
@@ -99,13 +111,25 @@ fn validate_batch_cngn(payload: &Value) -> Result<(), IntegrityError> {
 fn validate_batch_fiat(payload: &Value) -> Result<(), IntegrityError> {
     let obj = expect_object(payload, "request")?;
     reject_unknown_fields(obj, &["payouts"])?;
-    let payouts = obj
-        .get("payouts")
-        .ok_or_else(|| IntegrityError::structural("MISSING_REQUIRED_FIELD", "Field 'payouts' is required", Some("payouts".to_string())))?;
+    let payouts = obj.get("payouts").ok_or_else(|| {
+        IntegrityError::structural(
+            "MISSING_REQUIRED_FIELD",
+            "Field 'payouts' is required",
+            Some("payouts".to_string()),
+        )
+    })?;
     let items = expect_array(payouts, "payouts")?;
     for (index, item) in items.iter().enumerate() {
         let item_obj = expect_object(item, &format!("payouts[{index}]"))?;
-        reject_unknown_fields(item_obj, &["bank_account_number", "bank_code", "amount_ngn", "reference"])?;
+        reject_unknown_fields(
+            item_obj,
+            &[
+                "bank_account_number",
+                "bank_code",
+                "amount_ngn",
+                "reference",
+            ],
+        )?;
         required_string(item_obj, "bank_account_number", 32)?;
         required_string(item_obj, "bank_code", 8)?;
         required_string(item_obj, "amount_ngn", 64)?;
@@ -229,7 +253,8 @@ mod tests {
             "extra": "boom"
         });
 
-        let error = validate_structure(IntegrityEndpoint::OnrampInitiate, &payload, 32).unwrap_err();
+        let error =
+            validate_structure(IntegrityEndpoint::OnrampInitiate, &payload, 32).unwrap_err();
         assert_eq!(error.code, "UNEXPECTED_FIELD");
     }
 
@@ -240,9 +265,9 @@ mod tests {
             "payment_provider": "paystack"
         });
 
-        let error = validate_structure(IntegrityEndpoint::OnrampInitiate, &payload, 32).unwrap_err();
+        let error =
+            validate_structure(IntegrityEndpoint::OnrampInitiate, &payload, 32).unwrap_err();
         assert_eq!(error.code, "MISSING_REQUIRED_FIELD");
         assert_eq!(error.field.as_deref(), Some("quote_id"));
     }
 }
-

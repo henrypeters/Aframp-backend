@@ -37,10 +37,8 @@ impl AuditStreamer {
 
         match self.pool.get().await {
             Ok(mut conn) => {
-                let r1: redis::RedisResult<i64> =
-                    conn.publish(AUDIT_CHANNEL_ALL, &payload).await;
-                let r2: redis::RedisResult<i64> =
-                    conn.publish(&category_channel, &payload).await;
+                let r1: redis::RedisResult<i64> = conn.publish(AUDIT_CHANNEL_ALL, &payload).await;
+                let r2: redis::RedisResult<i64> = conn.publish(&category_channel, &payload).await;
 
                 if r1.is_err() || r2.is_err() {
                     warn!(entry_id = %entry.id, "Pub/sub delivery failed; pushing to dead-letter");

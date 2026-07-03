@@ -1,10 +1,10 @@
 use crate::database::error::{DatabaseError, DatabaseErrorKind};
 use crate::database::repository::{Repository, TransactionalRepository};
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use serde_json::Value;
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
-use serde_json::Value;
-use chrono::{DateTime, Utc};
 
 /// Bill Payment entity extending a core transaction
 #[derive(Debug, Clone, FromRow)]
@@ -46,13 +46,11 @@ impl BillPaymentRepository {
         &self,
         transaction_id: Uuid,
     ) -> Result<Option<BillPayment>, DatabaseError> {
-        sqlx::query_as::<_, BillPayment>(
-            "SELECT * FROM bill_payments WHERE transaction_id = $1"
-        )
-        .bind(transaction_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(DatabaseError::from_sqlx)
+        sqlx::query_as::<_, BillPayment>("SELECT * FROM bill_payments WHERE transaction_id = $1")
+            .bind(transaction_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(DatabaseError::from_sqlx)
     }
 
     /// Create new bill payment details for a transaction
@@ -107,7 +105,10 @@ impl BillPaymentRepository {
     }
 
     /// Find bill payments that need processing
-    pub async fn find_pending_processing(&self, limit: i64) -> Result<Vec<BillPayment>, DatabaseError> {
+    pub async fn find_pending_processing(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<BillPayment>, DatabaseError> {
         sqlx::query_as::<_, BillPayment>(
             "SELECT * FROM bill_payments 
              WHERE status IN ('cngn_received', 'verifying_account', 'processing_bill', 'provider_processing', 'retry_scheduled')
@@ -131,22 +132,18 @@ impl Repository for BillPaymentRepository {
                 message: format!("Invalid UUID: {}", e),
             })
         })?;
-        sqlx::query_as::<_, BillPayment>(
-            "SELECT * FROM bill_payments WHERE id = $1"
-        )
-        .bind(uuid)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(DatabaseError::from_sqlx)
+        sqlx::query_as::<_, BillPayment>("SELECT * FROM bill_payments WHERE id = $1")
+            .bind(uuid)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(DatabaseError::from_sqlx)
     }
 
     async fn find_all(&self) -> Result<Vec<Self::Entity>, DatabaseError> {
-        sqlx::query_as::<_, BillPayment>(
-            "SELECT * FROM bill_payments ORDER BY created_at DESC"
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(DatabaseError::from_sqlx)
+        sqlx::query_as::<_, BillPayment>("SELECT * FROM bill_payments ORDER BY created_at DESC")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(DatabaseError::from_sqlx)
     }
 
     async fn insert(&self, entity: &Self::Entity) -> Result<Self::Entity, DatabaseError> {
@@ -181,7 +178,7 @@ impl Repository for BillPaymentRepository {
                  error_message = $13, refund_tx_hash = $14, account_verified = $15, 
                  verification_data = $16, updated_at = now() 
              WHERE id = $17 
-             RETURNING *"
+             RETURNING *",
         )
         .bind(entity.transaction_id)
         .bind(&entity.provider_name)
@@ -225,4 +222,3 @@ impl TransactionalRepository for BillPaymentRepository {
         &self.pool
     }
 }
-

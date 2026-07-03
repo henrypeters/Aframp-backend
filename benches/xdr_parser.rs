@@ -21,15 +21,15 @@ use Bitmesh_backend::chains::stellar::xdr_parser::{
 fn make_tx_v1_bytes() -> Vec<u8> {
     let mut buf = Vec::with_capacity(MIN_TX_V1_LEN + 16);
     buf.put_u32(ENVELOPE_TYPE_TX);
-    buf.put_u32(0);           // source account type: ED25519
-    buf.put_bytes(0x42, 32);  // source key
-    buf.put_u32(100);         // fee
-    buf.put_i64(9_999_999);   // sequence number
-    buf.put_u32(0);           // preconditions: NONE
-    buf.put_u32(0);           // memo: NONE
-    buf.put_u32(0);           // operations: 0
-    buf.put_u32(0);           // ext: 0
-    buf.put_u32(0);           // signatures: 0
+    buf.put_u32(0); // source account type: ED25519
+    buf.put_bytes(0x42, 32); // source key
+    buf.put_u32(100); // fee
+    buf.put_i64(9_999_999); // sequence number
+    buf.put_u32(0); // preconditions: NONE
+    buf.put_u32(0); // memo: NONE
+    buf.put_u32(0); // operations: 0
+    buf.put_u32(0); // ext: 0
+    buf.put_u32(0); // signatures: 0
     buf
 }
 

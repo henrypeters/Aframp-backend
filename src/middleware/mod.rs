@@ -29,6 +29,9 @@ pub mod rate_limit_metrics;
 pub mod replay_prevention;
 
 #[cfg(feature = "database")]
+pub mod rbac;
+
+#[cfg(feature = "database")]
 pub mod request_integrity;
 
 #[cfg(feature = "database")]
@@ -36,5 +39,3 @@ pub mod scope_middleware;
 
 pub mod cors;
 pub mod security;
-
-pub mod edge_cache;

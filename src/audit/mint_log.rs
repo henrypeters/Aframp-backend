@@ -8,7 +8,11 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::{sync::watch, task, time::{sleep, Duration}};
+use tokio::{
+    sync::watch,
+    task,
+    time::{sleep, Duration},
+};
 
 const DEFAULT_MINT_AUDIT_DIR: &str = "./mint_audit_logs";
 const MINT_AUDIT_FILENAME: &str = "mint_authorizations.log";
@@ -78,7 +82,8 @@ impl fmt::Debug for MintAuditStore {
 
 impl MintAuditStore {
     pub fn from_env() -> Result<Self, MintAuditError> {
-        let directory = std::env::var("MINT_AUDIT_LOG_DIR").unwrap_or_else(|_| DEFAULT_MINT_AUDIT_DIR.to_string());
+        let directory = std::env::var("MINT_AUDIT_LOG_DIR")
+            .unwrap_or_else(|_| DEFAULT_MINT_AUDIT_DIR.to_string());
         Self::new(PathBuf::from(directory))
     }
 
@@ -97,7 +102,8 @@ impl MintAuditStore {
     ) -> Result<MintAuditEntry, MintAuditError> {
         let path = self.log_path.clone();
         task::spawn_blocking(move || {
-            let previous_hash = last_entry_hash_sync(&path)?.unwrap_or_else(|| GENESIS_HASH.to_string());
+            let previous_hash =
+                last_entry_hash_sync(&path)?.unwrap_or_else(|| GENESIS_HASH.to_string());
             let timestamp = Utc::now();
             let content = MintAuditEntryContent {
                 actor_id: &actor_id,
@@ -135,7 +141,8 @@ impl MintAuditStore {
 
     pub async fn verify(self: Arc<Self>) -> Result<MintAuditVerificationResult, MintAuditError> {
         let path = self.log_path.clone();
-        task::spawn_blocking(move || verify_sync(&path)).await
+        task::spawn_blocking(move || verify_sync(&path))
+            .await
             .map_err(|e| MintAuditError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?
     }
 }
@@ -268,7 +275,8 @@ fn verify_sync(path: &Path) -> Result<MintAuditVerificationResult, MintAuditErro
             request_payload: &entry.request_payload,
         };
         let content_bytes = serde_json::to_vec(&content)?;
-        let expected_current_hash = sha256_hex(&[entry.previous_hash.as_bytes(), &content_bytes].concat());
+        let expected_current_hash =
+            sha256_hex(&[entry.previous_hash.as_bytes(), &content_bytes].concat());
         if expected_current_hash != entry.current_hash {
             tampered_entries.push(TamperedMintAuditEntry {
                 line_number,
@@ -303,16 +311,16 @@ mod tests {
     use std::sync::Arc;
     use uuid::Uuid;
 
-    fn create_temp_dir() -> PathBuf {
+    fn create_temp_dir() -> Result<PathBuf, std::io::Error> {
         let tmp = std::env::temp_dir().join(format!("mint_audit_tests_{}", Uuid::new_v4()));
-        fs::create_dir_all(&tmp).unwrap();
-        tmp
+        fs::create_dir_all(&tmp)?;
+        Ok(tmp)
     }
 
     #[tokio::test]
-    async fn append_and_verify_mint_audit_entry() {
-        let temp = create_temp_dir();
-        let store = Arc::new(MintAuditStore::new(temp).unwrap());
+    async fn append_and_verify_mint_audit_entry() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = create_temp_dir()?;
+        let store = Arc::new(MintAuditStore::new(temp)?);
 
         let payload = json!({"transaction_id": "tx-1", "amount_cngn": "1000"});
         let entry = store
@@ -323,23 +331,23 @@ mod tests {
                 "MINT_REQUESTED".to_string(),
                 payload,
             )
-            .await
-            .unwrap();
+            .await?;
 
         assert_eq!(entry.action_type, "MINT_REQUESTED");
         assert_eq!(entry.previous_hash, GENESIS_HASH.to_string());
         assert_eq!(entry.current_hash.len(), 64);
 
-        let verification = store.verify().await.unwrap();
+        let verification = store.verify().await?;
         assert!(verification.valid);
         assert_eq!(verification.total_checked, 1);
         assert_eq!(verification.tampered_entries.len(), 0);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn detect_tampering_in_mint_audit_log() {
-        let temp = create_temp_dir();
-        let store = Arc::new(MintAuditStore::new(temp).unwrap());
+    async fn detect_tampering_in_mint_audit_log() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = create_temp_dir()?;
+        let store = Arc::new(MintAuditStore::new(temp)?);
 
         let payload = json!({"transaction_id": "tx-1", "amount_cngn": "1000"});
         let _ = store
@@ -350,15 +358,15 @@ mod tests {
                 "MINT_REQUESTED".to_string(),
                 payload,
             )
-            .await
-            .unwrap();
+            .await?;
 
-        let mut contents = fs::read_to_string(store.log_path.clone()).unwrap();
+        let mut contents = fs::read_to_string(store.log_path.clone())?;
         contents = contents.replace("MINT_REQUESTED", "MINT_SUBMITTED");
-        fs::write(&store.log_path, contents).unwrap();
+        fs::write(&store.log_path, contents)?;
 
-        let result = store.verify().await.unwrap();
+        let result = store.verify().await?;
         assert!(!result.valid);
         assert!(!result.tampered_entries.is_empty());
+        Ok(())
     }
 }

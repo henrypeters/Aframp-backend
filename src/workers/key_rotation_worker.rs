@@ -33,7 +33,11 @@ impl KeyRotationWorker {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(86400), // 24 hours
         );
-        Self { service, grace_interval, notification_interval }
+        Self {
+            service,
+            grace_interval,
+            notification_interval,
+        }
     }
 
     pub async fn run(self, mut shutdown: watch::Receiver<bool>) {

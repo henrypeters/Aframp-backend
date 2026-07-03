@@ -1,4 +1,3 @@
--- migrate:up
 CREATE TABLE cngn_supply_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   total_issued NUMERIC(36, 18) NOT NULL,
@@ -21,7 +20,3 @@ CREATE TABLE cngn_whales (
 
 -- Index for time-series queries
 CREATE INDEX idx_cngn_supply_snapshots_captured_at ON cngn_supply_snapshots(captured_at);
-
--- migrate:down
-DROP TABLE cngn_whales;
-DROP TABLE cngn_supply_snapshots;

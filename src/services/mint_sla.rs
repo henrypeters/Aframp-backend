@@ -95,7 +95,12 @@ impl MintSlaService {
         let repo = Arc::new(MintRequestRepository::new(db.clone()));
         let notifier = MintSlaNotifier::new(http);
         let timebound_guard = MintTimeboundGuard::new(db.clone());
-        Self { db, repo, notifier, timebound_guard }
+        Self {
+            db,
+            repo,
+            notifier,
+            timebound_guard,
+        }
     }
 
     /// Run one full SLA evaluation cycle.
@@ -119,7 +124,10 @@ impl MintSlaService {
 
         for req in stalled {
             // Resolve any request that has left the pending state since last run
-            if !matches!(req.status.as_str(), "pending_approval" | "partially_approved") {
+            if !matches!(
+                req.status.as_str(),
+                "pending_approval" | "partially_approved"
+            ) {
                 if let Err(e) = self.resolve_sla(&req, run_id).await {
                     error!(mint_request_id = %req.mint_request_id, error = %e, "Failed to resolve SLA");
                     summary.errors += 1;
@@ -145,33 +153,27 @@ impl MintSlaService {
 
             match action {
                 SlaAction::None => {}
-                SlaAction::Warn => {
-                    match self.send_warning(&req, elapsed_hours, run_id).await {
-                        Ok(_) => summary.warned += 1,
-                        Err(e) => {
-                            error!(mint_request_id = %req.mint_request_id, error = %e, "SLA warning failed");
-                            summary.errors += 1;
-                        }
+                SlaAction::Warn => match self.send_warning(&req, elapsed_hours, run_id).await {
+                    Ok(_) => summary.warned += 1,
+                    Err(e) => {
+                        error!(mint_request_id = %req.mint_request_id, error = %e, "SLA warning failed");
+                        summary.errors += 1;
                     }
-                }
-                SlaAction::Escalate => {
-                    match self.escalate(&req, elapsed_hours, run_id).await {
-                        Ok(_) => summary.escalated += 1,
-                        Err(e) => {
-                            error!(mint_request_id = %req.mint_request_id, error = %e, "SLA escalation failed");
-                            summary.errors += 1;
-                        }
+                },
+                SlaAction::Escalate => match self.escalate(&req, elapsed_hours, run_id).await {
+                    Ok(_) => summary.escalated += 1,
+                    Err(e) => {
+                        error!(mint_request_id = %req.mint_request_id, error = %e, "SLA escalation failed");
+                        summary.errors += 1;
                     }
-                }
-                SlaAction::Expire => {
-                    match self.expire_request(&req, run_id).await {
-                        Ok(_) => summary.expired += 1,
-                        Err(e) => {
-                            error!(mint_request_id = %req.mint_request_id, error = %e, "SLA expiration failed");
-                            summary.errors += 1;
-                        }
+                },
+                SlaAction::Expire => match self.expire_request(&req, run_id).await {
+                    Ok(_) => summary.expired += 1,
+                    Err(e) => {
+                        error!(mint_request_id = %req.mint_request_id, error = %e, "SLA expiration failed");
+                        summary.errors += 1;
                     }
-                }
+                },
             }
         }
 
@@ -236,9 +238,7 @@ impl MintSlaService {
             .map_err(|e| format!("Audit log failed: {e}"))?;
 
         // Dispatch notifications (non-blocking)
-        self.notifier
-            .send_warning(req, elapsed_hours)
-            .await;
+        self.notifier.send_warning(req, elapsed_hours).await;
 
         info!(
             mint_request_id = %req.mint_request_id,
@@ -326,15 +326,15 @@ impl MintSlaService {
     /// Auto-expire a request at 24 hours.
     /// Marks the mint_request status as 'expired' and the SLA stage as 'expired'.
     /// EXPIRED requests cannot be re-approved without fresh re-submission (#123).
-    async fn expire_request(
-        &self,
-        req: &StalledRequest,
-        run_id: Uuid,
-    ) -> Result<(), String> {
+    async fn expire_request(&self, req: &StalledRequest, run_id: Uuid) -> Result<(), String> {
         let elapsed_hours = (Utc::now() - req.created_at).num_hours();
 
         // Atomic: update both tables in a transaction
-        let mut tx = self.db.begin().await.map_err(|e| format!("TX begin failed: {e}"))?;
+        let mut tx = self
+            .db
+            .begin()
+            .await
+            .map_err(|e| format!("TX begin failed: {e}"))?;
 
         // 1. Expire the mint request itself (guard: only if still in pending state)
         let req_updated = sqlx::query!(
@@ -402,7 +402,9 @@ impl MintSlaService {
         .await
         .map_err(|e| format!("Escalation log failed: {e}"))?;
 
-        tx.commit().await.map_err(|e| format!("TX commit failed: {e}"))?;
+        tx.commit()
+            .await
+            .map_err(|e| format!("TX commit failed: {e}"))?;
 
         self.notifier.send_expiration(req, elapsed_hours).await;
 
@@ -481,18 +483,18 @@ impl MintSlaService {
         run_id: Uuid,
         metadata: serde_json::Value,
     ) -> Result<(), String> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO mint_escalation_log
                 (mint_request_id, action, elapsed_hours, notified_targets, metadata, worker_run_id)
             VALUES ($1, $2::escalation_action, $3, '[]', $4, $5)
-            "#,
-            mint_request_id,
-            action,
-            elapsed_hours as f64,
-            metadata,
-            run_id,
+            "#
         )
+        .bind(mint_request_id)
+        .bind(action)
+        .bind(elapsed_hours as f64)
+        .bind(metadata)
+        .bind(run_id)
         .execute(&self.db)
         .await
         .map_err(|e| format!("Escalation log insert failed: {e}"))?;
@@ -514,7 +516,10 @@ mod tests {
     #[test]
     fn sla_action_warn_at_4h() {
         assert_eq!(SlaAction::from_elapsed_hours(4, "pending"), SlaAction::Warn);
-        assert_eq!(SlaAction::from_elapsed_hours(11, "pending"), SlaAction::Warn);
+        assert_eq!(
+            SlaAction::from_elapsed_hours(11, "pending"),
+            SlaAction::Warn
+        );
     }
 
     #[test]
@@ -525,27 +530,54 @@ mod tests {
 
     #[test]
     fn sla_action_escalate_at_12h() {
-        assert_eq!(SlaAction::from_elapsed_hours(12, "warned"), SlaAction::Escalate);
-        assert_eq!(SlaAction::from_elapsed_hours(23, "warned"), SlaAction::Escalate);
+        assert_eq!(
+            SlaAction::from_elapsed_hours(12, "warned"),
+            SlaAction::Escalate
+        );
+        assert_eq!(
+            SlaAction::from_elapsed_hours(23, "warned"),
+            SlaAction::Escalate
+        );
         // Also escalates if warning was skipped (e.g. worker was down)
-        assert_eq!(SlaAction::from_elapsed_hours(12, "pending"), SlaAction::Escalate);
+        assert_eq!(
+            SlaAction::from_elapsed_hours(12, "pending"),
+            SlaAction::Escalate
+        );
     }
 
     #[test]
     fn sla_action_no_double_escalate() {
-        assert_eq!(SlaAction::from_elapsed_hours(15, "escalated"), SlaAction::None);
+        assert_eq!(
+            SlaAction::from_elapsed_hours(15, "escalated"),
+            SlaAction::None
+        );
     }
 
     #[test]
     fn sla_action_expire_at_24h() {
-        assert_eq!(SlaAction::from_elapsed_hours(24, "escalated"), SlaAction::Expire);
-        assert_eq!(SlaAction::from_elapsed_hours(48, "warned"), SlaAction::Expire);
-        assert_eq!(SlaAction::from_elapsed_hours(24, "pending"), SlaAction::Expire);
+        assert_eq!(
+            SlaAction::from_elapsed_hours(24, "escalated"),
+            SlaAction::Expire
+        );
+        assert_eq!(
+            SlaAction::from_elapsed_hours(48, "warned"),
+            SlaAction::Expire
+        );
+        assert_eq!(
+            SlaAction::from_elapsed_hours(24, "pending"),
+            SlaAction::Expire
+        );
     }
 
     #[test]
     fn sla_action_none_if_already_expired() {
-        assert_eq!(SlaAction::from_elapsed_hours(48, "expired"), SlaAction::None);
-        assert_eq!(SlaAction::from_elapsed_hours(48, "resolved"), SlaAction::None);
+        assert_eq!(
+            SlaAction::from_elapsed_hours(48, "expired"),
+            SlaAction::None
+        );
+        assert_eq!(
+            SlaAction::from_elapsed_hours(48, "resolved"),
+            SlaAction::None
+        );
     }
 }

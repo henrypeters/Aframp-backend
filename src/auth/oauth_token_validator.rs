@@ -181,7 +181,10 @@ impl OAuthTokenValidator {
     }
 
     /// Check if token is revoked
-    async fn check_revocation(&self, claims: &OAuthTokenClaims) -> Result<(), TokenValidationError> {
+    async fn check_revocation(
+        &self,
+        claims: &OAuthTokenClaims,
+    ) -> Result<(), TokenValidationError> {
         // Check cache first (fast path)
         if let Some(cache) = &self.cache {
             let cache_key = format!("token_revoked:{}", claims.jti);

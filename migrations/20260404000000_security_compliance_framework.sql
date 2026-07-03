@@ -6,19 +6,36 @@
 -- Vulnerability registry
 -- ---------------------------------------------------------------------------
 
-CREATE TYPE vuln_severity AS ENUM ('critical', 'high', 'medium', 'low', 'informational');
-CREATE TYPE vuln_status    AS ENUM ('open', 'acknowledged', 'resolved', 'risk_accepted');
-CREATE TYPE vuln_source    AS ENUM (
-    'cargo_audit',
-    'sast',
-    'container_scan',
-    'secrets_detection',
-    'owasp_api',
-    'infra_config',
-    'manual'
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'vuln_severity') THEN
+        CREATE TYPE vuln_severity AS ENUM ('critical', 'high', 'medium', 'low', 'informational');
+    END IF;
+END $$;
 
-CREATE TABLE security_vulnerabilities (
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'vuln_status') THEN
+        CREATE TYPE vuln_status AS ENUM ('open', 'acknowledged', 'resolved', 'risk_accepted');
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'vuln_source') THEN
+        CREATE TYPE vuln_source AS ENUM (
+            'cargo_audit',
+            'sast',
+            'container_scan',
+            'secrets_detection',
+            'owasp_api',
+            'infra_config',
+            'manual'
+        );
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS security_vulnerabilities (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title               TEXT NOT NULL,
     description         TEXT NOT NULL,
@@ -52,16 +69,16 @@ CREATE TABLE security_vulnerabilities (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_vulns_status_severity ON security_vulnerabilities (status, severity);
-CREATE INDEX idx_vulns_source          ON security_vulnerabilities (source);
-CREATE INDEX idx_vulns_sla_deadline    ON security_vulnerabilities (sla_deadline) WHERE status = 'open';
-CREATE INDEX idx_vulns_discovered_at   ON security_vulnerabilities (discovered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_vulns_status_severity ON security_vulnerabilities (status, severity);
+CREATE INDEX IF NOT EXISTS idx_vulns_source          ON security_vulnerabilities (source);
+CREATE INDEX IF NOT EXISTS idx_vulns_sla_deadline    ON security_vulnerabilities (sla_deadline) WHERE status = 'open';
+CREATE INDEX IF NOT EXISTS idx_vulns_discovered_at   ON security_vulnerabilities (discovered_at DESC);
 
 -- ---------------------------------------------------------------------------
 -- Vulnerability status history (immutable audit trail)
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE security_vulnerability_history (
+CREATE TABLE IF NOT EXISTS security_vulnerability_history (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     vuln_id     UUID NOT NULL REFERENCES security_vulnerabilities(id) ON DELETE CASCADE,
     old_status  vuln_status,
@@ -71,13 +88,13 @@ CREATE TABLE security_vulnerability_history (
     changed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_vuln_history_vuln_id ON security_vulnerability_history (vuln_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_vuln_history_vuln_id ON security_vulnerability_history (vuln_id, changed_at DESC);
 
 -- ---------------------------------------------------------------------------
 -- Vulnerability allowlist (acknowledged false positives / accepted risks)
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE security_vuln_allowlist (
+CREATE TABLE IF NOT EXISTS security_vuln_allowlist (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     identifier      TEXT NOT NULL UNIQUE,   -- e.g. RUSTSEC-2024-0001 or CVE-2024-12345
     source          vuln_source NOT NULL,
@@ -87,14 +104,14 @@ CREATE TABLE security_vuln_allowlist (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_allowlist_identifier ON security_vuln_allowlist (identifier);
-CREATE INDEX idx_allowlist_expiry     ON security_vuln_allowlist (expiry_date);
+CREATE INDEX IF NOT EXISTS idx_security_vuln_allowlist_identifier ON security_vuln_allowlist (identifier);
+CREATE INDEX IF NOT EXISTS idx_security_vuln_allowlist_expiry     ON security_vuln_allowlist (expiry_date);
 
 -- ---------------------------------------------------------------------------
 -- Compliance posture snapshots (daily)
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE security_posture_snapshots (
+CREATE TABLE IF NOT EXISTS security_posture_snapshots (
     id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     snapshot_date           DATE NOT NULL UNIQUE,
     posture_score           NUMERIC(5,2) NOT NULL,  -- 0.00 – 100.00
@@ -108,13 +125,13 @@ CREATE TABLE security_posture_snapshots (
     computed_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_posture_date ON security_posture_snapshots (snapshot_date DESC);
+CREATE INDEX IF NOT EXISTS idx_posture_date ON security_posture_snapshots (snapshot_date DESC);
 
 -- ---------------------------------------------------------------------------
 -- Compliance reports (monthly)
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE security_compliance_reports (
+CREATE TABLE IF NOT EXISTS security_compliance_reports (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     report_period_start DATE NOT NULL,
     report_period_end   DATE NOT NULL,
@@ -128,24 +145,34 @@ CREATE TABLE security_compliance_reports (
     generated_by        TEXT NOT NULL DEFAULT 'system'
 );
 
-CREATE INDEX idx_compliance_reports_period ON security_compliance_reports (report_period_start DESC);
+CREATE INDEX IF NOT EXISTS idx_compliance_reports_period ON security_compliance_reports (report_period_start DESC);
 
 -- ---------------------------------------------------------------------------
 -- Scan run log (tracks every CI/scheduled scan execution)
 -- ---------------------------------------------------------------------------
 
-CREATE TYPE scan_type AS ENUM (
-    'dependency',
-    'sast',
-    'container',
-    'secrets',
-    'owasp_api',
-    'infra_config'
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'scan_type') THEN
+        CREATE TYPE scan_type AS ENUM (
+            'dependency',
+            'sast',
+            'container',
+            'secrets',
+            'owasp_api',
+            'infra_config'
+        );
+    END IF;
+END $$;
 
-CREATE TYPE scan_result AS ENUM ('passed', 'failed', 'error');
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'scan_result') THEN
+        CREATE TYPE scan_result AS ENUM ('passed', 'failed', 'error');
+    END IF;
+END $$;
 
-CREATE TABLE security_scan_runs (
+CREATE TABLE IF NOT EXISTS security_scan_runs (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     scan_type       scan_type NOT NULL,
     result          scan_result NOT NULL,
@@ -159,4 +186,4 @@ CREATE TABLE security_scan_runs (
     completed_at    TIMESTAMPTZ
 );
 
-CREATE INDEX idx_scan_runs_type_started ON security_scan_runs (scan_type, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scan_runs_type_started ON security_scan_runs (scan_type, started_at DESC);

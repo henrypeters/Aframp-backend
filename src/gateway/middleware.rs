@@ -102,11 +102,7 @@ pub async fn gateway_middleware(
         return rate_limit_response();
     }
 
-    if let Some(key) = req
-        .headers()
-        .get("x-api-key")
-        .and_then(|v| v.to_str().ok())
-    {
+    if let Some(key) = req.headers().get("x-api-key").and_then(|v| v.to_str().ok()) {
         let prefix = api_key_prefix(key).to_string();
         if state.rate_limiter.check_key_prefix(&prefix).is_err() {
             record_rejection("gateway_rate_limit_key");
@@ -162,7 +158,9 @@ fn rejection_response(reason: RejectionReason) -> Response<Body> {
             "body_too_large",
             "Request body exceeds maximum allowed size",
         ),
-        RejectionReason::MalformedUrl | RejectionReason::PathTraversal | RejectionReason::NullByteInPath => (
+        RejectionReason::MalformedUrl
+        | RejectionReason::PathTraversal
+        | RejectionReason::NullByteInPath => (
             StatusCode::BAD_REQUEST,
             "invalid_url",
             "Request URL is invalid",
@@ -188,7 +186,9 @@ fn rejection_response(reason: RejectionReason) -> Response<Body> {
 }
 
 fn rate_limit_response() -> Response<Body> {
-    let body = json!({"error": {"code": "gateway_rate_limit_exceeded", "message": "Too many requests"}}).to_string();
+    let body =
+        json!({"error": {"code": "gateway_rate_limit_exceeded", "message": "Too many requests"}})
+            .to_string();
     Response::builder()
         .status(StatusCode::TOO_MANY_REQUESTS)
         .header("content-type", "application/json")

@@ -11,8 +11,8 @@ use crate::audit::writer::AuditWriter;
 use crate::error::{AppError, AppErrorKind, DomainError};
 use bigdecimal::BigDecimal;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tracing::{error, warn};
 
 const MIN_RESERVE_RATIO: f64 = 1.0;
@@ -49,7 +49,9 @@ pub struct AlertClient {
 
 impl AlertClient {
     pub fn new() -> Self {
-        Self { http: reqwest::Client::new() }
+        Self {
+            http: reqwest::Client::new(),
+        }
     }
 
     pub async fn send_reserve_warning(&self, ratio: f64, snapshot: &CollateralSnapshot) {
@@ -71,9 +73,12 @@ impl AlertClient {
                 "event_action": "trigger",
                 "payload": { "summary": msg, "severity": "warning", "source": "reserve-gatekeeper" }
             });
-            if let Err(e) = self.http
+            if let Err(e) = self
+                .http
                 .post("https://events.pagerduty.com/v2/enqueue")
-                .json(&payload).send().await
+                .json(&payload)
+                .send()
+                .await
             {
                 error!(error = %e, "Failed to send PagerDuty reserve warning");
             }
@@ -111,8 +116,11 @@ impl ReserveGatekeeper {
     ) -> Result<(), AppError> {
         if !self.mint_enabled.load(Ordering::SeqCst) {
             warn!("Mint attempt blocked: circuit breaker is open");
-            self.audit_blocked_mint(snapshot, mint_amount, actor_id, "circuit_breaker_open").await;
-            return Err(AppError::new(AppErrorKind::Domain(DomainError::MintDisabled)));
+            self.audit_blocked_mint(snapshot, mint_amount, actor_id, "circuit_breaker_open")
+                .await;
+            return Err(AppError::new(AppErrorKind::Domain(
+                DomainError::MintDisabled,
+            )));
         }
 
         let post_ratio = snapshot.ratio_after_mint(mint_amount);
@@ -120,20 +128,30 @@ impl ReserveGatekeeper {
         if post_ratio < MIN_RESERVE_RATIO {
             warn!(post_ratio = post_ratio, mint_amount = %mint_amount, "Mint rejected: post-mint ratio breaches 1:1 minimum");
             self.audit_blocked_mint(
-                snapshot, mint_amount, actor_id,
+                snapshot,
+                mint_amount,
+                actor_id,
                 &format!("reserve_insufficient: post_ratio={:.6}", post_ratio),
-            ).await;
-            return Err(AppError::new(AppErrorKind::Domain(DomainError::ReserveInsufficient {
-                total_reserves: snapshot.total_reserves.to_string(),
-                total_supply: snapshot.total_supply.to_string(),
-                mint_amount: mint_amount.to_string(),
-                ratio: format!("{:.6}", post_ratio),
-            })));
+            )
+            .await;
+            return Err(AppError::new(AppErrorKind::Domain(
+                DomainError::ReserveInsufficient {
+                    total_reserves: snapshot.total_reserves.to_string(),
+                    total_supply: snapshot.total_supply.to_string(),
+                    mint_amount: mint_amount.to_string(),
+                    ratio: format!("{:.6}", post_ratio),
+                },
+            )));
         }
 
         if post_ratio < WARNING_THRESHOLD {
-            warn!(post_ratio = post_ratio, "Reserve ratio below warning threshold after proposed mint");
-            self.alert_client.send_reserve_warning(post_ratio, snapshot).await;
+            warn!(
+                post_ratio = post_ratio,
+                "Reserve ratio below warning threshold after proposed mint"
+            );
+            self.alert_client
+                .send_reserve_warning(post_ratio, snapshot)
+                .await;
         }
 
         Ok(())
@@ -143,27 +161,36 @@ impl ReserveGatekeeper {
         let ratio = snapshot.ratio();
 
         if ratio < MIN_RESERVE_RATIO {
-            error!(ratio = ratio, "Reserve ratio below 1.0 - disabling minting (circuit breaker tripped)");
+            error!(
+                ratio = ratio,
+                "Reserve ratio below 1.0 - disabling minting (circuit breaker tripped)"
+            );
             self.mint_enabled.store(false, Ordering::SeqCst);
-            self.alert_client.send_reserve_warning(ratio, snapshot).await;
+            self.alert_client
+                .send_reserve_warning(ratio, snapshot)
+                .await;
             return;
         }
 
         if ratio < WARNING_THRESHOLD {
             warn!(ratio = ratio, "Reserve ratio in warning zone (<1.05)");
-            self.alert_client.send_reserve_warning(ratio, snapshot).await;
+            self.alert_client
+                .send_reserve_warning(ratio, snapshot)
+                .await;
         }
     }
 
     pub fn emergency_reset(&self, snapshot: &CollateralSnapshot) -> Result<(), AppError> {
         let ratio = snapshot.ratio();
         if ratio < MIN_RESERVE_RATIO {
-            return Err(AppError::new(AppErrorKind::Domain(DomainError::ReserveInsufficient {
-                total_reserves: snapshot.total_reserves.to_string(),
-                total_supply: snapshot.total_supply.to_string(),
-                mint_amount: "0".to_string(),
-                ratio: format!("{:.6}", ratio),
-            })));
+            return Err(AppError::new(AppErrorKind::Domain(
+                DomainError::ReserveInsufficient {
+                    total_reserves: snapshot.total_reserves.to_string(),
+                    total_supply: snapshot.total_supply.to_string(),
+                    mint_amount: "0".to_string(),
+                    ratio: format!("{:.6}", ratio),
+                },
+            )));
         }
         self.mint_enabled.store(true, Ordering::SeqCst);
         tracing::info!(ratio = ratio, "Minting re-enabled via emergency reset");
@@ -177,7 +204,9 @@ impl ReserveGatekeeper {
         actor_id: Option<&str>,
         reason: &str,
     ) {
-        let Some(writer) = &self.audit_writer else { return; };
+        let Some(writer) = &self.audit_writer else {
+            return;
+        };
 
         let entry = PendingAuditEntry {
             event_type: "mint.blocked".to_string(),
@@ -211,11 +240,11 @@ mod tests {
     use super::*;
     use bigdecimal::BigDecimal;
 
-    fn snapshot(reserves: &str, supply: &str) -> CollateralSnapshot {
-        CollateralSnapshot {
-            total_reserves: BigDecimal::from_str(reserves).unwrap(),
-            total_supply: BigDecimal::from_str(supply).unwrap(),
-        }
+    fn snapshot(reserves: &str, supply: &str) -> Result<CollateralSnapshot, Box<dyn std::error::Error>> {
+        Ok(CollateralSnapshot {
+            total_reserves: BigDecimal::from_str(reserves)?,
+            total_supply: BigDecimal::from_str(supply)?,
+        })
     }
 
     fn gatekeeper() -> ReserveGatekeeper {
@@ -223,115 +252,157 @@ mod tests {
     }
 
     #[test]
-    fn ratio_is_correct() {
-        let s = snapshot("1050000", "1000000");
+    fn ratio_is_correct() -> Result<(), Box<dyn std::error::Error>> {
+        let s = snapshot("1050000", "1000000")?;
         assert!((s.ratio() - 1.05).abs() < 1e-9);
+        Ok(())
     }
 
     #[test]
-    fn ratio_after_mint_accounts_for_new_supply() {
-        let s = snapshot("1050000", "1000000");
-        let ratio = s.ratio_after_mint(&BigDecimal::from_str("50000").unwrap());
+    fn ratio_after_mint_accounts_for_new_supply() -> Result<(), Box<dyn std::error::Error>> {
+        let s = snapshot("1050000", "1000000")?;
+        let ratio = s.ratio_after_mint(&BigDecimal::from_str("50000")?);
         assert!((ratio - 1.0).abs() < 1e-9);
+        Ok(())
     }
 
     #[test]
-    fn ratio_is_infinity_when_supply_is_zero() {
-        let s = snapshot("1000000", "0");
+    fn ratio_is_infinity_when_supply_is_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let s = snapshot("1000000", "0")?;
         assert_eq!(s.ratio(), f64::INFINITY);
+        Ok(())
     }
 
     #[test]
-    fn ratio_after_mint_is_infinity_when_supply_and_mint_are_zero() {
-        let s = snapshot("1000000", "0");
-        let ratio = s.ratio_after_mint(&BigDecimal::from_str("0").unwrap());
+    fn ratio_after_mint_is_infinity_when_supply_and_mint_are_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let s = snapshot("1000000", "0")?;
+        let ratio = s.ratio_after_mint(&BigDecimal::from_str("0")?);
         assert_eq!(ratio, f64::INFINITY);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn circuit_breaker_blocks_mint_even_when_reserves_are_sufficient() {
+    async fn circuit_breaker_blocks_mint_even_when_reserves_are_sufficient() -> Result<(), Box<dyn std::error::Error>> {
         let gk = gatekeeper();
         gk.mint_enabled.store(false, Ordering::SeqCst);
-        let s = snapshot("2000000", "1000000");
-        let result = gk.check_mint(&s, &BigDecimal::from_str("1").unwrap(), None).await;
-        assert!(matches!(result, Err(AppError { kind: AppErrorKind::Domain(DomainError::MintDisabled), .. })));
+        let s = snapshot("2000000", "1000000")?;
+        let result = gk
+            .check_mint(&s, &BigDecimal::from_str("1")?, None)
+            .await;
+        assert!(matches!(
+            result,
+            Err(AppError {
+                kind: AppErrorKind::Domain(DomainError::MintDisabled),
+                ..
+            })
+        ));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn mint_is_rejected_when_post_ratio_breaches_minimum() {
+    async fn mint_is_rejected_when_post_ratio_breaches_minimum() -> Result<(), Box<dyn std::error::Error>> {
         let gk = gatekeeper();
-        let s = snapshot("1000000", "1000000");
-        let result = gk.check_mint(&s, &BigDecimal::from_str("1").unwrap(), None).await;
-        assert!(matches!(result, Err(AppError { kind: AppErrorKind::Domain(DomainError::ReserveInsufficient { .. }), .. })));
+        let s = snapshot("1000000", "1000000")?;
+        let result = gk
+            .check_mint(&s, &BigDecimal::from_str("1")?, None)
+            .await;
+        assert!(matches!(
+            result,
+            Err(AppError {
+                kind: AppErrorKind::Domain(DomainError::ReserveInsufficient { .. }),
+                ..
+            })
+        ));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn mint_is_allowed_when_ratio_stays_above_minimum() {
+    async fn mint_is_allowed_when_ratio_stays_above_minimum() -> Result<(), Box<dyn std::error::Error>> {
         let gk = gatekeeper();
-        let s = snapshot("1100000", "1000000");
-        let result = gk.check_mint(&s, &BigDecimal::from_str("50000").unwrap(), None).await;
+        let s = snapshot("1100000", "1000000")?;
+        let result = gk
+            .check_mint(&s, &BigDecimal::from_str("50000")?, None)
+            .await;
         assert!(result.is_ok());
+        Ok(())
     }
 
     #[tokio::test]
-    async fn check_mint_allows_mint_in_warning_zone() {
+    async fn check_mint_allows_mint_in_warning_zone() -> Result<(), Box<dyn std::error::Error>> {
         let gk = gatekeeper();
         // ratio after mint ~1.0495 - below warning threshold but above minimum
-        let s = snapshot("1060000", "1000000");
-        let result = gk.check_mint(&s, &BigDecimal::from_str("10000").unwrap(), None).await;
+        let s = snapshot("1060000", "1000000")?;
+        let result = gk
+            .check_mint(&s, &BigDecimal::from_str("10000")?, None)
+            .await;
         assert!(result.is_ok());
+        Ok(())
     }
 
     #[tokio::test]
-    async fn check_mint_with_actor_id_records_blocked_attempt() {
+    async fn check_mint_with_actor_id_records_blocked_attempt() -> Result<(), Box<dyn std::error::Error>> {
         let gk = gatekeeper();
-        let s = snapshot("1000000", "1000000");
-        let result = gk.check_mint(&s, &BigDecimal::from_str("1").unwrap(), Some("admin-007")).await;
+        let s = snapshot("1000000", "1000000")?;
+        let result = gk
+            .check_mint(&s, &BigDecimal::from_str("1")?, Some("admin-007"))
+            .await;
         assert!(result.is_err());
+        Ok(())
     }
 
     #[tokio::test]
-    async fn emergency_reset_fails_when_ratio_still_below_minimum() {
+    async fn emergency_reset_fails_when_ratio_still_below_minimum() -> Result<(), Box<dyn std::error::Error>> {
         let gk = gatekeeper();
         gk.mint_enabled.store(false, Ordering::SeqCst);
-        let s = snapshot("900000", "1000000");
+        let s = snapshot("900000", "1000000")?;
         let result = gk.emergency_reset(&s);
-        assert!(matches!(result, Err(AppError { kind: AppErrorKind::Domain(DomainError::ReserveInsufficient { .. }), .. })));
+        assert!(matches!(
+            result,
+            Err(AppError {
+                kind: AppErrorKind::Domain(DomainError::ReserveInsufficient { .. }),
+                ..
+            })
+        ));
         assert!(!gk.mint_enabled.load(Ordering::SeqCst));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn emergency_reset_succeeds_when_ratio_is_restored() {
+    async fn emergency_reset_succeeds_when_ratio_is_restored() -> Result<(), Box<dyn std::error::Error>> {
         let gk = gatekeeper();
         gk.mint_enabled.store(false, Ordering::SeqCst);
-        let s = snapshot("1100000", "1000000");
+        let s = snapshot("1100000", "1000000")?;
         assert!(gk.emergency_reset(&s).is_ok());
         assert!(gk.mint_enabled.load(Ordering::SeqCst));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn evaluate_ratio_trips_circuit_breaker_below_minimum() {
+    async fn evaluate_ratio_trips_circuit_breaker_below_minimum() -> Result<(), Box<dyn std::error::Error>> {
         let gk = gatekeeper();
         assert!(gk.mint_enabled.load(Ordering::SeqCst));
-        let s = snapshot("900000", "1000000");
+        let s = snapshot("900000", "1000000")?;
         gk.evaluate_ratio(&s).await;
         assert!(!gk.mint_enabled.load(Ordering::SeqCst));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn evaluate_ratio_does_not_trip_breaker_in_warning_zone() {
+    async fn evaluate_ratio_does_not_trip_breaker_in_warning_zone() -> Result<(), Box<dyn std::error::Error>> {
         let gk = gatekeeper();
-        let s = snapshot("1020000", "1000000");
+        let s = snapshot("1020000", "1000000")?;
         gk.evaluate_ratio(&s).await;
         assert!(gk.mint_enabled.load(Ordering::SeqCst));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn evaluate_ratio_does_nothing_when_healthy() {
+    async fn evaluate_ratio_does_nothing_when_healthy() -> Result<(), Box<dyn std::error::Error>> {
         let gk = gatekeeper();
-        let s = snapshot("1200000", "1000000");
+        let s = snapshot("1200000", "1000000")?;
         gk.evaluate_ratio(&s).await;
         assert!(gk.mint_enabled.load(Ordering::SeqCst));
+        Ok(())
     }
 
     #[test]

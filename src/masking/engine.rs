@@ -30,7 +30,11 @@ impl MaskingStrategy {
                 if value.len() <= *n {
                     "*".repeat(value.len())
                 } else {
-                    format!("{}{}", "*".repeat(value.len() - n), &value[value.len() - n..])
+                    format!(
+                        "{}{}",
+                        "*".repeat(value.len() - n),
+                        &value[value.len() - n..]
+                    )
                 }
             }
             Self::PartialPrefix(n) => {
@@ -56,21 +60,51 @@ fn sensitive_fields() -> &'static HashSet<&'static str> {
     SENSITIVE_FIELDS.get_or_init(|| {
         [
             // Auth / credentials
-            "password", "passwd", "secret", "token", "access_token", "refresh_token",
-            "id_token", "authorization", "api_key", "apikey", "client_secret",
+            "password",
+            "passwd",
+            "secret",
+            "token",
+            "access_token",
+            "refresh_token",
+            "id_token",
+            "authorization",
+            "api_key",
+            "apikey",
+            "client_secret",
             // Crypto key material
-            "private_key", "privatekey", "seed", "mnemonic", "signing_key",
-            "wallet_secret", "secret_key",
+            "private_key",
+            "privatekey",
+            "seed",
+            "mnemonic",
+            "signing_key",
+            "wallet_secret",
+            "secret_key",
             // Government IDs
-            "nin", "bvn", "ssn", "passport_number", "id_number", "document_number",
+            "nin",
+            "bvn",
+            "ssn",
+            "passport_number",
+            "id_number",
+            "document_number",
             "national_id",
             // Financial identifiers
-            "account_number", "card_number", "cvv", "pin", "iban", "sort_code",
-            "routing_number", "bank_account",
+            "account_number",
+            "card_number",
+            "cvv",
+            "pin",
+            "iban",
+            "sort_code",
+            "routing_number",
+            "bank_account",
             // Contact PII
-            "email", "phone", "phone_number", "mobile", "address",
+            "email",
+            "phone",
+            "phone_number",
+            "mobile",
+            "address",
             // cNGN wallet
-            "wallet_private_key", "stellar_secret",
+            "wallet_private_key",
+            "stellar_secret",
         ]
         .into_iter()
         .collect()
@@ -172,17 +206,26 @@ mod unit_tests {
 
     #[test]
     fn test_full_redaction() {
-        assert_eq!(MaskingStrategy::FullRedaction.apply("secret123"), "[REDACTED]");
+        assert_eq!(
+            MaskingStrategy::FullRedaction.apply("secret123"),
+            "[REDACTED]"
+        );
     }
 
     #[test]
     fn test_partial_suffix_4() {
-        assert_eq!(MaskingStrategy::PartialSuffix(4).apply("1234567890123456"), "************3456");
+        assert_eq!(
+            MaskingStrategy::PartialSuffix(4).apply("1234567890123456"),
+            "************3456"
+        );
     }
 
     #[test]
     fn test_partial_suffix_3() {
-        assert_eq!(MaskingStrategy::PartialSuffix(3).apply("08012345678"), "********678");
+        assert_eq!(
+            MaskingStrategy::PartialSuffix(3).apply("08012345678"),
+            "********678"
+        );
     }
 
     #[test]

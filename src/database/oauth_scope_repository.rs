@@ -89,13 +89,12 @@ impl OAuthScopeRepository {
 
     /// Get scope by name
     pub async fn get_scope(&self, name: &str) -> DbResult<Option<OAuthScopeEntity>> {
-        let scope = sqlx::query_as::<_, OAuthScopeEntity>(
-            "SELECT * FROM oauth_scopes WHERE name = $1",
-        )
-        .bind(name)
-        .fetch_optional(self.db.pool())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+        let scope =
+            sqlx::query_as::<_, OAuthScopeEntity>("SELECT * FROM oauth_scopes WHERE name = $1")
+                .bind(name)
+                .fetch_optional(self.db.pool())
+                .await
+                .map_err(DatabaseError::from_sqlx)?;
 
         Ok(scope)
     }
@@ -138,11 +137,7 @@ impl OAuthScopeRepository {
     }
 
     /// Update scope sensitivity
-    pub async fn update_scope_sensitivity(
-        &self,
-        name: &str,
-        is_sensitive: bool,
-    ) -> DbResult<bool> {
+    pub async fn update_scope_sensitivity(&self, name: &str, is_sensitive: bool) -> DbResult<bool> {
         let now = Utc::now();
 
         let result = sqlx::query(
@@ -219,11 +214,7 @@ impl OAuthScopeRepository {
     }
 
     /// Approve a scope request
-    pub async fn approve_scope(
-        &self,
-        approval_id: &str,
-        approved_by: &str,
-    ) -> DbResult<bool> {
+    pub async fn approve_scope(&self, approval_id: &str, approved_by: &str) -> DbResult<bool> {
         let now = Utc::now();
 
         let result = sqlx::query(
@@ -245,11 +236,7 @@ impl OAuthScopeRepository {
     }
 
     /// Reject a scope request
-    pub async fn reject_scope(
-        &self,
-        approval_id: &str,
-        rejection_reason: &str,
-    ) -> DbResult<bool> {
+    pub async fn reject_scope(&self, approval_id: &str, rejection_reason: &str) -> DbResult<bool> {
         let now = Utc::now();
 
         let result = sqlx::query(

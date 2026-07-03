@@ -141,9 +141,8 @@ mod tests {
 
     #[test]
     fn rejects_missing_amount_field() {
-        let header = encode(
-            r#"{"asset":"XLM","payer":"GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ"}"#,
-        );
+        let header =
+            encode(r#"{"asset":"XLM","payer":"GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ"}"#);
         assert!(verify_payment_header(&header).is_err());
     }
 }

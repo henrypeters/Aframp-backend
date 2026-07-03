@@ -58,7 +58,12 @@ mod tests {
             (KeyType::BackupEncryption, 365),
         ];
         for (kt, expected_days) in schedules {
-            assert_eq!(kt.rotation_days(), expected_days, "Wrong rotation days for {:?}", kt);
+            assert_eq!(
+                kt.rotation_days(),
+                expected_days,
+                "Wrong rotation days for {:?}",
+                kt
+            );
         }
     }
 
@@ -85,7 +90,10 @@ mod tests {
     fn test_overdue_key_has_negative_days() {
         let overdue = Utc::now() - Duration::days(10);
         let days = days_until_rotation(Some(overdue)).unwrap();
-        assert!(days < 0, "Expected negative days for overdue key, got {days}");
+        assert!(
+            days < 0,
+            "Expected negative days for overdue key, got {days}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -177,8 +185,8 @@ mod tests {
 
     #[test]
     fn test_platform_key_serialization_has_no_material_fields() {
-        use Bitmesh_backend::key_management::catalogue::PlatformKey;
         use serde_json::Value;
+        use Bitmesh_backend::key_management::catalogue::PlatformKey;
 
         // Build a minimal PlatformKey and verify serialization has no key material
         let key = PlatformKey {

@@ -1,18 +1,17 @@
 use crate::database::{
-    notification_repository::{NotificationRepository, NotificationHistory},
+    notification_repository::{NotificationHistory, NotificationRepository},
     transaction_repository::{Transaction, TransactionRepository},
 };
 use crate::services::templates::TemplateService;
 use anyhow::{Context, Result};
+use hmac::{Hmac, Mac};
 use lettre::{
-    message::Mailbox,
-    transport::smtp::asynchronous::AsyncSmtpTransport,
-    AsyncSmtpTransport, AsyncTransport, Tokio1Executor,
+    message::Mailbox, transport::smtp::asynchronous::AsyncSmtpTransport, AsyncSmtpTransport,
+    AsyncTransport, Tokio1Executor,
 };
 use reqwest::Client;
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
 use serde_json::Value;
+use sha2::Sha256;
 use std::sync::Arc;
 use tokio::try_join;
 use tracing::{error, info};
@@ -48,7 +47,7 @@ pub struct NotificationService {
     templates: Arc<TemplateService>,
     http_client: Client,
     smtp: AsyncSmtpTransport<Tokio1Executor>,
-    webhook_secret: String, // For HMAC sig
+    webhook_secret: String,      // For HMAC sig
     partner_webhook_url: String, // Configurable
     support_email: String,
 }
@@ -89,47 +88,65 @@ impl NotificationService {
 
     /// Dispatch notification for tx state change
     pub async fn dispatch(&self, tx_id: Uuid, event: NotificationEvent) -> Result<()> {
-        let tx = self.tx_repo.find_by_id(&tx_id.to_string()).await?
+        let tx = self
+            .tx_repo
+            .find_by_id(&tx_id.to_string())
+            .await?
             .context("Transaction not found")?;
 
         let event_str = event.as_str().to_string();
         let tx_arc = Arc::new(tx);
 
         // Render payloads
-        let webhook_payload = self.templates.render_webhook(&event_str, &tx_arc).context("Webhook render")?;
-        let email_payload = self.templates.render_email(&event_str, &tx_arc).context("Email render")?;
+        let webhook_payload = self
+            .templates
+            .render_webhook(&event_str, &tx_arc)
+            .context("Webhook render")?;
+        let email_payload = self
+            .templates
+            .render_email(&event_str, &tx_arc)
+            .context("Email render")?;
 
         // Log to history (pending)
         let recipient_webhook = Some(self.partner_webhook_url.clone());
         let recipient_email = Some(format!("user@example.com")); // TODO: From tx metadata or DB
 
-        let _history_webhook = self.repo.log_notification(
-            tx_id,
-            &event_str,
-            "webhook",
-            recipient_webhook.as_deref(),
-            serde_json::from_str(&webhook_payload)?,
-        ).await?;
+        let _history_webhook = self
+            .repo
+            .log_notification(
+                tx_id,
+                &event_str,
+                "webhook",
+                recipient_webhook.as_deref(),
+                serde_json::from_str(&webhook_payload)?,
+            )
+            .await?;
 
-        let _history_email = self.repo.log_notification(
-            tx_id,
-            &event_str,
-            "email",
-            recipient_email.as_deref(),
-            serde_json::json!({"html": email_payload}),
-        ).await?;
+        let _history_email = self
+            .repo
+            .log_notification(
+                tx_id,
+                &event_str,
+                "email",
+                recipient_email.as_deref(),
+                serde_json::json!({"html": email_payload}),
+            )
+            .await?;
 
-        self.repo.log_notification(
-            tx_id,
-            &event_str,
-            "internal",
-            None,
-            serde_json::json!({"event": event_str, "tx_id": tx_id}),
-        ).await?;
+        self.repo
+            .log_notification(
+                tx_id,
+                &event_str,
+                "internal",
+                None,
+                serde_json::json!({"event": event_str, "tx_id": tx_id}),
+            )
+            .await?;
 
         // Parallel dispatch
         let webhook_res = self.send_webhook(&webhook_payload, &tx_id, &_history_webhook);
-        let email_res = self.send_email(&email_payload, &tx_arc, &event_str, &tx_id, &_history_email);
+        let email_res =
+            self.send_email(&email_payload, &tx_arc, &event_str, &tx_id, &_history_email);
 
         let (webhook_result, email_result) = try_join!(webhook_res, email_res,)?;
 
@@ -151,12 +168,13 @@ impl NotificationService {
         tx_id: &Uuid,
         history: &NotificationHistory,
     ) -> Result<Option<NotificationHistory>> {
-        let mut mac = HmacSha256::new_from_slice(self.webhook_secret.as_bytes())
-            .expect("HMAC secret valid");
+        let mut mac =
+            HmacSha256::new_from_slice(self.webhook_secret.as_bytes()).expect("HMAC secret valid");
         mac.update(payload.as_bytes());
         let sig = base64::encode(mac.finalize().into_bytes());
 
-        let res = self.http_client
+        let res = self
+            .http_client
             .post(&self.partner_webhook_url)
             .header("X-Signature", sig)
             .header("Content-Type", "application/json")
@@ -231,10 +249,13 @@ pub enum NotificationType {
 }
 
 #[allow(dead_code)]
-pub async fn send_notification(tx: &Transaction, notification_type: NotificationType, message: &str) {
+pub async fn send_notification(
+    tx: &Transaction,
+    notification_type: NotificationType,
+    message: &str,
+) {
     // Legacy logging
     match notification_type {
         _ => {}
     }
 }
-

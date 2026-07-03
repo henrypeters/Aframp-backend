@@ -41,22 +41,16 @@ fn metrics() -> &'static Metrics {
             "payment_poller_checked_total",
             "Payments checked per cycle"
         )
-        .unwrap(),
+        .expect("failed to register payment_poller_checked_total"),
         confirmed: register_int_counter!(
             "payment_poller_confirmed_total",
             "Payments confirmed per cycle"
         )
-        .unwrap(),
-        failed: register_int_counter!(
-            "payment_poller_failed_total",
-            "Payments failed per cycle"
-        )
-        .unwrap(),
-        retried: register_int_counter!(
-            "payment_poller_retried_total",
-            "Retry attempts per cycle"
-        )
-        .unwrap(),
+        .expect("failed to register payment_poller_confirmed_total"),
+        failed: register_int_counter!("payment_poller_failed_total", "Payments failed per cycle")
+            .expect("failed to register payment_poller_failed_total"),
+        retried: register_int_counter!("payment_poller_retried_total", "Retry attempts per cycle")
+            .expect("failed to register payment_poller_retried_total"),
     })
 }
 
@@ -123,7 +117,9 @@ impl PaymentPollerConfig {
 
     /// Compute the backoff delay for a given retry count (capped at 5 min).
     pub fn backoff_delay(&self, retry_count: i32) -> Duration {
-        let secs = self.backoff_base_secs.saturating_pow(retry_count.max(0) as u32);
+        let secs = self
+            .backoff_base_secs
+            .saturating_pow(retry_count.max(0) as u32);
         Duration::from_secs(secs.min(300))
     }
 }
@@ -293,12 +289,11 @@ impl PaymentPollerWorker {
                 );
 
                 // Idempotency: only trigger orchestrator if not already confirmed
-                if !matches!(tx.status.as_str(), "payment_confirmed" | "processing" | "completed") {
-                    if let Err(e) = self
-                        .orchestrator
-                        .handle_payment_success(reference)
-                        .await
-                    {
+                if !matches!(
+                    tx.status.as_str(),
+                    "payment_confirmed" | "processing" | "completed"
+                ) {
+                    if let Err(e) = self.orchestrator.handle_payment_success(reference).await {
                         error!(tx_id = %tx_id, error = %e, "Orchestrator failed after confirmation");
                     } else {
                         metrics().confirmed.inc();
@@ -460,26 +455,32 @@ mod tests {
     fn test_amounts_match_exact() {
         let cfg = worker_for_tests();
         // We test the logic directly since amounts_match is on the worker
-        let expected = BigDecimal::from_str("1000.00").unwrap();
+        let expected = BigDecimal::from_str("1000.00").expect("valid decimal literal");
         let confirmed = "1000.00";
-        let diff = (&expected - BigDecimal::from_str(confirmed).unwrap()).abs();
+        let diff = (&expected - BigDecimal::from_str(confirmed).expect("valid decimal literal")).abs();
         assert!(diff <= BigDecimal::from(1));
     }
 
     #[test]
     fn test_amounts_mismatch_detected() {
-        let expected = BigDecimal::from_str("1000.00").unwrap();
-        let confirmed = BigDecimal::from_str("500.00").unwrap();
+        let expected = BigDecimal::from_str("1000.00").expect("valid decimal literal");
+        let confirmed = BigDecimal::from_str("500.00").expect("valid decimal literal");
         let diff = (&expected - &confirmed).abs();
-        assert!(diff > BigDecimal::from(1), "Large mismatch should be detected");
+        assert!(
+            diff > BigDecimal::from(1),
+            "Large mismatch should be detected"
+        );
     }
 
     #[test]
     fn test_amounts_within_tolerance() {
-        let expected = BigDecimal::from_str("1000.00").unwrap();
-        let confirmed = BigDecimal::from_str("1000.50").unwrap();
+        let expected = BigDecimal::from_str("1000.00").expect("valid decimal literal");
+        let confirmed = BigDecimal::from_str("1000.50").expect("valid decimal literal");
         let diff = (&expected - &confirmed).abs();
-        assert!(diff <= BigDecimal::from(1), "Sub-unit rounding should be tolerated");
+        assert!(
+            diff <= BigDecimal::from(1),
+            "Sub-unit rounding should be tolerated"
+        );
     }
 
     #[test]
@@ -529,7 +530,8 @@ mod tests {
         // Idempotency: already-confirmed statuses must not re-trigger orchestrator
         let already_confirmed = ["payment_confirmed", "processing", "completed"];
         for status in &already_confirmed {
-            let should_trigger = !matches!(*status, "payment_confirmed" | "processing" | "completed");
+            let should_trigger =
+                !matches!(*status, "payment_confirmed" | "processing" | "completed");
             assert!(!should_trigger, "Status '{}' should not re-trigger", status);
         }
     }

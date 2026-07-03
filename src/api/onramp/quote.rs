@@ -1,9 +1,9 @@
 use super::models::*;
 use crate::cache::cache::Cache;
 use crate::cache::keys::onramp::QuoteKey;
-use crate::chains::stellar::client::StellarClient;
-use crate::chains::stellar::trustline::CngnTrustlineManager;
-use crate::chains::stellar::types::is_valid_stellar_address;
+// REMOVED: use crate::chains::stellar::client::StellarClient;
+// REMOVED: use crate::chains::stellar::trustline::CngnTrustlineManager;
+// REMOVED: use crate::chains::stellar::types::is_valid_stellar_address;
 use crate::error::{AppError, AppErrorKind, ValidationError};
 use crate::services::exchange_rate::{ConversionDirection, ConversionRequest, ExchangeRateService};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
@@ -69,31 +69,36 @@ pub async fn create_quote(
         .await
         .map_err(|e| {
             error!("Failed to fetch exchange rate: {}", e);
-            AppError::new(AppErrorKind::External(crate::error::ExternalError::Timeout {
-                service: "rate_service".to_string(),
-                timeout_secs: 30,
-            }))
+            AppError::new(AppErrorKind::External(
+                crate::error::ExternalError::Timeout {
+                    service: "rate_service".to_string(),
+                    timeout_secs: 30,
+                },
+            ))
         })?;
 
-    let rate = BigDecimal::from_str(&conversion_result.base_rate)
-        .unwrap_or_else(|_| BigDecimal::from(1));
+    let rate =
+        BigDecimal::from_str(&conversion_result.base_rate).unwrap_or_else(|_| BigDecimal::from(1));
     let rate_f64: f64 = rate.to_string().parse().unwrap_or(1.0);
 
     // 3. Calculate gross amount
     let gross_amount = &amount_bd * &rate;
 
     // 4. Calculate fees
-    let (platform_fee, provider_fee) = calculate_fees(&state, &amount_bd, &request.payment_method).await?;
+    let (platform_fee, provider_fee) =
+        calculate_fees(&state, &amount_bd, &request.payment_method).await?;
 
     let total_fees = &platform_fee + &provider_fee;
     let net_amount = &amount_bd - &total_fees;
 
     // Validate net amount is positive
     if net_amount <= BigDecimal::from(0) {
-        return Err(AppError::new(AppErrorKind::Validation(ValidationError::InvalidAmount {
-            amount: net_amount.to_string(),
-            reason: "Net amount after fees must be greater than zero".to_string(),
-        })));
+        return Err(AppError::new(AppErrorKind::Validation(
+            ValidationError::InvalidAmount {
+                amount: net_amount.to_string(),
+                reason: "Net amount after fees must be greater than zero".to_string(),
+            },
+        )));
     }
 
     debug!(
@@ -168,9 +173,11 @@ pub async fn create_quote(
         .await
         .map_err(|e| {
             error!("Failed to store quote in Redis: {}", e);
-            AppError::new(AppErrorKind::Infrastructure(crate::error::InfrastructureError::Cache {
-                message: "Failed to store quote".to_string(),
-            }))
+            AppError::new(AppErrorKind::Infrastructure(
+                crate::error::InfrastructureError::Cache {
+                    message: "Failed to store quote".to_string(),
+                },
+            ))
         })?;
 
     info!(

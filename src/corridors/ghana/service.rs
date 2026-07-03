@@ -1,11 +1,11 @@
 //! Ghana corridor service — orchestrates the full NG→GH transfer flow.
 
-use crate::compliance_registry::repository::ComplianceRegistryRepository;
+// REMOVED: use crate::compliance_registry::repository::ComplianceRegistryRepository;
 use crate::corridors::ghana::models::*;
+use crate::payments::provider::PaymentProvider;
 use crate::payments::providers::ghana::{
     validate_ghana_momo_recipient, GhanaProvider, GhanaProviderConfig,
 };
-use crate::payments::provider::PaymentProvider;
 use crate::payments::types::{Money, WithdrawalMethod, WithdrawalRecipient, WithdrawalRequest};
 use crate::services::exchange_rate::ExchangeRateService;
 use crate::services::fee_calculation::FeeCalculationService;
@@ -118,13 +118,14 @@ impl GhanaCorridorService {
 
         if !compliance.allowed {
             return Err(GhanaCorridorError::ComplianceDenied(
-                compliance.denial_reason.unwrap_or_else(|| "Compliance check failed".to_string()),
+                compliance
+                    .denial_reason
+                    .unwrap_or_else(|| "Compliance check failed".to_string()),
             ));
         }
 
         // 2. FX + fee calculation.
-        let (rate, ghs_gross, fee_breakdown) =
-            self.calculate_ghs_output(req.cngn_amount).await?;
+        let (rate, ghs_gross, fee_breakdown) = self.calculate_ghs_output(req.cngn_amount).await?;
         let ghs_net = ghs_gross - fee_breakdown.total_fee_ghs;
 
         // 3. BoG limits + Ghana Card requirement.
@@ -292,7 +293,9 @@ impl GhanaCorridorService {
             let result = validate_ghana_momo_recipient(phone);
             if !result.valid {
                 return Err(GhanaCorridorError::RecipientInvalid(
-                    result.reason.unwrap_or_else(|| "Phone validation failed".to_string()),
+                    result
+                        .reason
+                        .unwrap_or_else(|| "Phone validation failed".to_string()),
                 ));
             }
             return Ok((true, result.detected_network));
@@ -365,7 +368,9 @@ impl GhanaCorridorService {
             .await
             .map_err(|e| GhanaCorridorError::DisbursementFailed(e.to_string()))?;
 
-        Ok(resp.provider_reference.unwrap_or_else(|| transfer_id.to_string()))
+        Ok(resp
+            .provider_reference
+            .unwrap_or_else(|| transfer_id.to_string()))
     }
 
     async fn persist_transfer(

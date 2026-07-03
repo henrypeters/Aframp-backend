@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-
 /// Validated date-range query parameters shared across all analytics endpoints.
 /// Both bounds are required and the range is capped at 366 days to prevent
 /// unbounded heavy queries.
@@ -30,7 +29,9 @@ impl DateRangeParams {
         }
         match self.period.as_str() {
             "daily" | "weekly" | "monthly" => Ok(()),
-            other => Err(format!("Invalid period `{other}`. Use daily, weekly, or monthly")),
+            other => Err(format!(
+                "Invalid period `{other}`. Use daily, weekly, or monthly"
+            )),
         }
     }
 }
@@ -453,5 +454,4 @@ pub struct ChurnedConsumer {
     pub last_activity: DateTime<Utc>,
     pub previous_request_count: i64,
     pub days_inactive: i32,
-
 }

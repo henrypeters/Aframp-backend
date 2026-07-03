@@ -3,11 +3,11 @@
 //! This module provides a unified error system with proper HTTP status mapping,
 //! user-friendly messages, and structured error codes for client handling.
 #[cfg(feature = "database")]
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[cfg(feature = "database")]
-use crate::chains::stellar::errors::StellarError;
+// REMOVED: use crate::chains::stellar::errors::StellarError;
 
 /// CNGN-specific error codes for programmatic handling
 #[cfg(feature = "database")]
@@ -79,59 +79,35 @@ pub enum ErrorCode {
 #[derive(Debug, Clone)]
 pub enum DomainError {
     /// User doesn't have enough CNGN tokens for the operation
-    InsufficientBalance {
-        available: String,
-        required: String,
-    },
+    InsufficientBalance { available: String, required: String },
     /// Wallet hasn't established CNGN trustline
     TrustlineNotFound {
         wallet_address: String,
         asset: String,
     },
     /// Amount is invalid (negative, zero, or out of range)
-    InvalidAmount {
-        amount: String,
-        reason: String,
-    },
+    InvalidAmount { amount: String, reason: String },
     /// Amount below minimum threshold
-    AmountTooLow {
-        amount: String,
-        minimum: String,
-    },
+    AmountTooLow { amount: String, minimum: String },
     /// Transaction with given ID doesn't exist
-    TransactionNotFound {
-        transaction_id: String,
-    },
+    TransactionNotFound { transaction_id: String },
     /// Wallet doesn't exist in the system
-    WalletNotFound {
-        wallet_address: String,
-    },
+    WalletNotFound { wallet_address: String },
     /// Exchange rate quote has expired
-    RateExpired {
-        quote_id: String,
-    },
+    RateExpired { quote_id: String },
     /// Duplicate transaction attempt
-    DuplicateTransaction {
-        transaction_id: String,
-    },
+    DuplicateTransaction { transaction_id: String },
     /// Failed to create trustline on Stellar
     TrustlineCreationFailed {
         wallet_address: String,
         reason: String,
     },
     /// Insufficient cNGN liquidity on Stellar for onramp
-    InsufficientLiquidity {
-        amount: String,
-    },
+    InsufficientLiquidity { amount: String },
     /// Access forbidden (e.g., transaction doesn't belong to requesting wallet)
-    Forbidden {
-        message: String,
-    },
-    /// System halted due to circuit breaker activation
-    SystemHalted {
-        status: String,
-    },
     Forbidden { message: String },
+    /// System halted due to circuit breaker activation
+    SystemHalted { status: String },
     /// Fiat reserves are insufficient to back the requested mint amount (CBN/ASC compliance)
     ReserveInsufficient {
         total_reserves: String,
@@ -148,18 +124,11 @@ pub enum DomainError {
 #[derive(Debug, Clone)]
 pub enum InfrastructureError {
     /// Database connection or query failure
-    Database {
-        message: String,
-        is_retryable: bool,
-    },
+    Database { message: String, is_retryable: bool },
     /// Redis cache unavailable
-    Cache {
-        message: String,
-    },
+    Cache { message: String },
     /// Missing or invalid configuration
-    Configuration {
-        message: String,
-    },
+    Configuration { message: String },
 }
 
 /// External service errors (payment providers, blockchain)
@@ -173,20 +142,14 @@ pub enum ExternalError {
         is_retryable: bool,
     },
     /// Stellar blockchain error
-    Blockchain {
-        message: String,
-        is_retryable: bool,
-    },
+    Blockchain { message: String, is_retryable: bool },
     /// Rate limit exceeded
     RateLimit {
         service: String,
         retry_after: Option<u64>,
     },
     /// External service timeout
-    Timeout {
-        service: String,
-        timeout_secs: u64,
-    },
+    Timeout { service: String, timeout_secs: u64 },
 }
 
 /// Input validation errors
@@ -194,24 +157,13 @@ pub enum ExternalError {
 #[derive(Debug, Clone)]
 pub enum ValidationError {
     /// Invalid Stellar wallet address format
-    InvalidWalletAddress {
-        address: String,
-        reason: String,
-    },
+    InvalidWalletAddress { address: String, reason: String },
     /// Unsupported or invalid currency pair
-    InvalidCurrency {
-        currency: String,
-        reason: String,
-    },
+    InvalidCurrency { currency: String, reason: String },
     /// Invalid amount (format or value)
-    InvalidAmount {
-        amount: String,
-        reason: String,
-    },
+    InvalidAmount { amount: String, reason: String },
     /// Required field missing
-    MissingField {
-        field: String,
-    },
+    MissingField { field: String },
     /// Field value out of acceptable range
     OutOfRange {
         field: String,
@@ -267,43 +219,39 @@ impl AppError {
     /// Map error to HTTP status code
     pub fn status_code(&self) -> u16 {
         match &self.kind {
-            AppErrorKind::Domain(err) =>
-                match err {
-                    DomainError::InsufficientLiquidity { .. } => 422,
-                    DomainError::AmountTooLow { .. } => 400,
-                    DomainError::InsufficientBalance { .. } => 422, // Unprocessable Entity
-                    DomainError::TrustlineNotFound { .. } => 422,
-                    DomainError::InvalidAmount { .. } => 400,
-                    DomainError::TransactionNotFound { .. } => 404,
-                    DomainError::WalletNotFound { .. } => 404,
-                    DomainError::RateExpired { .. } => 410, // Gone
-                    DomainError::DuplicateTransaction { .. } => 409, // Conflict
-                    DomainError::TrustlineCreationFailed { .. } => 422,
-                    DomainError::InsufficientLiquidity { .. } => 409, // Conflict
-                    DomainError::Forbidden { .. } => 403, // Forbidden
-                    DomainError::SystemHalted { .. } => 503, // Service Unavailable
-                }
-            AppErrorKind::Infrastructure(err) =>
-                match err {
-                    InfrastructureError::Database { .. } => 500,
-                    InfrastructureError::Cache { .. } => 500,
-                    InfrastructureError::Configuration { .. } => 500,
-                }
-            AppErrorKind::External(err) =>
-                match err {
-                    ExternalError::PaymentProvider { .. } => 502, // Bad Gateway
-                    ExternalError::Blockchain { .. } => 502,
-                    ExternalError::RateLimit { .. } => 429, // Too Many Requests
-                    ExternalError::Timeout { .. } => 504, // Gateway Timeout
-                }
-            AppErrorKind::Validation(err) =>
-                match err {
-                    ValidationError::InvalidWalletAddress { .. } => 400,
-                    ValidationError::InvalidCurrency { .. } => 400,
-                    ValidationError::InvalidAmount { .. } => 400,
-                    ValidationError::MissingField { .. } => 400,
-                    ValidationError::OutOfRange { .. } => 400,
-                }
+            AppErrorKind::Domain(err) => match err {
+                DomainError::InsufficientLiquidity { .. } => 422,
+                DomainError::AmountTooLow { .. } => 400,
+                DomainError::InsufficientBalance { .. } => 422, // Unprocessable Entity
+                DomainError::TrustlineNotFound { .. } => 422,
+                DomainError::InvalidAmount { .. } => 400,
+                DomainError::TransactionNotFound { .. } => 404,
+                DomainError::WalletNotFound { .. } => 404,
+                DomainError::RateExpired { .. } => 410, // Gone
+                DomainError::DuplicateTransaction { .. } => 409, // Conflict
+                DomainError::TrustlineCreationFailed { .. } => 422,
+                DomainError::InsufficientLiquidity { .. } => 409, // Conflict
+                DomainError::Forbidden { .. } => 403,             // Forbidden
+                DomainError::SystemHalted { .. } => 503,          // Service Unavailable
+            },
+            AppErrorKind::Infrastructure(err) => match err {
+                InfrastructureError::Database { .. } => 500,
+                InfrastructureError::Cache { .. } => 500,
+                InfrastructureError::Configuration { .. } => 500,
+            },
+            AppErrorKind::External(err) => match err {
+                ExternalError::PaymentProvider { .. } => 502, // Bad Gateway
+                ExternalError::Blockchain { .. } => 502,
+                ExternalError::RateLimit { .. } => 429, // Too Many Requests
+                ExternalError::Timeout { .. } => 504,   // Gateway Timeout
+            },
+            AppErrorKind::Validation(err) => match err {
+                ValidationError::InvalidWalletAddress { .. } => 400,
+                ValidationError::InvalidCurrency { .. } => 400,
+                ValidationError::InvalidAmount { .. } => 400,
+                ValidationError::MissingField { .. } => 400,
+                ValidationError::OutOfRange { .. } => 400,
+            },
             AppErrorKind::Domain(err) => match err {
                 DomainError::InsufficientLiquidity { .. } => 422,
                 DomainError::AmountTooLow { .. } => 400,
@@ -344,40 +292,35 @@ impl AppError {
     /// Get error code for client handling
     pub fn error_code(&self) -> ErrorCode {
         match &self.kind {
-            AppErrorKind::Domain(err) =>
-                match err {
-                    DomainError::InsufficientBalance { .. } => ErrorCode::InsufficientCngnBalance,
-                    DomainError::TrustlineNotFound { .. } => ErrorCode::TrustlineRequired,
-                    DomainError::InvalidAmount { .. } => ErrorCode::InvalidCngnAmount,
-                    DomainError::TransactionNotFound { .. } => ErrorCode::TransactionNotFound,
-                    DomainError::WalletNotFound { .. } => ErrorCode::WalletNotFound,
-                    DomainError::RateExpired { .. } => ErrorCode::RateExpired,
-                    DomainError::DuplicateTransaction { .. } => ErrorCode::DuplicateTransaction,
-                    DomainError::TrustlineCreationFailed { .. } =>
-                        ErrorCode::TrustlineCreationFailed,
-                    DomainError::InsufficientLiquidity { .. } => ErrorCode::InsufficientLiquidity,
-                    DomainError::AmountTooLow { .. } => ErrorCode::AmountTooLow,
-                    DomainError::Forbidden { .. } => ErrorCode::ValidationError, // Use generic validation error
-                    DomainError::SystemHalted { .. } => ErrorCode::SystemHalted,
-                }
-            AppErrorKind::Infrastructure(err) =>
-                match err {
-                    InfrastructureError::Database { .. } => ErrorCode::DatabaseError,
-                    InfrastructureError::Cache { .. } => ErrorCode::CacheError,
-                    InfrastructureError::Configuration { .. } => ErrorCode::ConfigurationError,
-                }
-            AppErrorKind::External(err) =>
-                match err {
-                    ExternalError::PaymentProvider { .. } => ErrorCode::PaymentProviderError,
-                    ExternalError::Blockchain { .. } => ErrorCode::BlockchainError,
-                    ExternalError::RateLimit { .. } => ErrorCode::RateLimitError,
-                    ExternalError::Timeout { .. } => ErrorCode::ExternalServiceTimeout,
-                }
-            AppErrorKind::Validation(err) =>
-                match err {
-                    ValidationError::InvalidWalletAddress { .. } => ErrorCode::InvalidWallet,
-                    _ => ErrorCode::ValidationError,
-                }
+            AppErrorKind::Domain(err) => match err {
+                DomainError::InsufficientBalance { .. } => ErrorCode::InsufficientCngnBalance,
+                DomainError::TrustlineNotFound { .. } => ErrorCode::TrustlineRequired,
+                DomainError::InvalidAmount { .. } => ErrorCode::InvalidCngnAmount,
+                DomainError::TransactionNotFound { .. } => ErrorCode::TransactionNotFound,
+                DomainError::WalletNotFound { .. } => ErrorCode::WalletNotFound,
+                DomainError::RateExpired { .. } => ErrorCode::RateExpired,
+                DomainError::DuplicateTransaction { .. } => ErrorCode::DuplicateTransaction,
+                DomainError::TrustlineCreationFailed { .. } => ErrorCode::TrustlineCreationFailed,
+                DomainError::InsufficientLiquidity { .. } => ErrorCode::InsufficientLiquidity,
+                DomainError::AmountTooLow { .. } => ErrorCode::AmountTooLow,
+                DomainError::Forbidden { .. } => ErrorCode::ValidationError, // Use generic validation error
+                DomainError::SystemHalted { .. } => ErrorCode::SystemHalted,
+            },
+            AppErrorKind::Infrastructure(err) => match err {
+                InfrastructureError::Database { .. } => ErrorCode::DatabaseError,
+                InfrastructureError::Cache { .. } => ErrorCode::CacheError,
+                InfrastructureError::Configuration { .. } => ErrorCode::ConfigurationError,
+            },
+            AppErrorKind::External(err) => match err {
+                ExternalError::PaymentProvider { .. } => ErrorCode::PaymentProviderError,
+                ExternalError::Blockchain { .. } => ErrorCode::BlockchainError,
+                ExternalError::RateLimit { .. } => ErrorCode::RateLimitError,
+                ExternalError::Timeout { .. } => ErrorCode::ExternalServiceTimeout,
+            },
+            AppErrorKind::Validation(err) => match err {
+                ValidationError::InvalidWalletAddress { .. } => ErrorCode::InvalidWallet,
+                _ => ErrorCode::ValidationError,
+            },
             AppErrorKind::Domain(err) => match err {
                 DomainError::InsufficientBalance { .. } => ErrorCode::InsufficientCngnBalance,
                 DomainError::TrustlineNotFound { .. } => ErrorCode::TrustlineRequired,
@@ -559,19 +502,17 @@ impl AppError {
     pub fn is_retryable(&self) -> bool {
         match &self.kind {
             AppErrorKind::Domain(_) => false,
-            AppErrorKind::Infrastructure(err) =>
-                match err {
-                    InfrastructureError::Database { is_retryable, .. } => *is_retryable,
-                    InfrastructureError::Cache { .. } => true,
-                    InfrastructureError::Configuration { .. } => false,
-                }
-            AppErrorKind::External(err) =>
-                match err {
-                    ExternalError::PaymentProvider { is_retryable, .. } => *is_retryable,
-                    ExternalError::Blockchain { is_retryable, .. } => *is_retryable,
-                    ExternalError::RateLimit { .. } => true,
-                    ExternalError::Timeout { .. } => true,
-                }
+            AppErrorKind::Infrastructure(err) => match err {
+                InfrastructureError::Database { is_retryable, .. } => *is_retryable,
+                InfrastructureError::Cache { .. } => true,
+                InfrastructureError::Configuration { .. } => false,
+            },
+            AppErrorKind::External(err) => match err {
+                ExternalError::PaymentProvider { is_retryable, .. } => *is_retryable,
+                ExternalError::Blockchain { is_retryable, .. } => *is_retryable,
+                ExternalError::RateLimit { .. } => true,
+                ExternalError::Timeout { .. } => true,
+            },
             AppErrorKind::Validation(_) => false,
         }
     }
@@ -593,40 +534,39 @@ impl std::error::Error for AppError {}
 #[cfg(feature = "database")]
 impl From<StellarError> for AppError {
     fn from(err: StellarError) -> Self {
-        use crate::chains::stellar::errors::StellarError as SE;
+// REMOVED:         use crate::chains::stellar::errors::StellarError as SE;
 
         let kind = match err {
-            SE::AccountNotFound { address } =>
-                AppErrorKind::Domain(DomainError::WalletNotFound {
-                    wallet_address: address,
-                }),
+            SE::AccountNotFound { address } => AppErrorKind::Domain(DomainError::WalletNotFound {
+                wallet_address: address,
+            }),
             SE::InvalidAddress { address } => {
                 AppErrorKind::Validation(ValidationError::InvalidWalletAddress {
                     address,
                     reason: "Invalid Stellar address format".to_string(),
                 })
             }
-            SE::RateLimitError =>
-                AppErrorKind::External(ExternalError::RateLimit {
-                    service: "Stellar".to_string(),
-                    retry_after: Some(60),
-                }),
-            SE::TimeoutError { seconds } =>
-                AppErrorKind::External(ExternalError::Timeout {
-                    service: "Stellar".to_string(),
-                    timeout_secs: seconds,
-                }),
+            SE::RateLimitError => AppErrorKind::External(ExternalError::RateLimit {
+                service: "Stellar".to_string(),
+                retry_after: Some(60),
+            }),
+            SE::TimeoutError { seconds } => AppErrorKind::External(ExternalError::Timeout {
+                service: "Stellar".to_string(),
+                timeout_secs: seconds,
+            }),
             SE::NetworkError { message } | SE::UnexpectedError { message } => {
                 AppErrorKind::External(ExternalError::Blockchain {
                     message,
                     is_retryable: true,
                 })
             }
-            SE::InsufficientXlm { available, required } =>
-                AppErrorKind::Domain(DomainError::InsufficientBalance {
-                    available,
-                    required,
-                }),
+            SE::InsufficientXlm {
+                available,
+                required,
+            } => AppErrorKind::Domain(DomainError::InsufficientBalance {
+                available,
+                required,
+            }),
             SE::TrustlineAlreadyExists { address, asset } => {
                 AppErrorKind::Domain(DomainError::DuplicateTransaction {
                     transaction_id: format!("trustline:{}:{}", address, asset),
@@ -641,11 +581,10 @@ impl From<StellarError> for AppError {
             SE::ConfigError { message } => {
                 AppErrorKind::Infrastructure(InfrastructureError::Configuration { message })
             }
-            _ =>
-                AppErrorKind::External(ExternalError::Blockchain {
-                    message: err.to_string(),
-                    is_retryable: false,
-                }),
+            _ => AppErrorKind::External(ExternalError::Blockchain {
+                message: err.to_string(),
+                is_retryable: false,
+            }),
         };
 
         AppError::new(kind)
@@ -687,7 +626,9 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Authentication(m) | Error::Unauthorized(m) => write!(f, "Authentication error: {}", m),
+            Error::Authentication(m) | Error::Unauthorized(m) => {
+                write!(f, "Authentication error: {}", m)
+            }
             Error::Forbidden(m) => write!(f, "Forbidden: {}", m),
             Error::NotFound(m) => write!(f, "Not found: {}", m),
             Error::BadRequest(m) | Error::Validation(m) => write!(f, "Bad request: {}", m),
@@ -709,13 +650,17 @@ impl axum::response::IntoResponse for Error {
         use serde_json::json;
 
         let (status, message) = match &self {
-            Error::Authentication(m) | Error::Unauthorized(m) => (StatusCode::UNAUTHORIZED, m.clone()),
+            Error::Authentication(m) | Error::Unauthorized(m) => {
+                (StatusCode::UNAUTHORIZED, m.clone())
+            }
             Error::Forbidden(m) => (StatusCode::FORBIDDEN, m.clone()),
             Error::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             Error::BadRequest(m) | Error::Validation(m) => (StatusCode::BAD_REQUEST, m.clone()),
             Error::Conflict(m) => (StatusCode::CONFLICT, m.clone()),
             Error::TooManyRequests(m) => (StatusCode::TOO_MANY_REQUESTS, m.clone()),
-            Error::Internal(m) | Error::Database(m) => (StatusCode::INTERNAL_SERVER_ERROR, m.clone()),
+            Error::Internal(m) | Error::Database(m) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, m.clone())
+            }
         };
 
         (status, Json(json!({ "error": message }))).into_response()
@@ -735,12 +680,10 @@ mod tests {
 
     #[test]
     fn test_insufficient_balance_error() {
-        let error = AppError::new(
-            AppErrorKind::Domain(DomainError::InsufficientBalance {
-                available: "50".to_string(),
-                required: "100".to_string(),
-            })
-        );
+        let error = AppError::new(AppErrorKind::Domain(DomainError::InsufficientBalance {
+            available: "50".to_string(),
+            required: "100".to_string(),
+        }));
 
         assert_eq!(error.status_code(), 422);
         assert_eq!(error.error_code(), ErrorCode::InsufficientCngnBalance);
@@ -750,12 +693,10 @@ mod tests {
 
     #[test]
     fn test_trustline_not_found_error() {
-        let error = AppError::new(
-            AppErrorKind::Domain(DomainError::TrustlineNotFound {
-                wallet_address: "GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX".to_string(),
-                asset: "AFRI".to_string(),
-            })
-        );
+        let error = AppError::new(AppErrorKind::Domain(DomainError::TrustlineNotFound {
+            wallet_address: "GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX".to_string(),
+            asset: "AFRI".to_string(),
+        }));
 
         assert_eq!(error.status_code(), 422);
         assert_eq!(error.error_code(), ErrorCode::TrustlineRequired);
@@ -764,12 +705,10 @@ mod tests {
 
     #[test]
     fn test_rate_limit_error() {
-        let error = AppError::new(
-            AppErrorKind::External(ExternalError::RateLimit {
-                service: "Stellar".to_string(),
-                retry_after: Some(60),
-            })
-        );
+        let error = AppError::new(AppErrorKind::External(ExternalError::RateLimit {
+            service: "Stellar".to_string(),
+            retry_after: Some(60),
+        }));
 
         assert_eq!(error.status_code(), 429);
         assert_eq!(error.error_code(), ErrorCode::RateLimitError);
@@ -778,12 +717,10 @@ mod tests {
 
     #[test]
     fn test_validation_error() {
-        let error = AppError::new(
-            AppErrorKind::Validation(ValidationError::InvalidAmount {
-                amount: "-100".to_string(),
-                reason: "Amount cannot be negative".to_string(),
-            })
-        );
+        let error = AppError::new(AppErrorKind::Validation(ValidationError::InvalidAmount {
+            amount: "-100".to_string(),
+            reason: "Amount cannot be negative".to_string(),
+        }));
 
         assert_eq!(error.status_code(), 400);
         assert_eq!(error.error_code(), ErrorCode::ValidationError);

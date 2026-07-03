@@ -3,20 +3,34 @@
 //! Level 1 — moka in-process cache (fee structures, currency configs, provider lists)
 //! Level 2 — Redis distributed cache (exchange rates, wallet balances, quotes)
 
+pub mod advanced_redis;
 pub mod cache;
+pub mod cdn_integration;
 pub mod error;
+pub mod handlers;
+pub mod invalidation;
 pub mod keys;
 pub mod l1;
 pub mod metrics;
 pub mod multi_level;
+pub mod patterns;
+pub mod routes;
 pub mod single_flight;
+pub mod stats_worker;
 pub mod warmer;
 
 // Re-export commonly used items
+pub use advanced_redis::{AdvancedCacheConfig, AdvancedRedisCache, InvalidationSubscriber};
 pub use cache::{Cache, RedisCache};
+pub use cdn_integration::{cdn_cache_middleware, CDNConfig, CDNManager, CDNMiddleware};
 pub use error::CacheError;
+pub use handlers::{CacheAdminState};
+pub use invalidation::{InvalidationEvent, InvalidationPipeline};
 pub use l1::L1Cache;
 pub use multi_level::MultiLevelCache;
+pub use patterns::CachingRepository;
+pub use routes::cache_admin_router;
+pub use stats_worker::CacheStatsWorker;
 pub use warmer::WarmingState;
 
 use bb8::Pool;

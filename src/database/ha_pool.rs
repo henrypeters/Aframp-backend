@@ -55,13 +55,29 @@ struct ShardPools {
 
 impl ShardPools {
     async fn new(cfg: &ShardConfig) -> Result<Self, sqlx::Error> {
-        let primary = build_pool(&cfg.primary_url, cfg.max_connections, cfg.min_connections, cfg.connection_timeout).await?;
+        let primary = build_pool(
+            &cfg.primary_url,
+            cfg.max_connections,
+            cfg.min_connections,
+            cfg.connection_timeout,
+        )
+        .await?;
 
         let mut replicas = Vec::with_capacity(cfg.replica_urls.len());
         for url in &cfg.replica_urls {
-            match build_pool(url, cfg.max_connections, cfg.min_connections, cfg.connection_timeout).await {
+            match build_pool(
+                url,
+                cfg.max_connections,
+                cfg.min_connections,
+                cfg.connection_timeout,
+            )
+            .await
+            {
                 Ok(p) => replicas.push(p),
-                Err(e) => warn!(shard_id = cfg.shard_id, url, "Replica unavailable at startup: {e}"),
+                Err(e) => warn!(
+                    shard_id = cfg.shard_id,
+                    url, "Replica unavailable at startup: {e}"
+                ),
             }
         }
 
@@ -175,6 +191,21 @@ impl HaPoolManager {
         }
     }
 
+    /// Return one read pool for each shard, using a healthy replica if available.
+    pub async fn all_read_pools(&self) -> Vec<Arc<PgPool>> {
+        let shards = self.shards.read().await;
+        shards
+            .values()
+            .map(|s| Arc::new(s.read_pool().await.clone()))
+            .collect()
+    }
+
+    /// Return one primary pool for each shard.
+    pub async fn all_primary_pools(&self) -> Vec<Arc<PgPool>> {
+        let shards = self.shards.read().await;
+        shards.values().map(|s| Arc::new(s.primary.clone())).collect()
+    }
+
     // -----------------------------------------------------------------------
     // Hot shard addition (no cluster restart required)
     // -----------------------------------------------------------------------
@@ -214,20 +245,26 @@ impl HaPoolManager {
             // Replica liveness + checksum comparison
             for (idx, replica) in pools.replicas.iter().enumerate() {
                 match replica_checksum(replica).await {
-                    Ok(replica_csum) => {
-                        match replica_checksum(&pools.primary).await {
-                            Ok(primary_csum) if primary_csum == replica_csum => {
-                                pools.mark_replica_healthy(idx).await;
-                            }
-                            Ok(_) => {
-                                warn!(shard_id, replica_idx = idx, "Checksum mismatch — marking replica unhealthy");
-                                pools.mark_replica_unhealthy(idx).await;
-                            }
-                            Err(e) => error!(shard_id, "Primary checksum error: {e}"),
+                    Ok(replica_csum) => match replica_checksum(&pools.primary).await {
+                        Ok(primary_csum) if primary_csum == replica_csum => {
+                            pools.mark_replica_healthy(idx).await;
                         }
-                    }
+                        Ok(_) => {
+                            warn!(
+                                shard_id,
+                                replica_idx = idx,
+                                "Checksum mismatch — marking replica unhealthy"
+                            );
+                            pools.mark_replica_unhealthy(idx).await;
+                        }
+                        Err(e) => error!(shard_id, "Primary checksum error: {e}"),
+                    },
                     Err(e) => {
-                        warn!(shard_id, replica_idx = idx, "Replica health check failed: {e}");
+                        warn!(
+                            shard_id,
+                            replica_idx = idx,
+                            "Replica health check failed: {e}"
+                        );
                         pools.mark_replica_unhealthy(idx).await;
                     }
                 }
@@ -240,7 +277,12 @@ impl HaPoolManager {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async fn build_pool(url: &str, max: u32, min: u32, timeout: Duration) -> Result<PgPool, sqlx::Error> {
+async fn build_pool(
+    url: &str,
+    max: u32,
+    min: u32,
+    timeout: Duration,
+) -> Result<PgPool, sqlx::Error> {
     PgPoolOptions::new()
         .max_connections(max)
         .min_connections(min)
@@ -266,7 +308,8 @@ async fn replica_checksum(pool: &PgPool) -> Result<i64, sqlx::Error> {
 fn fnv1a(s: &str) -> u32 {
     const OFFSET: u32 = 2166136261;
     const PRIME: u32 = 16777619;
-    s.bytes().fold(OFFSET, |acc, b| (acc ^ b as u32).wrapping_mul(PRIME))
+    s.bytes()
+        .fold(OFFSET, |acc, b| (acc ^ b as u32).wrapping_mul(PRIME))
 }
 
 #[cfg(test)]

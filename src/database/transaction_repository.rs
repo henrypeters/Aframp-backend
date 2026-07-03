@@ -37,6 +37,84 @@ impl TransactionRepository {
         Self { pool }
     }
 
+    async fn get_write_pool(&self, wallet_address: &str) -> Result<PgPool, DatabaseError> {
+        if let Some(manager) = crate::database::get_global_ha_pool() {
+            if let Some(pool) = manager.write_pool(wallet_address).await {
+                return Ok((*pool).clone());
+            }
+        }
+        Ok(self.pool.clone())
+    }
+
+    async fn get_read_pool(
+        &self,
+        wallet_address: Option<&str>,
+    ) -> Result<PgPool, DatabaseError> {
+        if let Some(manager) = crate::database::get_global_ha_pool() {
+            if let Some(key) = wallet_address {
+                if let Some(pool) = manager.read_pool(key).await {
+                    return Ok((*pool).clone());
+                }
+            }
+        }
+
+        if let Some(replica) = crate::database::get_global_read_replica_pool() {
+            return Ok(replica.clone());
+        }
+
+        Ok(self.pool.clone())
+    }
+
+    async fn all_read_pools(&self) -> Result<Vec<PgPool>, DatabaseError> {
+        if let Some(manager) = crate::database::get_global_ha_pool() {
+            let pools = manager.all_read_pools().await;
+            return Ok(pools.into_iter().map(|pool| (*pool).clone()).collect());
+        }
+
+        if let Some(replica) = crate::database::get_global_read_replica_pool() {
+            return Ok(vec![replica.clone()]);
+        }
+
+        Ok(vec![self.pool.clone()])
+    }
+
+    async fn fetch_all_from_shards<F>(&self, mut make_query: F) -> Result<Vec<Transaction>, DatabaseError>
+    where
+        F: FnMut(&PgPool) -> sqlx::query::QueryAs<'_, sqlx::Postgres, Transaction, sqlx::postgres::PgArguments>,
+    {
+        let pools = self.all_read_pools().await?;
+        let mut combined = Vec::new();
+
+        for pool in pools {
+            let mut shard_results = make_query(&pool)
+                .fetch_all(&pool)
+                .await
+                .map_err(DatabaseError::from_sqlx)?;
+            combined.append(&mut shard_results);
+        }
+
+        Ok(combined)
+    }
+
+    async fn fetch_optional_from_shards<F>(&self, mut make_query: F) -> Result<Option<Transaction>, DatabaseError>
+    where
+        F: FnMut(&PgPool) -> sqlx::query::QueryAs<'_, sqlx::Postgres, Transaction, sqlx::postgres::PgArguments>,
+    {
+        let pools = self.all_read_pools().await?;
+
+        for pool in pools {
+            if let Some(tx) = make_query(&pool)
+                .fetch_optional(&pool)
+                .await
+                .map_err(DatabaseError::from_sqlx)?
+            {
+                return Ok(Some(tx));
+            }
+        }
+
+        Ok(None)
+    }
+
     /// Create a new transaction
     pub async fn create_transaction(
         &self,
@@ -52,6 +130,7 @@ impl TransactionRepository {
         payment_reference: Option<&str>,
         metadata: serde_json::Value,
     ) -> Result<Transaction, DatabaseError> {
+        let pool = self.get_write_pool(wallet_address).await?;
         sqlx::query_as::<_, Transaction>(
             "INSERT INTO transactions 
              (wallet_address, type, from_currency, to_currency, from_amount, to_amount, 
@@ -76,7 +155,7 @@ impl TransactionRepository {
         .bind(metadata)
         .bind(0) // Default priority_level for new transactions
         .bind("standard") // Default partner_tier
-        .fetch_one(&self.pool)
+        .fetch_one(&pool)
         .await
         .map_err(DatabaseError::from_sqlx)
     }
@@ -204,6 +283,7 @@ impl TransactionRepository {
         &self,
         wallet_address: &str,
     ) -> Result<Vec<Transaction>, DatabaseError> {
+        let pool = self.get_read_pool(Some(wallet_address)).await?;
         sqlx::query_as::<_, Transaction>(
             "SELECT transaction_id, wallet_address, type, from_currency, to_currency, 
                     from_amount, to_amount, cngn_amount, status, payment_provider, 
@@ -214,7 +294,7 @@ impl TransactionRepository {
              ORDER BY created_at DESC",
         )
         .bind(wallet_address)
-        .fetch_all(&self.pool)
+        .fetch_all(&pool)
         .await
         .map_err(DatabaseError::from_sqlx)
     }
@@ -224,18 +304,33 @@ impl TransactionRepository {
         &self,
         payment_reference: &str,
     ) -> Result<Option<Transaction>, DatabaseError> {
-        sqlx::query_as::<_, Transaction>(
-            "SELECT transaction_id, wallet_address, type, from_currency, to_currency, 
-                    from_amount, to_amount, cngn_amount, status, payment_provider, 
-                    payment_reference, blockchain_tx_hash, error_message, metadata, 
-                    created_at, updated_at 
-             FROM transactions 
-             WHERE payment_reference = $1",
-        )
-        .bind(payment_reference)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(DatabaseError::from_sqlx)
+        if crate::database::get_global_ha_pool().is_some() {
+            self.fetch_optional_from_shards(|pool| {
+                sqlx::query_as::<_, Transaction>(
+                    "SELECT transaction_id, wallet_address, type, from_currency, to_currency, 
+                            from_amount, to_amount, cngn_amount, status, payment_provider, 
+                            payment_reference, blockchain_tx_hash, error_message, metadata, 
+                            created_at, updated_at 
+                     FROM transactions 
+                     WHERE payment_reference = $1",
+                )
+                .bind(payment_reference)
+            })
+            .await
+        } else {
+            sqlx::query_as::<_, Transaction>(
+                "SELECT transaction_id, wallet_address, type, from_currency, to_currency, 
+                        from_amount, to_amount, cngn_amount, status, payment_provider, 
+                        payment_reference, blockchain_tx_hash, error_message, metadata, 
+                        created_at, updated_at 
+                 FROM transactions 
+                 WHERE payment_reference = $1",
+            )
+            .bind(payment_reference)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(DatabaseError::from_sqlx)
+        }
     }
 
     /// Find status by transaction_id
@@ -246,13 +341,30 @@ impl TransactionRepository {
             })
         })?;
 
-        sqlx::query_scalar::<_, String>(
-            "SELECT status FROM transactions WHERE transaction_id = $1"
-        )
-        .bind(uuid)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(DatabaseError::from_sqlx)
+        if crate::database::get_global_ha_pool().is_some() {
+            let pools = self.all_read_pools().await?;
+            for pool in pools {
+                if let Some(status) = sqlx::query_scalar::<_, String>(
+                    "SELECT status FROM transactions WHERE transaction_id = $1",
+                )
+                .bind(uuid)
+                .fetch_optional(&pool)
+                .await
+                .map_err(DatabaseError::from_sqlx)?
+                {
+                    return Ok(status);
+                }
+            }
+            Err(DatabaseError::new(DatabaseErrorKind::NotFound {
+                message: format!("Transaction {} not found", transaction_id),
+            }))
+        } else {
+            sqlx::query_scalar::<_, String>("SELECT status FROM transactions WHERE transaction_id = $1")
+                .bind(uuid)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(DatabaseError::from_sqlx)
+        }
     }
 
     /// Find pending payments for monitoring
@@ -265,23 +377,46 @@ impl TransactionRepository {
         window_hours: i32,
         limit: i64,
     ) -> Result<Vec<Transaction>, DatabaseError> {
-        sqlx::query_as::<_, Transaction>(
-            "SELECT transaction_id, wallet_address, type, from_currency, to_currency,
-                    from_amount, to_amount, cngn_amount, status, payment_provider,
-                    payment_reference, blockchain_tx_hash, error_message, metadata,
-                    priority_level, partner_tier,
-                    created_at, updated_at
-             FROM transactions
-             WHERE status IN ('pending', 'processing', 'pending_payment', 'burning', 'refunding')
-               AND created_at > NOW() - INTERVAL '1 hour' * $1
-             ORDER BY created_at ASC
-             LIMIT $2",
-        )
-        .bind(window_hours)
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(DatabaseError::from_sqlx)
+        if crate::database::get_global_ha_pool().is_some() {
+            let mut results = self
+                .fetch_all_from_shards(|pool| {
+                    sqlx::query_as::<_, Transaction>(
+                        "SELECT transaction_id, wallet_address, type, from_currency, to_currency,
+                                from_amount, to_amount, cngn_amount, status, payment_provider,
+                                payment_reference, blockchain_tx_hash, error_message, metadata,
+                                priority_level, partner_tier,
+                                created_at, updated_at
+                         FROM transactions
+                         WHERE status IN ('pending', 'processing', 'pending_payment', 'burning', 'refunding')
+                           AND created_at > NOW() - INTERVAL '1 hour' * $1
+                         ORDER BY created_at ASC
+                         LIMIT $2",
+                    )
+                    .bind(window_hours)
+                    .bind(limit)
+                })
+                .await?;
+            results.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+            Ok(results.into_iter().take(limit as usize).collect())
+        } else {
+            sqlx::query_as::<_, Transaction>(
+                "SELECT transaction_id, wallet_address, type, from_currency, to_currency,
+                        from_amount, to_amount, cngn_amount, status, payment_provider,
+                        payment_reference, blockchain_tx_hash, error_message, metadata,
+                        priority_level, partner_tier,
+                        created_at, updated_at
+                 FROM transactions
+                 WHERE status IN ('pending', 'processing', 'pending_payment', 'burning', 'refunding')
+                   AND created_at > NOW() - INTERVAL '1 hour' * $1
+                 ORDER BY created_at ASC
+                 LIMIT $2",
+            )
+            .bind(window_hours)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(DatabaseError::from_sqlx)
+        }
     }
 
     /// Find transactions by status
@@ -290,21 +425,42 @@ impl TransactionRepository {
         status: &str,
         limit: i64,
     ) -> Result<Vec<Transaction>, DatabaseError> {
-        sqlx::query_as::<_, Transaction>(
-            "SELECT transaction_id, wallet_address, type, from_currency, to_currency, 
-                    from_amount, to_amount, cngn_amount, status, payment_provider, 
-                    payment_reference, blockchain_tx_hash, error_message, metadata, 
-                    created_at, updated_at 
-             FROM transactions 
-             WHERE status = $1 
-             ORDER BY created_at ASC 
-             LIMIT $2",
-        )
-        .bind(status)
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(DatabaseError::from_sqlx)
+        if crate::database::get_global_ha_pool().is_some() {
+            let mut results = self
+                .fetch_all_from_shards(|pool| {
+                    sqlx::query_as::<_, Transaction>(
+                        "SELECT transaction_id, wallet_address, type, from_currency, to_currency, 
+                                from_amount, to_amount, cngn_amount, status, payment_provider, 
+                                payment_reference, blockchain_tx_hash, error_message, metadata, 
+                                created_at, updated_at 
+                         FROM transactions 
+                         WHERE status = $1 
+                         ORDER BY created_at ASC 
+                         LIMIT $2",
+                    )
+                    .bind(status)
+                    .bind(limit)
+                })
+                .await?;
+            results.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+            Ok(results.into_iter().take(limit as usize).collect())
+        } else {
+            sqlx::query_as::<_, Transaction>(
+                "SELECT transaction_id, wallet_address, type, from_currency, to_currency, 
+                        from_amount, to_amount, cngn_amount, status, payment_provider, 
+                        payment_reference, blockchain_tx_hash, error_message, metadata, 
+                        created_at, updated_at 
+                 FROM transactions 
+                 WHERE status = $1 
+                 ORDER BY created_at ASC 
+                 LIMIT $2",
+            )
+            .bind(status)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(DatabaseError::from_sqlx)
+        }
     }
 
     /// Find offramp transactions by status
@@ -313,21 +469,42 @@ impl TransactionRepository {
         status: &str,
         limit: i64,
     ) -> Result<Vec<Transaction>, DatabaseError> {
-        sqlx::query_as::<_, Transaction>(
-            "SELECT transaction_id, wallet_address, type, from_currency, to_currency, 
-                    from_amount, to_amount, cngn_amount, status, payment_provider, 
-                    payment_reference, blockchain_tx_hash, error_message, metadata, 
-                    created_at, updated_at 
-             FROM transactions 
-             WHERE status = $1 AND type = 'offramp' 
-             ORDER BY created_at ASC 
-             LIMIT $2",
-        )
-        .bind(status)
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(DatabaseError::from_sqlx)
+        if crate::database::get_global_ha_pool().is_some() {
+            let mut results = self
+                .fetch_all_from_shards(|pool| {
+                    sqlx::query_as::<_, Transaction>(
+                        "SELECT transaction_id, wallet_address, type, from_currency, to_currency, 
+                                from_amount, to_amount, cngn_amount, status, payment_provider, 
+                                payment_reference, blockchain_tx_hash, error_message, metadata, 
+                                created_at, updated_at 
+                         FROM transactions 
+                         WHERE status = $1 AND type = 'offramp' 
+                         ORDER BY created_at ASC 
+                         LIMIT $2",
+                    )
+                    .bind(status)
+                    .bind(limit)
+                })
+                .await?;
+            results.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+            Ok(results.into_iter().take(limit as usize).collect())
+        } else {
+            sqlx::query_as::<_, Transaction>(
+                "SELECT transaction_id, wallet_address, type, from_currency, to_currency, 
+                        from_amount, to_amount, cngn_amount, status, payment_provider, 
+                        payment_reference, blockchain_tx_hash, error_message, metadata, 
+                        created_at, updated_at 
+                 FROM transactions 
+                 WHERE status = $1 AND type = 'offramp' 
+                 ORDER BY created_at ASC 
+                 LIMIT $2",
+            )
+            .bind(status)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(DatabaseError::from_sqlx)
+        }
     }
 }
 

@@ -71,9 +71,15 @@ pub fn inject_gateway_headers(headers: &mut HeaderMap, method: &str, path: &str)
 
 /// Inject security response headers onto every outgoing response.
 pub fn inject_security_response_headers(headers: &mut HeaderMap, hsts_max_age: u64) {
-    headers.insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+    headers.insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
     headers.insert("x-frame-options", HeaderValue::from_static("DENY"));
-    headers.insert("x-xss-protection", HeaderValue::from_static("1; mode=block"));
+    headers.insert(
+        "x-xss-protection",
+        HeaderValue::from_static("1; mode=block"),
+    );
     headers.insert(
         "referrer-policy",
         HeaderValue::from_static("strict-origin-when-cross-origin"),
@@ -161,7 +167,10 @@ mod tests {
         let sig = headers["x-gateway-signature"].to_str().unwrap();
         let ts = headers["x-gateway-timestamp"].to_str().unwrap();
         assert!(crate::gateway::signature::verify_gateway_signature(
-            "POST", "/api/v1/onramp", ts, sig
+            "POST",
+            "/api/v1/onramp",
+            ts,
+            sig
         ));
     }
 
@@ -187,7 +196,10 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("server", HeaderValue::from_static("nginx/1.25.0"));
         headers.insert("x-powered-by", HeaderValue::from_static("Express"));
-        headers.insert("x-upstream-service", HeaderValue::from_static("payment-svc"));
+        headers.insert(
+            "x-upstream-service",
+            HeaderValue::from_static("payment-svc"),
+        );
         strip_internal_response_headers(&mut headers);
         // server is replaced with generic value
         assert_eq!(headers["server"], "aframp-gateway");

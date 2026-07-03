@@ -6,13 +6,13 @@
 
 #[cfg(feature = "database")]
 mod tests {
+    use serde_json::json;
+    use uuid::Uuid;
     use Bitmesh_backend::multisig::{
         governance_log::compute_entry_hash,
         models::{MultiSigOpType, MultiSigProposalStatus},
         xdr_builder::{build_burn_xdr, build_mint_xdr, build_set_options_xdr, SetOptionsParams},
     };
-    use serde_json::json;
-    use uuid::Uuid;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Known valid Stellar testnet addresses for unit tests
@@ -36,8 +36,8 @@ mod tests {
 
     #[test]
     fn test_burn_xdr_is_valid_base64() {
-        let xdr = build_burn_xdr(DEST, ISSUER, 5_000_000_000, 99)
-            .expect("burn XDR build should succeed");
+        let xdr =
+            build_burn_xdr(DEST, ISSUER, 5_000_000_000, 99).expect("burn XDR build should succeed");
         assert!(!xdr.is_empty());
         let decoded = base64::decode(&xdr);
         assert!(decoded.is_ok(), "burn XDR must be valid base64");
@@ -52,8 +52,8 @@ mod tests {
             high_threshold: Some(3),
             signer: Some((DEST.to_string(), 1)),
         };
-        let xdr = build_set_options_xdr(ISSUER, 0, params)
-            .expect("set_options XDR build should succeed");
+        let xdr =
+            build_set_options_xdr(ISSUER, 0, params).expect("set_options XDR build should succeed");
         assert!(!xdr.is_empty());
     }
 

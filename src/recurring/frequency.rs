@@ -110,8 +110,14 @@ mod tests {
     fn test_parse_valid() {
         assert_eq!(Frequency::parse("daily", None).unwrap(), Frequency::Daily);
         assert_eq!(Frequency::parse("weekly", None).unwrap(), Frequency::Weekly);
-        assert_eq!(Frequency::parse("monthly", None).unwrap(), Frequency::Monthly);
-        assert_eq!(Frequency::parse("custom", Some(7)).unwrap(), Frequency::Custom(7));
+        assert_eq!(
+            Frequency::parse("monthly", None).unwrap(),
+            Frequency::Monthly
+        );
+        assert_eq!(
+            Frequency::parse("custom", Some(7)).unwrap(),
+            Frequency::Custom(7)
+        );
     }
 
     #[test]

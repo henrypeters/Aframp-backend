@@ -89,11 +89,7 @@ impl ProvisioningRepository {
         .map_err(DatabaseError::from_sqlx)
     }
 
-    pub async fn set_failure(
-        &self,
-        wallet_id: Uuid,
-        reason: &str,
-    ) -> Result<(), DatabaseError> {
+    pub async fn set_failure(&self, wallet_id: Uuid, reason: &str) -> Result<(), DatabaseError> {
         sqlx::query(
             r#"
             UPDATE wallet_provisioning
@@ -208,7 +204,11 @@ impl ProvisioningRepository {
         trustline_authorized: bool,
         wallet_registered: bool,
     ) -> Result<WalletReadinessCheck, DatabaseError> {
-        let all_met = stellar_exists && min_xlm && trustline_active && trustline_authorized && wallet_registered;
+        let all_met = stellar_exists
+            && min_xlm
+            && trustline_active
+            && trustline_authorized
+            && wallet_registered;
         sqlx::query_as::<_, WalletReadinessCheck>(
             r#"
             INSERT INTO wallet_readiness_checks
@@ -256,7 +256,9 @@ impl ProvisioningRepository {
     // Platform funding account
     // -------------------------------------------------------------------------
 
-    pub async fn get_funding_account(&self) -> Result<Option<PlatformFundingAccount>, DatabaseError> {
+    pub async fn get_funding_account(
+        &self,
+    ) -> Result<Option<PlatformFundingAccount>, DatabaseError> {
         sqlx::query_as::<_, PlatformFundingAccount>(
             "SELECT * FROM platform_funding_account WHERE is_active = TRUE LIMIT 1",
         )

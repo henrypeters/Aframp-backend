@@ -13,13 +13,13 @@
 //! Probabilistic early expiry (via moka's time_to_idle) prevents simultaneous
 //! expiry spikes across multiple instances.
 
+use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 use std::sync::Arc;
-use serde::{de::DeserializeOwned, Serialize};
 use tracing::{debug, info};
 
-use crate::cache::l1::{L1Cache, L1Category};
 use crate::cache::cache::{Cache as CacheTrait, RedisCache};
+use crate::cache::l1::{L1Cache, L1Category};
 use crate::cache::metrics::{CacheSizeMetrics, L1Metrics, L2Metrics};
 use crate::cache::single_flight::SingleFlight;
 
@@ -192,8 +192,7 @@ impl MultiLevelCache {
             .sf
             .get_or_rebuild(key, || async move {
                 let value = rebuild().await?;
-                let bytes = serde_json::to_vec(&value)
-                    .map_err(|e| e.to_string())?;
+                let bytes = serde_json::to_vec(&value).map_err(|e| e.to_string())?;
                 // Populate L2 after rebuild
                 if let Err(e) = l2.set(&key_owned, &value, Some(ttl)).await {
                     debug!(key = key_owned, error = %e, "Failed to populate L2 after rebuild");
@@ -211,18 +210,12 @@ impl MultiLevelCache {
     // -------------------------------------------------------------------------
 
     pub fn update_size_metrics(&self) {
-        self.size_metrics.set_l1_size(
-            "fee_structures",
-            self.l1.fee_structures.entry_count(),
-        );
-        self.size_metrics.set_l1_size(
-            "currency_configs",
-            self.l1.currency_configs.entry_count(),
-        );
-        self.size_metrics.set_l1_size(
-            "provider_lists",
-            self.l1.provider_lists.entry_count(),
-        );
+        self.size_metrics
+            .set_l1_size("fee_structures", self.l1.fee_structures.entry_count());
+        self.size_metrics
+            .set_l1_size("currency_configs", self.l1.currency_configs.entry_count());
+        self.size_metrics
+            .set_l1_size("provider_lists", self.l1.provider_lists.entry_count());
     }
 
     // -------------------------------------------------------------------------

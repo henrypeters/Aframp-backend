@@ -33,7 +33,9 @@ impl IpReputationEntity {
         match self.block_status.as_deref() {
             Some("temporary") | Some("permanent") | Some("shadow") => {
                 // Check if temporary block has expired
-                if let (Some("temporary"), Some(expiry)) = (self.block_status.as_deref(), self.block_expiry_at) {
+                if let (Some("temporary"), Some(expiry)) =
+                    (self.block_status.as_deref(), self.block_expiry_at)
+                {
                     expiry > Utc::now()
                 } else {
                     true
@@ -44,7 +46,10 @@ impl IpReputationEntity {
     }
 
     pub fn is_hard_blocked(&self) -> bool {
-        matches!(self.block_status.as_deref(), Some("temporary") | Some("permanent"))
+        matches!(
+            self.block_status.as_deref(),
+            Some("temporary") | Some("permanent")
+        )
     }
 
     pub fn is_shadow_blocked(&self) -> bool {

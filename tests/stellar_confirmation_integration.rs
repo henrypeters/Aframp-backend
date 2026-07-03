@@ -29,19 +29,19 @@ use uuid::Uuid;
 // Helpers
 // ---------------------------------------------------------------------------
 
-async fn test_pool() -> PgPool {
-    let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for integration tests");
-    init_pool(&url, None).await.expect("db pool")
+async fn test_pool() -> anyhow::Result<PgPool> {
+    let url = std::env::var("DATABASE_URL").map_err(|_| anyhow::anyhow!("DATABASE_URL must be set for integration tests"))?;
+    init_pool(&url, None).await.map_err(|e| anyhow::anyhow!("Failed to init db pool: {}", e))
 }
 
-fn testnet_stellar_client() -> StellarClient {
-    let cfg = StellarConfig::from_env().expect("stellar config");
-    StellarClient::new(cfg).expect("stellar client")
+fn testnet_stellar_client() -> anyhow::Result<StellarClient> {
+    let cfg = StellarConfig::from_env().map_err(|e| anyhow::anyhow!("stellar config error: {}", e))?;
+    StellarClient::new(cfg).map_err(|e| anyhow::anyhow!("stellar client error: {}", e))
 }
 
-fn test_metrics() -> Arc<WorkerMetrics> {
+fn test_metrics() -> anyhow::Result<Arc<WorkerMetrics>> {
     let registry = Registry::new();
-    Arc::new(WorkerMetrics::new(&registry).expect("metrics"))
+    Ok(Arc::new(WorkerMetrics::new(&registry).map_err(|e| anyhow::anyhow!("metrics error: {}", e))?))
 }
 
 /// Insert a synthetic transaction row with a known stellar_tx_hash.
@@ -96,8 +96,8 @@ const KNOWN_CONFIRMED_HASH: &str =
     "b9d0b2292c4e09e8eb22d036171491e87b8d2086bf8b265874c8d182cb9c9020";
 
 #[tokio::test]
-async fn test_pending_to_completed_on_confirmed_hash() {
-    let pool = test_pool().await;
+async fn test_pending_to_completed_on_confirmed_hash() -> anyhow::Result<()> {
+    let pool = test_pool().await?;
     let tx_id = insert_test_transaction(&pool, KNOWN_CONFIRMED_HASH, "pending").await;
 
     let config = StellarConfirmationConfig {
@@ -110,9 +110,9 @@ async fn test_pending_to_completed_on_confirmed_hash() {
 
     let worker = StellarConfirmationWorker::new(
         pool.clone(),
-        testnet_stellar_client(),
+        testnet_stellar_client()?,
         config,
-        test_metrics(),
+        test_metrics()?,
     );
 
     // Run a single cycle.
@@ -136,6 +136,7 @@ async fn test_pending_to_completed_on_confirmed_hash() {
     assert_eq!(event_count, 1, "exactly one webhook event should be emitted");
 
     cleanup_transaction(&pool, tx_id).await;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -143,8 +144,8 @@ async fn test_pending_to_completed_on_confirmed_hash() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn test_idempotent_on_repeat_poll() {
-    let pool = test_pool().await;
+async fn test_idempotent_on_repeat_poll() -> anyhow::Result<()> {
+    let pool = test_pool().await?;
     let tx_id = insert_test_transaction(&pool, KNOWN_CONFIRMED_HASH, "pending").await;
 
     let config = StellarConfirmationConfig {
@@ -157,9 +158,9 @@ async fn test_idempotent_on_repeat_poll() {
 
     let worker = StellarConfirmationWorker::new(
         pool.clone(),
-        testnet_stellar_client(),
+        testnet_stellar_client()?,
         config,
-        test_metrics(),
+        test_metrics()?,
     );
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -180,6 +181,7 @@ async fn test_idempotent_on_repeat_poll() {
     assert_eq!(event_count, 1, "webhook must be emitted exactly once");
 
     cleanup_transaction(&pool, tx_id).await;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -192,8 +194,8 @@ const KNOWN_FAILED_HASH: &str =
     "0000000000000000000000000000000000000000000000000000000000000bad";
 
 #[tokio::test]
-async fn test_pending_to_failed_on_rejected_hash() {
-    let pool = test_pool().await;
+async fn test_pending_to_failed_on_rejected_hash() -> anyhow::Result<()> {
+    let pool = test_pool().await?;
     let tx_id = insert_test_transaction(&pool, KNOWN_FAILED_HASH, "pending").await;
 
     let config = StellarConfirmationConfig {
@@ -206,9 +208,9 @@ async fn test_pending_to_failed_on_rejected_hash() {
 
     let worker = StellarConfirmationWorker::new(
         pool.clone(),
-        testnet_stellar_client(),
+        testnet_stellar_client()?,
         config,
-        test_metrics(),
+        test_metrics()?,
     );
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -228,6 +230,7 @@ async fn test_pending_to_failed_on_rejected_hash() {
     );
 
     cleanup_transaction(&pool, tx_id).await;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -235,8 +238,8 @@ async fn test_pending_to_failed_on_rejected_hash() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn test_stale_transaction_is_flagged() {
-    let pool = test_pool().await;
+async fn test_stale_transaction_is_flagged() -> anyhow::Result<()> {
+    let pool = test_pool().await?;
     let tx_id = Uuid::new_v4();
 
     // Insert a transaction that is already 2 hours old.
@@ -267,9 +270,9 @@ async fn test_stale_transaction_is_flagged() {
 
     let worker = StellarConfirmationWorker::new(
         pool.clone(),
-        testnet_stellar_client(),
+        testnet_stellar_client()?,
         config,
-        test_metrics(),
+        test_metrics()?,
     );
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -289,6 +292,7 @@ async fn test_stale_transaction_is_flagged() {
     assert!(stale_at.is_some(), "stale_flagged_at should be set");
 
     cleanup_transaction(&pool, tx_id).await;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -296,8 +300,8 @@ async fn test_stale_transaction_is_flagged() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn test_graceful_shutdown() {
-    let pool = test_pool().await;
+async fn test_graceful_shutdown() -> anyhow::Result<()> {
+    let pool = test_pool().await?;
 
     let config = StellarConfirmationConfig {
         poll_interval: Duration::from_secs(60), // long interval
@@ -309,9 +313,9 @@ async fn test_graceful_shutdown() {
 
     let worker = StellarConfirmationWorker::new(
         pool.clone(),
-        testnet_stellar_client(),
+        testnet_stellar_client()?,
         config,
-        test_metrics(),
+        test_metrics()?,
     );
 
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -324,4 +328,5 @@ async fn test_graceful_shutdown() {
     // Worker must finish within a reasonable time.
     let result = tokio::time::timeout(Duration::from_secs(10), handle).await;
     assert!(result.is_ok(), "worker did not shut down within 10 seconds");
+    Ok(())
 }

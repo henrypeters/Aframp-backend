@@ -4,7 +4,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use sqlx::{FromRow, Row};
 use uuid::Uuid;
 
 use super::error::{DatabaseError, DbResult};
@@ -82,7 +82,10 @@ impl GeoRestrictionRepository {
     }
 
     /// Get country access policy by country code
-    pub async fn get_country_policy(&self, country_code: &str) -> DbResult<Option<CountryAccessPolicyEntity>> {
+    pub async fn get_country_policy(
+        &self,
+        country_code: &str,
+    ) -> DbResult<Option<CountryAccessPolicyEntity>> {
         let policy = sqlx::query_as::<_, CountryAccessPolicyEntity>(
             "SELECT * FROM country_access_policies WHERE country_code = $1",
         )
@@ -137,7 +140,10 @@ impl GeoRestrictionRepository {
     }
 
     /// Get region grouping by region name
-    pub async fn get_region_grouping(&self, region_name: &str) -> DbResult<Option<RegionGroupingEntity>> {
+    pub async fn get_region_grouping(
+        &self,
+        region_name: &str,
+    ) -> DbResult<Option<RegionGroupingEntity>> {
         let region = sqlx::query_as::<_, RegionGroupingEntity>(
             "SELECT * FROM region_groupings WHERE region_name = $1",
         )
@@ -213,7 +219,10 @@ impl GeoRestrictionRepository {
     }
 
     /// Get all active consumer overrides for a consumer
-    pub async fn get_consumer_overrides(&self, consumer_id: &str) -> DbResult<Vec<ConsumerGeoOverrideEntity>> {
+    pub async fn get_consumer_overrides(
+        &self,
+        consumer_id: &str,
+    ) -> DbResult<Vec<ConsumerGeoOverrideEntity>> {
         let overrides = sqlx::query_as::<_, ConsumerGeoOverrideEntity>(
             r#"
             SELECT * FROM active_consumer_geo_overrides
@@ -268,13 +277,11 @@ impl GeoRestrictionRepository {
 
     /// Delete consumer geo-override
     pub async fn delete_consumer_override(&self, override_id: &str) -> DbResult<bool> {
-        let result = sqlx::query(
-            "DELETE FROM consumer_geo_overrides WHERE id = $1",
-        )
-        .bind(override_id)
-        .execute(self.db.pool())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+        let result = sqlx::query("DELETE FROM consumer_geo_overrides WHERE id = $1")
+            .bind(override_id)
+            .execute(self.db.pool())
+            .await
+            .map_err(DatabaseError::from_sqlx)?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -328,20 +335,20 @@ impl GeoRestrictionRepository {
 
     /// Get geo-restriction statistics for reporting
     pub async fn get_geo_stats(&self, since: DateTime<Utc>) -> DbResult<serde_json::Value> {
-        let stats = sqlx::query!(
+        let stats = sqlx::query(
             r#"
             SELECT
                 resolved_country_code,
-                access_decision,
-                transaction_type,
-                COUNT(*) as count
+                access_decision::text AS access_decision,
+                transaction_type::text AS transaction_type,
+                COUNT(*)::bigint AS count
             FROM geo_restriction_audit
             WHERE timestamp >= $1
             GROUP BY resolved_country_code, access_decision, transaction_type
             ORDER BY resolved_country_code, count DESC
             "#,
-            since
         )
+        .bind(since)
         .fetch_all(self.db.pool())
         .await
         .map_err(DatabaseError::from_sqlx)?;
@@ -349,12 +356,23 @@ impl GeoRestrictionRepository {
         // Convert to JSON structure
         let mut result = serde_json::Map::new();
         for stat in stats {
-            let country = stat.resolved_country_code.unwrap_or_else(|| "unknown".to_string());
-            let decision = stat.access_decision;
-            let tx_type = stat.transaction_type.unwrap_or_else(|| "unknown".to_string());
-            let count = stat.count.unwrap_or(0);
+            let country = stat
+                .try_get::<Option<String>, _>("resolved_country_code")
+                .unwrap_or(None)
+                .unwrap_or_else(|| "unknown".to_string());
+            let decision = stat
+                .try_get::<String, _>("access_decision")
+                .unwrap_or_else(|_| "unknown".to_string());
+            let tx_type = stat
+                .try_get::<Option<String>, _>("transaction_type")
+                .unwrap_or(None)
+                .unwrap_or_else(|| "unknown".to_string());
+            let count = stat.try_get::<i64, _>("count").unwrap_or(0);
 
-            result.insert(format!("{}_{}_{}", country, decision, tx_type), serde_json::Value::Number(count.into()));
+            result.insert(
+                format!("{}_{}_{}", country, decision, tx_type),
+                serde_json::Value::Number(count.into()),
+            );
         }
 
         Ok(serde_json::Value::Object(result))

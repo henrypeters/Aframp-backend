@@ -3,9 +3,11 @@
 //! All metrics are registered in a single global registry exposed at GET /metrics.
 //! Metric names follow Prometheus naming conventions: snake_case, unit suffix where
 //! applicable, and the `aframp_` namespace prefix.
+pub mod analytics;
 pub mod geo_restriction;
 pub mod handler;
 pub mod issuer;
+pub mod por;
 pub mod tests;
 
 use prometheus::{
@@ -262,8 +264,15 @@ pub mod cngn {
                     "cNGN transaction amounts in NGN",
                     &["tx_type"],
                     vec![
-                        100.0, 500.0, 1_000.0, 5_000.0, 10_000.0, 50_000.0, 100_000.0,
-                        500_000.0, 1_000_000.0,
+                        100.0,
+                        500.0,
+                        1_000.0,
+                        5_000.0,
+                        10_000.0,
+                        50_000.0,
+                        100_000.0,
+                        500_000.0,
+                        1_000_000.0,
                     ],
                     r
                 )
@@ -437,9 +446,7 @@ pub mod worker {
     static WORKER_ERRORS_TOTAL: OnceLock<CounterVec> = OnceLock::new();
 
     pub fn cycles_total() -> &'static CounterVec {
-        WORKER_CYCLES_TOTAL
-            .get()
-            .expect("metrics not initialised")
+        WORKER_CYCLES_TOTAL.get().expect("metrics not initialised")
     }
 
     pub fn cycle_duration_seconds() -> &'static HistogramVec {
@@ -455,9 +462,7 @@ pub mod worker {
     }
 
     pub fn errors_total() -> &'static CounterVec {
-        WORKER_ERRORS_TOTAL
-            .get()
-            .expect("metrics not initialised")
+        WORKER_ERRORS_TOTAL.get().expect("metrics not initialised")
     }
 
     pub(super) fn register(r: &Registry) {
@@ -522,6 +527,18 @@ pub mod cache {
     static CACHE_HITS_TOTAL: OnceLock<CounterVec> = OnceLock::new();
     static CACHE_MISSES_TOTAL: OnceLock<CounterVec> = OnceLock::new();
     static CACHE_OPERATION_DURATION_SECONDS: OnceLock<HistogramVec> = OnceLock::new();
+    static CACHE_HIT_RATIO_TOTAL: OnceLock<CounterVec> = OnceLock::new();
+    static CDN_CACHE_STATUS_TOTAL: OnceLock<CounterVec> = OnceLock::new();
+    static REDIS_MEMORY_USED_BYTES: OnceLock<GaugeVec> = OnceLock::new();
+    static REDIS_MAXMEMORY_BYTES: OnceLock<GaugeVec> = OnceLock::new();
+
+    pub fn redis_memory_used_bytes() -> &'static GaugeVec {
+        REDIS_MEMORY_USED_BYTES.get().expect("metrics not initialised")
+    }
+
+    pub fn redis_maxmemory_bytes() -> &'static GaugeVec {
+        REDIS_MAXMEMORY_BYTES.get().expect("metrics not initialised")
+    }
 
     pub fn hits_total() -> &'static CounterVec {
         CACHE_HITS_TOTAL.get().expect("metrics not initialised")
@@ -535,6 +552,17 @@ pub mod cache {
         CACHE_OPERATION_DURATION_SECONDS
             .get()
             .expect("metrics not initialised")
+    }
+
+    /// Per-tier, per-namespace hit counter. Compute ratio via `rate()` in Prometheus:
+    ///   `rate(cache_hit_ratio_total{tier="l2",namespace="rate"}[5m])`
+    pub fn cache_hit_ratio_total() -> &'static CounterVec {
+        CACHE_HIT_RATIO_TOTAL.get().expect("metrics not initialised")
+    }
+
+    /// CDN edge cache status per path prefix.
+    pub fn cdn_cache_status_total() -> &'static CounterVec {
+        CDN_CACHE_STATUS_TOTAL.get().expect("metrics not initialised")
     }
 
     pub(super) fn register(r: &Registry) {
@@ -569,6 +597,54 @@ pub mod cache {
                     "Redis cache operation duration in seconds",
                     &["operation"],
                     vec![0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5],
+                    r
+                )
+                .unwrap(),
+            )
+            .ok();
+
+        CACHE_HIT_RATIO_TOTAL
+            .set(
+                register_counter_vec_with_registry!(
+                    "aframp_cache_hit_ratio_total",
+                    "Cache hit events by tier (l1|l2) and namespace — use rate() for ratio",
+                    &["tier", "namespace"],
+                    r
+                )
+                .unwrap(),
+            )
+            .ok();
+
+        CDN_CACHE_STATUS_TOTAL
+            .set(
+                register_counter_vec_with_registry!(
+                    "aframp_cdn_cache_status_total",
+                    "CDN/edge cache response status by status code and path prefix",
+                    &["status", "path_prefix"],
+                    r
+                )
+                .unwrap(),
+            )
+            .ok();
+
+        REDIS_MEMORY_USED_BYTES
+            .set(
+                register_gauge_vec_with_registry!(
+                    "aframp_redis_memory_used_bytes",
+                    "Redis used_memory in bytes (from INFO memory)",
+                    &["instance"],
+                    r
+                )
+                .unwrap(),
+            )
+            .ok();
+
+        REDIS_MAXMEMORY_BYTES
+            .set(
+                register_gauge_vec_with_registry!(
+                    "aframp_redis_maxmemory_bytes",
+                    "Redis maxmemory configured limit in bytes (0 = unlimited)",
+                    &["instance"],
                     r
                 )
                 .unwrap(),
@@ -754,19 +830,27 @@ pub mod ip_detection {
     }
 
     pub fn ip_blocks_applied_total() -> &'static CounterVec {
-        IP_BLOCKS_APPLIED_TOTAL.get().expect("metrics not initialised")
+        IP_BLOCKS_APPLIED_TOTAL
+            .get()
+            .expect("metrics not initialised")
     }
 
     pub fn ip_shadow_blocks_applied_total() -> &'static CounterVec {
-        IP_SHADOW_BLOCKS_APPLIED_TOTAL.get().expect("metrics not initialised")
+        IP_SHADOW_BLOCKS_APPLIED_TOTAL
+            .get()
+            .expect("metrics not initialised")
     }
 
     pub fn ip_block_enforcement_total() -> &'static CounterVec {
-        IP_BLOCK_ENFORCEMENT_TOTAL.get().expect("metrics not initialised")
+        IP_BLOCK_ENFORCEMENT_TOTAL
+            .get()
+            .expect("metrics not initialised")
     }
 
     pub fn ip_automated_blocking_rate() -> &'static GaugeVec {
-        IP_AUTOMATED_BLOCKING_RATE.get().expect("metrics not initialised")
+        IP_AUTOMATED_BLOCKING_RATE
+            .get()
+            .expect("metrics not initialised")
     }
 
     pub(super) fn register(r: &Registry) {
@@ -858,13 +942,13 @@ fn register_all(r: &Registry) {
     crate::gateway::metrics::register(r);
 
     backup::register(r);
+    por::register(r);
     #[cfg(feature = "database")]
-
     crate::analytics::metrics::register(r);
     crate::adaptive_rate_limit::metrics::register(r);
     crate::security_compliance::metrics::register(r);
     crate::liquidity::metrics::register(r);
-
+    crate::travel_rule::metrics::register(r);
 }
 
 // ---------------------------------------------------------------------------

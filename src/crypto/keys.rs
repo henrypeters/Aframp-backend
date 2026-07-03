@@ -205,8 +205,8 @@ impl PlatformKeyVersion {
 
 /// AES-256 Key Wrap (RFC 3394) — unwrap a wrapped key.
 fn aes_kw_unwrap(kek: &[u8; 32], wrapped: &[u8]) -> Result<Zeroizing<[u8; 32]>, EncryptionError> {
-    use aes_gcm::aes::Aes256;
     use aes_gcm::aes::cipher::{BlockDecrypt, KeyInit as AesKeyInit};
+    use aes_gcm::aes::Aes256;
 
     // RFC 3394: wrapped key length = n*8 + 8 where n = number of 8-byte blocks
     if wrapped.len() != 40 {
@@ -214,8 +214,8 @@ fn aes_kw_unwrap(kek: &[u8; 32], wrapped: &[u8]) -> Result<Zeroizing<[u8; 32]>, 
         return Err(EncryptionError::SessionKeyDecryptionFailed);
     }
 
-    let cipher = Aes256::new_from_slice(kek)
-        .map_err(|_| EncryptionError::SessionKeyDecryptionFailed)?;
+    let cipher =
+        Aes256::new_from_slice(kek).map_err(|_| EncryptionError::SessionKeyDecryptionFailed)?;
 
     let mut a = [0u8; 8];
     a.copy_from_slice(&wrapped[..8]);
@@ -255,11 +255,10 @@ fn aes_kw_unwrap(kek: &[u8; 32], wrapped: &[u8]) -> Result<Zeroizing<[u8; 32]>, 
 
 /// AES-256 Key Wrap (RFC 3394) — wrap a key. Used in reference implementations and tests.
 pub fn aes_kw_wrap(kek: &[u8; 32], key_to_wrap: &[u8; 32]) -> Result<Vec<u8>, EncryptionError> {
-    use aes_gcm::aes::Aes256;
     use aes_gcm::aes::cipher::{BlockEncrypt, KeyInit as AesKeyInit};
+    use aes_gcm::aes::Aes256;
 
-    let cipher = Aes256::new_from_slice(kek)
-        .map_err(|_| EncryptionError::EncryptionFailed)?;
+    let cipher = Aes256::new_from_slice(kek).map_err(|_| EncryptionError::EncryptionFailed)?;
 
     let mut a = [0xA6u8; 8]; // default IV
     let mut r: Vec<[u8; 8]> = key_to_wrap
@@ -368,7 +367,9 @@ impl KeyStore {
 
     /// Get the active key version.
     pub fn active(&self) -> &PlatformKeyVersion {
-        self.inner.get(&self.active_kid).expect("active key must exist")
+        self.inner
+            .get(&self.active_kid)
+            .expect("active key must exist")
     }
 
     /// All non-retired key versions (for public key endpoint).

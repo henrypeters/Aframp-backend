@@ -11,11 +11,11 @@
 //! All material lives in the secrets manager (env vars in dev).
 
 pub mod catalogue;
-pub mod rotation;
 pub mod emergency;
-pub mod reencryption;
 pub mod escrow;
 pub mod metrics;
+pub mod reencryption;
+pub mod rotation;
 
 #[cfg(test)]
 pub mod tests;

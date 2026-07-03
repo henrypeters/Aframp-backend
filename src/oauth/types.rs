@@ -1,8 +1,8 @@
 //! Core OAuth 2.0 domain types.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 // ── Grant types ───────────────────────────────────────────────────────────────
 
@@ -66,7 +66,10 @@ impl std::str::FromStr for ClientType {
         match s {
             "public" => Ok(ClientType::Public),
             "confidential" => Ok(ClientType::Confidential),
-            _ => Err(OAuthError::InvalidRequest(format!("unknown client_type: {}", s))),
+            _ => Err(OAuthError::InvalidRequest(format!(
+                "unknown client_type: {}",
+                s
+            ))),
         }
     }
 }

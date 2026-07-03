@@ -1,9 +1,11 @@
-use Bitmesh_backend::database::bill_payment_repository::BillPaymentRepository;
-use Bitmesh_backend::database::transaction_repository::TransactionRepository;
-use Bitmesh_backend::workers::bill_processor::worker::{BillProcessorWorker, BillProcessorConfig};
-use Bitmesh_backend::workers::bill_processor::providers::BillProviderFactory;
-use Bitmesh_backend::services::notification::NotificationService;
-use Bitmesh_backend::chains::stellar::client::StellarClient;
+#![cfg(feature = "database")]
+
+use aframp_backend::chains::stellar::client::StellarClient;
+use aframp_backend::database::bill_payment_repository::BillPaymentRepository;
+use aframp_backend::database::transaction_repository::TransactionRepository;
+use aframp_backend::services::notification::NotificationService;
+use aframp_backend::workers::bill_processor::providers::BillProviderFactory;
+use aframp_backend::workers::bill_processor::worker::{BillProcessorConfig, BillProcessorWorker};
 use sqlx::{PgPool, types::BigDecimal};
 use std::sync::Arc;
 use uuid::Uuid;

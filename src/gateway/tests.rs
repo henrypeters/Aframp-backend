@@ -8,7 +8,10 @@ mod integration {
     use crate::gateway::{
         config::{cors_origins_for, hsts_max_age, MAX_URL_LENGTH},
         cors::evaluate_cors,
-        prescreening::{check_auth_header, check_content_type, check_method, check_url, prescreen, RejectionReason},
+        prescreening::{
+            check_auth_header, check_content_type, check_method, check_url, prescreen,
+            RejectionReason,
+        },
         rate_limit::GatewayRateLimiter,
         signature::{compute_gateway_signature, verify_gateway_signature},
         transform::{
@@ -32,7 +35,10 @@ mod integration {
     #[test]
     fn test_nginx_config_enforces_tls_12_minimum() {
         let conf = include_str!("../../config/nginx/nginx.conf");
-        assert!(conf.contains("ssl_protocols TLSv1.2 TLSv1.3"), "nginx must only allow TLS 1.2+");
+        assert!(
+            conf.contains("ssl_protocols TLSv1.2 TLSv1.3"),
+            "nginx must only allow TLS 1.2+"
+        );
         assert!(!conf.contains("TLSv1.0"), "TLS 1.0 must not be listed");
         assert!(!conf.contains("TLSv1.1"), "TLS 1.1 must not be listed");
     }
@@ -40,7 +46,10 @@ mod integration {
     #[test]
     fn test_nginx_config_has_strong_ciphers() {
         let conf = include_str!("../../config/nginx/nginx.conf");
-        assert!(conf.contains("ssl_ciphers"), "nginx must define cipher suite");
+        assert!(
+            conf.contains("ssl_ciphers"),
+            "nginx must define cipher suite"
+        );
         assert!(conf.contains("ECDHE"), "must include ECDHE ciphers");
         assert!(!conf.contains("RC4"), "RC4 must not be in cipher suite");
         assert!(!conf.contains("DES"), "DES must not be in cipher suite");
@@ -49,21 +58,36 @@ mod integration {
     #[test]
     fn test_nginx_config_has_hsts() {
         let conf = include_str!("../../config/nginx/nginx.conf");
-        assert!(conf.contains("Strict-Transport-Security"), "HSTS header must be configured");
-        assert!(conf.contains("includeSubDomains"), "HSTS must include subdomains");
+        assert!(
+            conf.contains("Strict-Transport-Security"),
+            "HSTS header must be configured"
+        );
+        assert!(
+            conf.contains("includeSubDomains"),
+            "HSTS must include subdomains"
+        );
     }
 
     #[test]
     fn test_nginx_config_http_to_https_redirect() {
         let conf = include_str!("../../config/nginx/nginx.conf");
-        assert!(conf.contains("return 301 https://"), "HTTP must redirect to HTTPS with 301");
+        assert!(
+            conf.contains("return 301 https://"),
+            "HTTP must redirect to HTTPS with 301"
+        );
     }
 
     #[test]
     fn test_nginx_config_ocsp_stapling() {
         let conf = include_str!("../../config/nginx/nginx.conf");
-        assert!(conf.contains("ssl_stapling on"), "OCSP stapling must be enabled");
-        assert!(conf.contains("ssl_stapling_verify on"), "OCSP stapling verify must be on");
+        assert!(
+            conf.contains("ssl_stapling on"),
+            "OCSP stapling must be enabled"
+        );
+        assert!(
+            conf.contains("ssl_stapling_verify on"),
+            "OCSP stapling verify must be on"
+        );
     }
 
     // ── Pre-screening rejection scenarios ─────────────────────────────────────
@@ -71,12 +95,19 @@ mod integration {
     #[test]
     fn test_missing_auth_rejected() {
         let r = req("GET", "/api/v1/wallet", &[]);
-        assert_eq!(check_auth_header(&r), Err(RejectionReason::MissingAuthHeader));
+        assert_eq!(
+            check_auth_header(&r),
+            Err(RejectionReason::MissingAuthHeader)
+        );
     }
 
     #[test]
     fn test_path_traversal_rejected() {
-        let r = req("GET", "/api/v1/../admin", &[("authorization", "Bearer tok")]);
+        let r = req(
+            "GET",
+            "/api/v1/../admin",
+            &[("authorization", "Bearer tok")],
+        );
         assert_eq!(check_url(&r), Err(RejectionReason::PathTraversal));
     }
 
@@ -89,22 +120,33 @@ mod integration {
 
     #[test]
     fn test_disallowed_method_rejected() {
-        let r = req("TRACE", "/api/v1/wallet", &[("authorization", "Bearer tok")]);
+        let r = req(
+            "TRACE",
+            "/api/v1/wallet",
+            &[("authorization", "Bearer tok")],
+        );
         assert_eq!(check_method(&r), Err(RejectionReason::MethodNotAllowed));
     }
 
     #[test]
     fn test_post_without_content_type_rejected() {
         let r = req("POST", "/api/v1/onramp", &[("authorization", "Bearer tok")]);
-        assert_eq!(check_content_type(&r), Err(RejectionReason::UnsupportedContentType));
+        assert_eq!(
+            check_content_type(&r),
+            Err(RejectionReason::UnsupportedContentType)
+        );
     }
 
     #[test]
     fn test_valid_request_passes_all_checks() {
-        let r = req("POST", "/api/v1/onramp", &[
-            ("authorization", "Bearer tok"),
-            ("content-type", "application/json"),
-        ]);
+        let r = req(
+            "POST",
+            "/api/v1/onramp",
+            &[
+                ("authorization", "Bearer tok"),
+                ("content-type", "application/json"),
+            ],
+        );
         assert_eq!(prescreen(&r), Ok(()));
     }
 
@@ -150,10 +192,14 @@ mod integration {
     #[test]
     fn test_cors_disallowed_origin_rejected() {
         std::env::set_var("APP_ENV", "production");
-        let r = req("GET", "/api/v1/wallet", &[
-            ("authorization", "Bearer tok"),
-            ("origin", "https://attacker.com"),
-        ]);
+        let r = req(
+            "GET",
+            "/api/v1/wallet",
+            &[
+                ("authorization", "Bearer tok"),
+                ("origin", "https://attacker.com"),
+            ],
+        );
         let resp = evaluate_cors(&r);
         assert!(resp.is_some());
         assert_eq!(resp.unwrap().status(), StatusCode::FORBIDDEN);
@@ -163,7 +209,11 @@ mod integration {
     #[test]
     fn test_cors_preflight_handled_without_forwarding() {
         std::env::set_var("APP_ENV", "development");
-        let r = req("OPTIONS", "/api/v1/wallet", &[("origin", "http://localhost:3000")]);
+        let r = req(
+            "OPTIONS",
+            "/api/v1/wallet",
+            &[("origin", "http://localhost:3000")],
+        );
         let resp = evaluate_cors(&r);
         assert!(resp.is_some());
         assert_eq!(resp.unwrap().status(), StatusCode::NO_CONTENT);
@@ -172,9 +222,17 @@ mod integration {
 
     #[test]
     fn test_no_wildcard_cors_on_any_endpoint() {
-        for path in &["/api/admin/accounts", "/api/v1/wallet", "/api/developer/apps"] {
+        for path in &[
+            "/api/admin/accounts",
+            "/api/v1/wallet",
+            "/api/developer/apps",
+        ] {
             let origins = cors_origins_for(path);
-            assert!(!origins.contains(&"*".to_string()), "wildcard CORS on {}", path);
+            assert!(
+                !origins.contains(&"*".to_string()),
+                "wildcard CORS on {}",
+                path
+            );
         }
     }
 
@@ -218,7 +276,12 @@ mod integration {
     #[test]
     fn test_tampered_gateway_signature_rejected() {
         let sig = compute_gateway_signature("POST", "/api/v1/onramp", "1700000000");
-        assert!(!verify_gateway_signature("GET", "/api/v1/onramp", "1700000000", &sig));
+        assert!(!verify_gateway_signature(
+            "GET",
+            "/api/v1/onramp",
+            "1700000000",
+            &sig
+        ));
     }
 
     // ── Gateway-level rate limiting ───────────────────────────────────────────
@@ -257,7 +320,11 @@ mod integration {
             "server_tokens off",
         ];
         for directive in &required {
-            assert!(conf.contains(directive), "Missing required directive: {}", directive);
+            assert!(
+                conf.contains(directive),
+                "Missing required directive: {}",
+                directive
+            );
         }
     }
 }

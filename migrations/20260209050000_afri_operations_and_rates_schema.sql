@@ -1,4 +1,3 @@
--- migrate:up
 -- #4 Create AFRI Stablecoin Operations and Rates Schema
 -- Purpose: Add exchange rate tracking enhancements, conversion audit trail,
 --          trustline operations logging, and dynamic fee structures.

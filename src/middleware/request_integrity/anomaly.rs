@@ -45,13 +45,18 @@ pub async fn evaluate_anomaly(
         });
     };
 
-    let profile_key = format!("request_integrity:profile:{consumer_id}:{}", endpoint.as_str());
+    let profile_key = format!(
+        "request_integrity:profile:{consumer_id}:{}",
+        endpoint.as_str()
+    );
     let mut conn = cache.get_connection().await.ok()?;
     let raw_profile: Option<String> = conn.get(&profile_key).await.ok();
     let mut profile = parse_profile(raw_profile).unwrap_or_default();
 
     let historical_max = Decimal::from_str(&profile.max_amount).unwrap_or(Decimal::ZERO);
-    let flagged = profile.request_count >= 3 && historical_max > Decimal::ZERO && amount > historical_max * Decimal::from(10u32);
+    let flagged = profile.request_count >= 3
+        && historical_max > Decimal::ZERO
+        && amount > historical_max * Decimal::from(10u32);
 
     if flagged {
         crate::metrics::security::request_anomaly_flags_total()
@@ -77,7 +82,9 @@ pub async fn evaluate_anomaly(
     profile.last_currency = Some(currency.to_string());
 
     if let Ok(serialized) = serde_json::to_string(&profile) {
-        let _: Result<(), _> = conn.set_ex(&profile_key, serialized, 60 * 60 * 24 * 30).await;
+        let _: Result<(), _> = conn
+            .set_ex(&profile_key, serialized, 60 * 60 * 24 * 30)
+            .await;
     }
 
     Some(AnomalyAssessment {
@@ -94,7 +101,11 @@ pub async fn evaluate_anomaly(
         profile_summary: Some(format!(
             "request_count={}, historical_max_amount={}, last_currency={}",
             profile.request_count,
-            if historical_max > Decimal::ZERO { historical_max.to_string() } else { "0".to_string() },
+            if historical_max > Decimal::ZERO {
+                historical_max.to_string()
+            } else {
+                "0".to_string()
+            },
             currency
         )),
     })
@@ -106,8 +117,12 @@ fn extract_amount(
     ctx: &ValidationContext,
 ) -> Option<Decimal> {
     match endpoint {
-        IntegrityEndpoint::OnrampInitiate | IntegrityEndpoint::OfframpInitiate => ctx.amount_snapshot,
-        IntegrityEndpoint::BatchCngnTransfer | IntegrityEndpoint::BatchFiatPayout => ctx.batch_total,
+        IntegrityEndpoint::OnrampInitiate | IntegrityEndpoint::OfframpInitiate => {
+            ctx.amount_snapshot
+        }
+        IntegrityEndpoint::BatchCngnTransfer | IntegrityEndpoint::BatchFiatPayout => {
+            ctx.batch_total
+        }
     }
 }
 
@@ -136,4 +151,3 @@ mod tests {
         );
     }
 }
-

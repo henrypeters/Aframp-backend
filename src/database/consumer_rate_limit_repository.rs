@@ -39,7 +39,7 @@ pub struct RateLimitsConfig {
     pub ip: LimitDimension,
 }
 
-pub type LimitsJson = serde_json::Value;  // Flexible JSONB
+pub type LimitsJson = serde_json::Value; // Flexible JSONB
 
 #[derive(Debug, Clone, FromRow)]
 pub struct Profile {
@@ -150,14 +150,15 @@ impl ConsumerRateLimitRepository {
     }
 
     /// Get effective limits: override OR profile (via PG func)
-    pub async fn get_effective_limits(&self, consumer_id: Uuid) -> Result<Option<LimitsJson>, DatabaseError> {
-        let json: Option<LimitsJson> = sqlx::query_scalar(
-            "SELECT get_effective_rate_limits($1)",
-            consumer_id
-        )
-        .fetch_optional(self.pool.as_ref())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+    pub async fn get_effective_limits(
+        &self,
+        consumer_id: Uuid,
+    ) -> Result<Option<LimitsJson>, DatabaseError> {
+        let json: Option<LimitsJson> =
+            sqlx::query_scalar("SELECT get_effective_rate_limits($1)", consumer_id)
+                .fetch_optional(self.pool.as_ref())
+                .await
+                .map_err(DatabaseError::from_sqlx)?;
 
         Ok(json)
     }
@@ -188,4 +189,3 @@ impl TransactionalRepository for ConsumerRateLimitRepository {
         self.pool.as_ref()
     }
 }
-

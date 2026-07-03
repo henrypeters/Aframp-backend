@@ -584,7 +584,6 @@ impl AnalyticsRepository {
             LIMIT $1
             "#,
             limit
-
         )
         .fetch_all(&self.pool)
         .await
@@ -743,6 +742,15 @@ impl AnalyticsRepository {
         .await
         .map_err(DatabaseError::from_sqlx)?;
         Ok(())
+    }
+}
 
+/// Map API period labels to PostgreSQL `date_trunc` units.
+fn period_trunc(period: &str) -> &'static str {
+    match period {
+        "daily" => "day",
+        "weekly" => "week",
+        "monthly" => "month",
+        _ => "day",
     }
 }

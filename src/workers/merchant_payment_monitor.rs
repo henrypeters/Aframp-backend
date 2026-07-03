@@ -2,9 +2,9 @@
 //! Monitors Stellar blockchain for incoming payments to merchant addresses
 //! Matches payments to payment intents via memo field
 
-use crate::chains::stellar::client::StellarClient;
-use crate::merchant_gateway::repository::PaymentIntentRepository;
-use crate::merchant_gateway::service::MerchantGatewayService;
+// REMOVED: use crate::chains::stellar::client::StellarClient;
+// REMOVED: use crate::merchant_gateway::repository::PaymentIntentRepository;
+// REMOVED: use crate::merchant_gateway::service::MerchantGatewayService;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::collections::HashSet;
@@ -39,25 +39,25 @@ impl Default for MerchantPaymentMonitorConfig {
 impl MerchantPaymentMonitorConfig {
     pub fn from_env() -> Self {
         let mut config = Self::default();
-        
+
         if let Ok(val) = std::env::var("MERCHANT_PAYMENT_POLL_INTERVAL_SECS") {
             if let Ok(secs) = val.parse() {
                 config.poll_interval = Duration::from_secs(secs);
             }
         }
-        
+
         if let Ok(val) = std::env::var("MERCHANT_PAYMENT_BATCH_SIZE") {
             if let Ok(size) = val.parse() {
                 config.batch_size = size;
             }
         }
-        
+
         if let Ok(val) = std::env::var("MERCHANT_PAYMENT_CONFIRMATION_THRESHOLD") {
             if let Ok(threshold) = val.parse() {
                 config.confirmation_threshold = threshold;
             }
         }
-        
+
         config
     }
 }
@@ -131,7 +131,10 @@ impl MerchantPaymentMonitorWorker {
             return Ok(());
         }
 
-        info!(count = pending_intents.len(), "Monitoring pending payment intents");
+        info!(
+            count = pending_intents.len(),
+            "Monitoring pending payment intents"
+        );
 
         // Group by destination address for efficient querying
         let mut addresses_to_check: HashSet<String> = HashSet::new();
@@ -141,7 +144,10 @@ impl MerchantPaymentMonitorWorker {
 
         // Check each address for recent payments
         for address in addresses_to_check {
-            if let Err(e) = self.check_address_payments(&address, &pending_intents).await {
+            if let Err(e) = self
+                .check_address_payments(&address, &pending_intents)
+                .await
+            {
                 warn!(
                     address = %address,
                     error = %e,
@@ -213,12 +219,7 @@ impl MerchantPaymentMonitorWorker {
 
                 if let Err(e) = self
                     .gateway_service
-                    .process_stellar_payment(
-                        memo,
-                        &payment.transaction_hash,
-                        amount,
-                        &payment.from,
-                    )
+                    .process_stellar_payment(memo, &payment.transaction_hash, amount, &payment.from)
                     .await
                 {
                     error!(

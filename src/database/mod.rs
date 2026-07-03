@@ -1,23 +1,36 @@
 // This module requires std library (not available in WASM)
 
-pub mod ha_pool;
+pub mod analytics_repository;
 pub mod bill_payment_repository;
 pub mod consumer_rate_limit_repository;
 pub mod conversion_audit_repository;
 pub mod error;
 pub mod exchange_rate_repository;
 pub mod fee_structure_repository;
-pub mod kyc_repository;
 pub mod geo_restriction_repository;
+pub mod notification_repository;
+pub mod ha_pool;
 pub mod ip_reputation_repository;
+pub mod kyc_repository;
+pub mod metrics;
+pub mod mint_request_repository;
+pub mod monitoring;
 pub mod oauth_scope_repository;
 pub mod onramp_quote_repository;
+pub mod partner_repository;
 pub mod payment_method_repository;
 pub mod payment_repository;
 pub mod provider_config_repository;
+pub mod read_replica_router;
+pub mod reconciliation_repository;
 pub mod recurring_payment_repository;
 pub mod refresh_token_repository;
+pub mod replication_monitor;
 pub mod repository;
+pub mod saga;
+pub mod shard;
+pub mod shard_manager;
+pub mod shard_migration;
 pub mod token_registry_repository;
 pub mod transaction;
 pub mod transaction_repository;
@@ -25,15 +38,45 @@ pub mod trustline_operation_repository;
 pub mod trustline_repository;
 pub mod wallet_repository;
 pub mod webhook_repository;
-pub mod reconciliation_repository;
+pub mod write_isolation;
 
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tracing::{error as log_error, info, warn};
 
+/// Type alias for the Postgres connection pool — used throughout the codebase.
+pub type DbPool = PgPool;
+
+/// Re-export for modules that import `crate::database::Repository`
+pub use self::repository::Repository;
+
 use self::error::DatabaseError;
 use crate::config::DatabaseConfig;
+
+static GLOBAL_READ_REPLICA_POOL: OnceLock<PgPool> = OnceLock::new();
+static GLOBAL_HA_POOL: OnceLock<std::sync::Arc<ha_pool::HaPoolManager>> = OnceLock::new();
+
+/// Set the optional global read replica pool. Returns false if already initialized.
+pub fn set_global_read_replica_pool(pool: PgPool) -> bool {
+    GLOBAL_READ_REPLICA_POOL.set(pool).is_ok()
+}
+
+/// Returns the configured global read replica pool, if any.
+pub fn get_global_read_replica_pool() -> Option<&'static PgPool> {
+    GLOBAL_READ_REPLICA_POOL.get()
+}
+
+/// Set the optional global HA pool manager. Returns false if already initialized.
+pub fn set_global_ha_pool(manager: std::sync::Arc<ha_pool::HaPoolManager>) -> bool {
+    GLOBAL_HA_POOL.set(manager).is_ok()
+}
+
+/// Returns the configured global HA pool manager, if any.
+pub fn get_global_ha_pool() -> Option<&'static std::sync::Arc<ha_pool::HaPoolManager>> {
+    GLOBAL_HA_POOL.get()
+}
 
 /// Database pool configuration
 #[derive(Debug, Clone)]

@@ -2,7 +2,7 @@
 //!
 //! Provides real-time monitoring endpoints for system status and alerts
 
-use crate::security::{AnomalyDetectionService, SystemStatus, CircuitBreakerState};
+use crate::security::{AnomalyDetectionService, CircuitBreakerState, SystemStatus};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -77,40 +77,42 @@ pub struct DashboardApiState {
 // ---------------------------------------------------------------------------
 
 /// GET /api/dashboard/status
-/// 
+///
 /// Get current system status for dashboard display
 pub async fn get_dashboard_status(
     State(state): State<Arc<DashboardApiState>>,
 ) -> Result<impl IntoResponse, crate::error::AppError> {
     let circuit_state = state.anomaly_service.get_circuit_breaker_state().await;
     let status = circuit_state.status.clone();
-    
+
     let response = DashboardStatusResponse {
         status: status.to_string(),
         status_description: get_status_description(&status),
         is_operational: matches!(status, SystemStatus::Operational),
         triggered_at: circuit_state.triggered_at.map(|dt| dt.to_rfc3339()),
-        last_anomaly: circuit_state.last_anomaly.map(|a| serde_json::to_value(a).unwrap_or_default()),
+        last_anomaly: circuit_state
+            .last_anomaly
+            .map(|a| serde_json::to_value(a).unwrap_or_default()),
         audit_required: circuit_state.audit_required,
         uptime_percentage: calculate_uptime_percentage().await, // Would be calculated from historical data
-        alerts_last_24h: get_alerts_last_24h().await, // Would be fetched from alert logs
+        alerts_last_24h: get_alerts_last_24h().await,           // Would be fetched from alert logs
         timestamp: chrono::Utc::now().to_rfc3339(),
     };
-    
+
     Ok((StatusCode::OK, Json(response)))
 }
 
 /// GET /api/dashboard/health
-/// 
+///
 /// Get comprehensive system health check
 pub async fn get_system_health(
     State(state): State<Arc<DashboardApiState>>,
 ) -> Result<impl IntoResponse, crate::error::AppError> {
     let circuit_state = state.anomaly_service.get_circuit_breaker_state().await;
     let system_status = state.anomaly_service.get_system_status().await;
-    
+
     let mut checks = Vec::new();
-    
+
     // Circuit breaker health check
     checks.push(HealthCheck {
         name: "circuit_breaker".to_string(),
@@ -122,7 +124,7 @@ pub async fn get_system_health(
         message: Some(format!("Circuit breaker status: {}", system_status)),
         response_time_ms: Some(0), // Would measure actual response time
     });
-    
+
     // Database health check
     checks.push(HealthCheck {
         name: "database".to_string(),
@@ -130,7 +132,7 @@ pub async fn get_system_health(
         message: None,
         response_time_ms: Some(5),
     });
-    
+
     // Alert system health check
     checks.push(HealthCheck {
         name: "alert_system".to_string(),
@@ -138,28 +140,28 @@ pub async fn get_system_health(
         message: None,
         response_time_ms: Some(10),
     });
-    
-    let overall_healthy = matches!(system_status, SystemStatus::Operational) 
+
+    let overall_healthy = matches!(system_status, SystemStatus::Operational)
         && checks.iter().all(|check| check.status == "healthy");
-    
+
     let response = SystemHealthResponse {
         healthy: overall_healthy,
         status: system_status.to_string(),
         checks,
         timestamp: chrono::Utc::now().to_rfc3339(),
     };
-    
+
     let status_code = if overall_healthy {
         StatusCode::OK
     } else {
         StatusCode::SERVICE_UNAVAILABLE
     };
-    
+
     Ok((status_code, Json(response)))
 }
 
 /// GET /api/dashboard/alerts
-/// 
+///
 /// Get recent alert history
 pub async fn get_alert_history(
     State(state): State<Arc<DashboardApiState>>,
@@ -167,29 +169,29 @@ pub async fn get_alert_history(
 ) -> Result<impl IntoResponse, crate::error::AppError> {
     let limit = params.limit.unwrap_or(50).min(100); // Cap at 100
     let offset = params.offset.unwrap_or(0);
-    
+
     // This would fetch from actual alert storage
     let alerts = fetch_alert_history(limit, offset).await;
     let total_count = get_total_alert_count().await;
     let last_24h = get_alerts_last_24h().await;
-    
+
     let response = AlertHistoryResponse {
         alerts,
         total_count,
         last_24h,
     };
-    
+
     Ok((StatusCode::OK, Json(response)))
 }
 
 /// GET /api/dashboard/metrics
-/// 
+///
 /// Get system metrics for monitoring
 pub async fn get_system_metrics(
     State(state): State<Arc<DashboardApiState>>,
 ) -> Result<impl IntoResponse, crate::error::AppError> {
     let circuit_state = state.anomaly_service.get_circuit_breaker_state().await;
-    
+
     let metrics = serde_json::json!({
         "system_status": circuit_state.status.to_string(),
         "audit_required": circuit_state.audit_required,
@@ -202,7 +204,7 @@ pub async fn get_system_metrics(
         "uptime_percentage": calculate_uptime_percentage().await,
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
-    
+
     Ok((StatusCode::OK, Json(metrics)))
 }
 
@@ -278,13 +280,9 @@ async fn get_halted_transaction_count() -> u64 {
 // Router Setup
 // ---------------------------------------------------------------------------
 
-pub fn create_router(
-    anomaly_service: Arc<AnomalyDetectionService>,
-) -> axum::Router {
-    let state = Arc::new(DashboardApiState {
-        anomaly_service,
-    });
-    
+pub fn create_router(anomaly_service: Arc<AnomalyDetectionService>) -> axum::Router {
+    let state = Arc::new(DashboardApiState { anomaly_service });
+
     axum::Router::new()
         .route("/status", axum::routing::get(get_dashboard_status))
         .route("/health", axum::routing::get(get_system_health))
@@ -306,7 +304,7 @@ mod tests {
         let operational_desc = get_status_description(&SystemStatus::Operational);
         assert!(operational_desc.contains("🟢"));
         assert!(operational_desc.contains("operating normally"));
-        
+
         let emergency_desc = get_status_description(&SystemStatus::EmergencyStop);
         assert!(emergency_desc.contains("🔴"));
         assert!(emergency_desc.contains("ALL OPERATIONS HALTED"));
@@ -320,7 +318,7 @@ mod tests {
             severity: Some("critical".to_string()),
             resolved: Some(false),
         };
-        
+
         assert_eq!(params.limit, Some(10));
         assert_eq!(params.offset, Some(5));
         assert_eq!(params.severity, Some("critical".to_string()));

@@ -125,7 +125,12 @@ impl WalletRegistryRepository {
     }
 
     // Auth challenges
-    pub async fn create_challenge(&self, pubkey: &str, challenge: &str, ttl_secs: i64) -> Result<WalletAuthChallenge> {
+    pub async fn create_challenge(
+        &self,
+        pubkey: &str,
+        challenge: &str,
+        ttl_secs: i64,
+    ) -> Result<WalletAuthChallenge> {
         let expires_at = Utc::now() + Duration::seconds(ttl_secs);
         Ok(sqlx::query_as!(
             WalletAuthChallenge,
@@ -140,7 +145,10 @@ impl WalletRegistryRepository {
         .await?)
     }
 
-    pub async fn consume_challenge(&self, challenge_id: Uuid) -> Result<Option<WalletAuthChallenge>> {
+    pub async fn consume_challenge(
+        &self,
+        challenge_id: Uuid,
+    ) -> Result<Option<WalletAuthChallenge>> {
         Ok(sqlx::query_as!(
             WalletAuthChallenge,
             r#"UPDATE wallet_auth_challenges SET used = true
@@ -174,9 +182,11 @@ impl WalletRegistryRepository {
         cngn_trustline: bool,
         cursor: Option<&str>,
     ) -> Result<()> {
-        let balance: Option<sqlx::types::BigDecimal> = xlm_balance
-            .and_then(|b| b.parse().ok());
-        let min_met = balance.as_ref().map(|b| b >= &"1".parse().unwrap()).unwrap_or(false);
+        let balance: Option<sqlx::types::BigDecimal> = xlm_balance.and_then(|b| b.parse().ok());
+        let min_met = balance
+            .as_ref()
+            .map(|b| b >= &"1".parse().unwrap())
+            .unwrap_or(false);
         sqlx::query!(
             r#"UPDATE wallet_metadata SET
                account_created_on_stellar = $2,
@@ -326,11 +336,18 @@ impl WalletRegistryRepository {
     }
 
     // Guardians
-    pub async fn set_guardians(&self, wallet_id: Uuid, guardians: &[(Option<Uuid>, Option<String>)]) -> Result<()> {
+    pub async fn set_guardians(
+        &self,
+        wallet_id: Uuid,
+        guardians: &[(Option<Uuid>, Option<String>)],
+    ) -> Result<()> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query!("DELETE FROM wallet_guardians WHERE wallet_id = $1", wallet_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query!(
+            "DELETE FROM wallet_guardians WHERE wallet_id = $1",
+            wallet_id
+        )
+        .execute(&mut *tx)
+        .await?;
         for (i, (user_id, email)) in guardians.iter().enumerate() {
             sqlx::query!(
                 "INSERT INTO wallet_guardians (wallet_id, guardian_user_id, guardian_email, share_index) VALUES ($1, $2, $3, $4)",
@@ -357,7 +374,11 @@ impl WalletRegistryRepository {
     }
 
     // Social recovery
-    pub async fn create_social_recovery_request(&self, wallet_id: Uuid, threshold: i32) -> Result<SocialRecoveryRequest> {
+    pub async fn create_social_recovery_request(
+        &self,
+        wallet_id: Uuid,
+        threshold: i32,
+    ) -> Result<SocialRecoveryRequest> {
         Ok(sqlx::query_as!(
             SocialRecoveryRequest,
             r#"INSERT INTO social_recovery_requests (wallet_id, threshold_required)
@@ -571,7 +592,10 @@ impl PortfolioRepository {
         Self { pool }
     }
 
-    pub async fn save_snapshot(&self, snapshot: &InsertPortfolioSnapshot) -> Result<PortfolioSnapshot> {
+    pub async fn save_snapshot(
+        &self,
+        snapshot: &InsertPortfolioSnapshot,
+    ) -> Result<PortfolioSnapshot> {
         Ok(sqlx::query_as!(
             PortfolioSnapshot,
             r#"INSERT INTO portfolio_snapshots
@@ -588,11 +612,7 @@ impl PortfolioRepository {
         .await?)
     }
 
-    pub async fn get_history(
-        &self,
-        user_id: Uuid,
-        limit: i64,
-    ) -> Result<Vec<PortfolioSnapshot>> {
+    pub async fn get_history(&self, user_id: Uuid, limit: i64) -> Result<Vec<PortfolioSnapshot>> {
         Ok(sqlx::query_as!(
             PortfolioSnapshot,
             "SELECT * FROM portfolio_snapshots WHERE user_account_id = $1 ORDER BY snapshot_at DESC LIMIT $2",
@@ -610,7 +630,9 @@ impl PortfolioRepository {
         )
         .fetch_optional(&self.pool)
         .await?;
-        Ok(row.map(|r| r.preferred_fiat_currency).unwrap_or_else(|| "NGN".to_string()))
+        Ok(row
+            .map(|r| r.preferred_fiat_currency)
+            .unwrap_or_else(|| "NGN".to_string()))
     }
 
     pub async fn set_preferred_currency(&self, user_id: Uuid, currency: &str) -> Result<()> {
@@ -656,7 +678,12 @@ impl StatementRepository {
         .await?)
     }
 
-    pub async fn update_completed(&self, id: Uuid, file_url: &str, expires_at: chrono::DateTime<Utc>) -> Result<()> {
+    pub async fn update_completed(
+        &self,
+        id: Uuid,
+        file_url: &str,
+        expires_at: chrono::DateTime<Utc>,
+    ) -> Result<()> {
         sqlx::query!(
             "UPDATE financial_statements SET status = 'completed', file_url = $2, download_expires_at = $3, generated_at = NOW() WHERE id = $1",
             id,

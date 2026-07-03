@@ -8,12 +8,15 @@ mod gateway_integration {
     use aframp::gateway::{
         config::{cors_origins_for, MAX_URL_LENGTH},
         cors::evaluate_cors,
-        prescreening::{check_auth_header, check_content_type, check_method, check_url, prescreen, RejectionReason},
+        prescreening::{
+            check_auth_header, check_content_type, check_method, check_url, prescreen,
+            RejectionReason,
+        },
         rate_limit::GatewayRateLimiter,
         signature::{compute_gateway_signature, verify_gateway_signature},
         transform::{
-            inject_gateway_headers, inject_security_response_headers,
-            normalise_path, strip_internal_response_headers, strip_spoofable_headers,
+            inject_gateway_headers, inject_security_response_headers, normalise_path,
+            strip_internal_response_headers, strip_spoofable_headers,
         },
     };
 
@@ -48,12 +51,19 @@ mod gateway_integration {
     #[test]
     fn test_missing_auth_header_rejected() {
         let r = req("GET", "/api/v1/wallet", &[]);
-        assert_eq!(check_auth_header(&r), Err(RejectionReason::MissingAuthHeader));
+        assert_eq!(
+            check_auth_header(&r),
+            Err(RejectionReason::MissingAuthHeader)
+        );
     }
 
     #[test]
     fn test_path_traversal_rejected() {
-        let r = req("GET", "/api/v1/../admin", &[("authorization", "Bearer tok")]);
+        let r = req(
+            "GET",
+            "/api/v1/../admin",
+            &[("authorization", "Bearer tok")],
+        );
         assert_eq!(check_url(&r), Err(RejectionReason::PathTraversal));
     }
 
@@ -66,22 +76,33 @@ mod gateway_integration {
 
     #[test]
     fn test_disallowed_method_rejected() {
-        let r = req("TRACE", "/api/v1/wallet", &[("authorization", "Bearer tok")]);
+        let r = req(
+            "TRACE",
+            "/api/v1/wallet",
+            &[("authorization", "Bearer tok")],
+        );
         assert_eq!(check_method(&r), Err(RejectionReason::MethodNotAllowed));
     }
 
     #[test]
     fn test_post_missing_content_type_rejected() {
         let r = req("POST", "/api/v1/onramp", &[("authorization", "Bearer tok")]);
-        assert_eq!(check_content_type(&r), Err(RejectionReason::UnsupportedContentType));
+        assert_eq!(
+            check_content_type(&r),
+            Err(RejectionReason::UnsupportedContentType)
+        );
     }
 
     #[test]
     fn test_valid_request_passes_prescreening() {
-        let r = req("POST", "/api/v1/onramp", &[
-            ("authorization", "Bearer tok"),
-            ("content-type", "application/json"),
-        ]);
+        let r = req(
+            "POST",
+            "/api/v1/onramp",
+            &[
+                ("authorization", "Bearer tok"),
+                ("content-type", "application/json"),
+            ],
+        );
         assert_eq!(prescreen(&r), Ok(()));
     }
 
@@ -104,10 +125,14 @@ mod gateway_integration {
     #[test]
     fn test_cors_disallowed_origin_rejected() {
         std::env::set_var("APP_ENV", "production");
-        let r = req("GET", "/api/v1/wallet", &[
-            ("authorization", "Bearer tok"),
-            ("origin", "https://attacker.com"),
-        ]);
+        let r = req(
+            "GET",
+            "/api/v1/wallet",
+            &[
+                ("authorization", "Bearer tok"),
+                ("origin", "https://attacker.com"),
+            ],
+        );
         let resp = evaluate_cors(&r);
         assert!(resp.is_some());
         assert_eq!(resp.unwrap().status(), StatusCode::FORBIDDEN);
@@ -117,7 +142,11 @@ mod gateway_integration {
     #[test]
     fn test_cors_preflight_handled_at_gateway() {
         std::env::set_var("APP_ENV", "development");
-        let r = req("OPTIONS", "/api/v1/wallet", &[("origin", "http://localhost:3000")]);
+        let r = req(
+            "OPTIONS",
+            "/api/v1/wallet",
+            &[("origin", "http://localhost:3000")],
+        );
         let resp = evaluate_cors(&r);
         assert!(resp.is_some());
         assert_eq!(resp.unwrap().status(), StatusCode::NO_CONTENT);
@@ -126,9 +155,17 @@ mod gateway_integration {
 
     #[test]
     fn test_no_wildcard_cors_on_authenticated_endpoints() {
-        for path in &["/api/admin/accounts", "/api/v1/wallet", "/api/developer/apps"] {
+        for path in &[
+            "/api/admin/accounts",
+            "/api/v1/wallet",
+            "/api/developer/apps",
+        ] {
             let origins = cors_origins_for(path);
-            assert!(!origins.contains(&"*".to_string()), "wildcard CORS on {}", path);
+            assert!(
+                !origins.contains(&"*".to_string()),
+                "wildcard CORS on {}",
+                path
+            );
         }
     }
 
@@ -195,7 +232,11 @@ mod gateway_integration {
             "X-Content-Type-Options",
         ];
         for directive in &required {
-            assert!(conf.contains(directive), "Config drift: missing '{}'", directive);
+            assert!(
+                conf.contains(directive),
+                "Config drift: missing '{}'",
+                directive
+            );
         }
     }
 }

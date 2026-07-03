@@ -44,7 +44,9 @@ pub async fn get_audit_log_entry(
     Path(entry_id): Path<Uuid>,
 ) -> impl IntoResponse {
     match state.repo.get_by_id(entry_id).await {
-        Ok(Some(entry)) => (StatusCode::OK, Json(serde_json::json!({ "data": entry }))).into_response(),
+        Ok(Some(entry)) => {
+            (StatusCode::OK, Json(serde_json::json!({ "data": entry }))).into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "Audit log entry not found" })),
@@ -101,8 +103,13 @@ pub async fn export_audit_logs(
                 }
                 (
                     StatusCode::OK,
-                    [(header::CONTENT_TYPE, "text/csv"),
-                     (header::CONTENT_DISPOSITION, "attachment; filename=\"audit_export.csv\"")],
+                    [
+                        (header::CONTENT_TYPE, "text/csv"),
+                        (
+                            header::CONTENT_DISPOSITION,
+                            "attachment; filename=\"audit_export.csv\"",
+                        ),
+                    ],
                     csv,
                 )
                     .into_response()

@@ -12,8 +12,8 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 use super::error::{DatabaseError, DbResult};
-use crate::database::Repository;
 use crate::auth::refresh_token_service::RefreshTokenStatus;
+use sqlx::PgPool;
 
 // ── Refresh token entity ─────────────────────────────────────────────────────
 
@@ -56,11 +56,11 @@ pub struct CreateRefreshTokenRequest {
 // ── Refresh token repository ─────────────────────────────────────────────────
 
 pub struct RefreshTokenRepository {
-    db: Repository,
+    db: PgPool,
 }
 
 impl RefreshTokenRepository {
-    pub fn new(db: Repository) -> Self {
+    pub fn new(db: PgPool) -> Self {
         Self { db }
     }
 
@@ -94,7 +94,7 @@ impl RefreshTokenRepository {
         .bind(RefreshTokenStatus::Active.as_str())
         .bind(now)
         .bind(now)
-        .fetch_one(self.db.pool())
+        .fetch_one(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -103,26 +103,23 @@ impl RefreshTokenRepository {
 
     /// Find token by token_id
     pub async fn find_by_token_id(&self, token_id: &str) -> DbResult<Option<RefreshToken>> {
-        let token = sqlx::query_as::<_, RefreshToken>(
-            "SELECT * FROM refresh_tokens WHERE token_id = $1",
-        )
-        .bind(token_id)
-        .fetch_optional(self.db.pool())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+        let token =
+            sqlx::query_as::<_, RefreshToken>("SELECT * FROM refresh_tokens WHERE token_id = $1")
+                .bind(token_id)
+                .fetch_optional(&self.db)
+                .await
+                .map_err(DatabaseError::from_sqlx)?;
 
         Ok(token)
     }
 
     /// Find token by ID
     pub async fn find_by_id(&self, id: &str) -> DbResult<Option<RefreshToken>> {
-        let token = sqlx::query_as::<_, RefreshToken>(
-            "SELECT * FROM refresh_tokens WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(self.db.pool())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+        let token = sqlx::query_as::<_, RefreshToken>("SELECT * FROM refresh_tokens WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.db)
+            .await
+            .map_err(DatabaseError::from_sqlx)?;
 
         Ok(token)
     }
@@ -133,7 +130,7 @@ impl RefreshTokenRepository {
             "SELECT * FROM refresh_tokens WHERE family_id = $1 ORDER BY created_at DESC",
         )
         .bind(family_id)
-        .fetch_all(self.db.pool())
+        .fetch_all(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -160,7 +157,7 @@ impl RefreshTokenRepository {
         .bind(consumer_id)
         .bind(limit)
         .bind(offset)
-        .fetch_all(self.db.pool())
+        .fetch_all(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -178,7 +175,7 @@ impl RefreshTokenRepository {
             "#,
         )
         .bind(consumer_id)
-        .fetch_one(self.db.pool())
+        .fetch_one(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -199,7 +196,7 @@ impl RefreshTokenRepository {
         .bind(now)
         .bind(now)
         .bind(token_id)
-        .execute(self.db.pool())
+        .execute(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -224,7 +221,7 @@ impl RefreshTokenRepository {
         .bind(replacement_token_id)
         .bind(now)
         .bind(token_id)
-        .execute(self.db.pool())
+        .execute(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -244,7 +241,7 @@ impl RefreshTokenRepository {
         )
         .bind(now)
         .bind(token_id)
-        .execute(self.db.pool())
+        .execute(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -264,7 +261,7 @@ impl RefreshTokenRepository {
         )
         .bind(now)
         .bind(family_id)
-        .execute(self.db.pool())
+        .execute(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -284,7 +281,7 @@ impl RefreshTokenRepository {
         )
         .bind(now)
         .bind(consumer_id)
-        .execute(self.db.pool())
+        .execute(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -297,7 +294,7 @@ impl RefreshTokenRepository {
             "SELECT status FROM refresh_tokens WHERE token_id = $1",
         )
         .bind(token_id)
-        .fetch_optional(self.db.pool())
+        .fetch_optional(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -310,7 +307,7 @@ impl RefreshTokenRepository {
             "SELECT status FROM refresh_tokens WHERE token_id = $1",
         )
         .bind(token_id)
-        .fetch_optional(self.db.pool())
+        .fetch_optional(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 
@@ -319,26 +316,22 @@ impl RefreshTokenRepository {
 
     /// Delete expired tokens (cleanup)
     pub async fn delete_expired(&self, before: DateTime<Utc>) -> DbResult<u64> {
-        let result = sqlx::query(
-            "DELETE FROM refresh_tokens WHERE expires_at < $1",
-        )
-        .bind(before)
-        .execute(self.db.pool())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+        let result = sqlx::query("DELETE FROM refresh_tokens WHERE expires_at < $1")
+            .bind(before)
+            .execute(&self.db)
+            .await
+            .map_err(DatabaseError::from_sqlx)?;
 
         Ok(result.rows_affected())
     }
 
     /// Delete expired families (cleanup)
     pub async fn delete_expired_families(&self, before: DateTime<Utc>) -> DbResult<u64> {
-        let result = sqlx::query(
-            "DELETE FROM refresh_tokens WHERE family_expires_at < $1",
-        )
-        .bind(before)
-        .execute(self.db.pool())
-        .await
-        .map_err(DatabaseError::from_sqlx)?;
+        let result = sqlx::query("DELETE FROM refresh_tokens WHERE family_expires_at < $1")
+            .bind(before)
+            .execute(&self.db)
+            .await
+            .map_err(DatabaseError::from_sqlx)?;
 
         Ok(result.rows_affected())
     }
@@ -357,7 +350,7 @@ impl RefreshTokenRepository {
             FROM refresh_tokens
             "#,
         )
-        .fetch_one(self.db.pool())
+        .fetch_one(&self.db)
         .await
         .map_err(DatabaseError::from_sqlx)?;
 

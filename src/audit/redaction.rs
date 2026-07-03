@@ -61,7 +61,11 @@ pub fn compute_entry_hash(previous_hash: &str, entry_content: &str) -> String {
 }
 
 /// Build the canonical string representation of a pending entry for hashing.
-pub fn entry_content(entry: &crate::audit::models::PendingAuditEntry, id: uuid::Uuid, created_at: &chrono::DateTime<chrono::Utc>) -> String {
+pub fn entry_content(
+    entry: &crate::audit::models::PendingAuditEntry,
+    id: uuid::Uuid,
+    created_at: &chrono::DateTime<chrono::Utc>,
+) -> String {
     format!(
         "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
         id,

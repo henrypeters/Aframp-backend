@@ -1,8 +1,8 @@
 use crate::cache::RedisPool;
 use crate::database::error::DatabaseError;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use tracing::{debug, error, info};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -68,7 +68,7 @@ impl MintQueueService {
         // We check high_priority then standard.
         // Using RPOP to keep it non-blocking for simplicity in the worker loop if needed,
         // but BRPOP with a short timeout is better.
-        
+
         let result: Option<(String, String)> = redis::cmd("BRPOP")
             .arg("mint_queue:high_priority")
             .arg("mint_queue:standard")
@@ -79,7 +79,8 @@ impl MintQueueService {
 
         match result {
             Some((_key, payload)) => {
-                let request: MintRequest = serde_json::from_str(&payload).map_err(|e| e.to_string())?;
+                let request: MintRequest =
+                    serde_json::from_str(&payload).map_err(|e| e.to_string())?;
                 Ok(Some(request))
             }
             None => Ok(None),

@@ -4,8 +4,8 @@
 //! Validates account existence, normalizes account names, and detects name mismatches.
 
 use crate::error::{AppError, AppErrorKind, ExternalError, ValidationError};
-use crate::payments::types::ProviderName;
 use crate::payments::factory::PaymentProviderFactory;
+use crate::payments::types::ProviderName;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
@@ -47,7 +47,10 @@ pub struct BankVerificationService {
 }
 
 impl BankVerificationService {
-    pub fn new(provider_factory: Arc<PaymentProviderFactory>, config: BankVerificationConfig) -> Self {
+    pub fn new(
+        provider_factory: Arc<PaymentProviderFactory>,
+        config: BankVerificationConfig,
+    ) -> Self {
         Self {
             provider_factory,
             config,
@@ -67,7 +70,12 @@ impl BankVerificationService {
     ) -> Result<BankVerificationResult, AppError> {
         // First try Flutterwave, then Paystack as fallback
         let result = self
-            .verify_with_provider(ProviderName::Flutterwave, bank_code, account_number, account_name)
+            .verify_with_provider(
+                ProviderName::Flutterwave,
+                bank_code,
+                account_number,
+                account_name,
+            )
             .await;
 
         match result {
@@ -89,8 +97,13 @@ impl BankVerificationService {
         }
 
         // Fallback to Paystack
-        self.verify_with_provider(ProviderName::Paystack, bank_code, account_number, account_name)
-            .await
+        self.verify_with_provider(
+            ProviderName::Paystack,
+            bank_code,
+            account_number,
+            account_name,
+        )
+        .await
     }
 
     /// Verify account with specific provider
@@ -122,15 +135,13 @@ impl BankVerificationService {
                 self.verify_with_paystack(bank_code, account_number, provided_name)
                     .await
             }
-            ProviderName::Mock => {
-                Ok(BankVerificationResult {
-                    account_number: account_number.to_string(),
-                    account_name: provided_name.to_string(),
-                    bank_name: Some("Mock Bank".to_string()),
-                    verified: true,
-                    verified_at: chrono::Utc::now().to_rfc3339(),
-                })
-            }
+            ProviderName::Mock => Ok(BankVerificationResult {
+                account_number: account_number.to_string(),
+                account_name: provided_name.to_string(),
+                bank_name: Some("Mock Bank".to_string()),
+                verified: true,
+                verified_at: chrono::Utc::now().to_rfc3339(),
+            }),
             _ => {
                 error!(provider = ?provider_name, "Unsupported provider for bank verification");
                 Err(AppError::new(AppErrorKind::Validation(
@@ -152,15 +163,14 @@ impl BankVerificationService {
         provided_name: &str,
     ) -> Result<BankVerificationResult, AppError> {
         let url = "https://api.flutterwave.com/v3/accounts/resolve";
-        let secret_key = std::env::var("FLUTTERWAVE_SECRET_KEY")
-            .map_err(|_| {
-                error!("FLUTTERWAVE_SECRET_KEY not configured");
-                AppError::new(AppErrorKind::Infrastructure(
-                    crate::error::InfrastructureError::Configuration {
-                        message: "Flutterwave API key not configured".to_string(),
-                    },
-                ))
-            })?;
+        let secret_key = std::env::var("FLUTTERWAVE_SECRET_KEY").map_err(|_| {
+            error!("FLUTTERWAVE_SECRET_KEY not configured");
+            AppError::new(AppErrorKind::Infrastructure(
+                crate::error::InfrastructureError::Configuration {
+                    message: "Flutterwave API key not configured".to_string(),
+                },
+            ))
+        })?;
 
         let client = HttpClient::new();
         let payload = serde_json::json!({
@@ -209,17 +219,14 @@ impl BankVerificationService {
         })?;
 
         let status = response.status();
-        let text = response
-            .text()
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Failed to read Flutterwave response");
-                AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
-                    provider: "flutterwave".to_string(),
-                    message: "Failed to read response".to_string(),
-                    is_retryable: false,
-                }))
-            })?;
+        let text = response.text().await.map_err(|e| {
+            error!(error = %e, "Failed to read Flutterwave response");
+            AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
+                provider: "flutterwave".to_string(),
+                message: "Failed to read response".to_string(),
+                is_retryable: false,
+            }))
+        })?;
 
         debug!(status = %status, response = %text, "Flutterwave response received");
 
@@ -242,15 +249,14 @@ impl BankVerificationService {
             )));
         }
 
-        let json_response: serde_json::Value =
-            serde_json::from_str(&text).map_err(|e| {
-                error!(error = %e, response = %text, "Failed to parse Flutterwave response");
-                AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
-                    provider: "flutterwave".to_string(),
-                    message: "Invalid response format".to_string(),
-                    is_retryable: false,
-                }))
-            })?;
+        let json_response: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
+            error!(error = %e, response = %text, "Failed to parse Flutterwave response");
+            AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
+                provider: "flutterwave".to_string(),
+                message: "Invalid response format".to_string(),
+                is_retryable: false,
+            }))
+        })?;
 
         // Expected format:
         // {
@@ -261,16 +267,14 @@ impl BankVerificationService {
         //   }
         // }
 
-        let account_data = json_response
-            .get("data")
-            .ok_or_else(|| {
-                error!("No data in Flutterwave response");
-                AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
-                    provider: "flutterwave".to_string(),
-                    message: "Invalid response format".to_string(),
-                    is_retryable: false,
-                }))
-            })?;
+        let account_data = json_response.get("data").ok_or_else(|| {
+            error!("No data in Flutterwave response");
+            AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
+                provider: "flutterwave".to_string(),
+                message: "Invalid response format".to_string(),
+                is_retryable: false,
+            }))
+        })?;
 
         let verified_account_name = account_data
             .get("account_name")
@@ -325,15 +329,14 @@ impl BankVerificationService {
             account_number, bank_code
         );
 
-        let secret_key = std::env::var("PAYSTACK_SECRET_KEY")
-            .map_err(|_| {
-                error!("PAYSTACK_SECRET_KEY not configured");
-                AppError::new(AppErrorKind::Infrastructure(
-                    crate::error::InfrastructureError::Configuration {
-                        message: "Paystack API key not configured".to_string(),
-                    },
-                ))
-            })?;
+        let secret_key = std::env::var("PAYSTACK_SECRET_KEY").map_err(|_| {
+            error!("PAYSTACK_SECRET_KEY not configured");
+            AppError::new(AppErrorKind::Infrastructure(
+                crate::error::InfrastructureError::Configuration {
+                    message: "Paystack API key not configured".to_string(),
+                },
+            ))
+        })?;
 
         let client = HttpClient::new();
 
@@ -346,10 +349,7 @@ impl BankVerificationService {
 
         let response = tokio::time::timeout(
             std::time::Duration::from_secs(self.config.timeout_secs),
-            client
-                .get(&url)
-                .bearer_auth(&secret_key)
-                .send(),
+            client.get(&url).bearer_auth(&secret_key).send(),
         )
         .await
         .map_err(|_| {
@@ -377,17 +377,14 @@ impl BankVerificationService {
         })?;
 
         let status = response.status();
-        let text = response
-            .text()
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Failed to read Paystack response");
-                AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
-                    provider: "paystack".to_string(),
-                    message: "Failed to read response".to_string(),
-                    is_retryable: false,
-                }))
-            })?;
+        let text = response.text().await.map_err(|e| {
+            error!(error = %e, "Failed to read Paystack response");
+            AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
+                provider: "paystack".to_string(),
+                message: "Failed to read response".to_string(),
+                is_retryable: false,
+            }))
+        })?;
 
         debug!(status = %status, response = %text, "Paystack response received");
 
@@ -410,15 +407,14 @@ impl BankVerificationService {
             )));
         }
 
-        let json_response: serde_json::Value =
-            serde_json::from_str(&text).map_err(|e| {
-                error!(error = %e, response = %text, "Failed to parse Paystack response");
-                AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
-                    provider: "paystack".to_string(),
-                    message: "Invalid response format".to_string(),
-                    is_retryable: false,
-                }))
-            })?;
+        let json_response: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
+            error!(error = %e, response = %text, "Failed to parse Paystack response");
+            AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
+                provider: "paystack".to_string(),
+                message: "Invalid response format".to_string(),
+                is_retryable: false,
+            }))
+        })?;
 
         // Expected format:
         // {
@@ -431,16 +427,14 @@ impl BankVerificationService {
         //   }
         // }
 
-        let account_data = json_response
-            .get("data")
-            .ok_or_else(|| {
-                error!("No data in Paystack response");
-                AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
-                    provider: "paystack".to_string(),
-                    message: "Invalid response format".to_string(),
-                    is_retryable: false,
-                }))
-            })?;
+        let account_data = json_response.get("data").ok_or_else(|| {
+            error!("No data in Paystack response");
+            AppError::new(AppErrorKind::External(ExternalError::PaymentProvider {
+                provider: "paystack".to_string(),
+                message: "Invalid response format".to_string(),
+                is_retryable: false,
+            }))
+        })?;
 
         let verified_account_name = account_data
             .get("account_name")
@@ -542,10 +536,7 @@ mod tests {
 
         assert_eq!(service.normalize_name("john doe"), "JOHN DOE");
         assert_eq!(service.normalize_name("JOHN  DOE"), "JOHN DOE");
-        assert_eq!(
-            service.normalize_name("  john doe  "),
-            "JOHN DOE"
-        );
+        assert_eq!(service.normalize_name("  john doe  "), "JOHN DOE");
     }
 
     #[test]
@@ -569,7 +560,7 @@ mod tests {
         assert!(service.names_match("John Doe", "JOHN DOE"));
         // Fuzzy match - at least one word matches
         assert!(service.names_match("John Smith", "JOHN DOE")); // JOHN matches
-        // No match
+                                                                // No match
         assert!(!service.names_match("Jane Doe", "JOHN DOE"));
     }
 }

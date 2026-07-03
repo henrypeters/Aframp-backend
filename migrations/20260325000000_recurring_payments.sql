@@ -1,4 +1,3 @@
--- migrate:up
 -- Recurring payments schema: schedules + execution history
 
 CREATE TYPE recurring_frequency AS ENUM ('daily', 'weekly', 'monthly', 'custom');

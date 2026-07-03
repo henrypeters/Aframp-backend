@@ -102,7 +102,10 @@ impl KeyRotationService {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(DEFAULT_GRACE_PERIOD_HOURS);
-        Self { pool, grace_period_hours }
+        Self {
+            pool,
+            grace_period_hours,
+        }
     }
 
     // ── Lifetime policy ───────────────────────────────────────────────────────
@@ -541,10 +544,7 @@ impl KeyRotationService {
 
 /// Checks whether a key is within an active grace period.
 /// Returns `Some(grace_period_end)` if the old key is still valid under grace.
-pub async fn check_grace_period(
-    pool: &PgPool,
-    key_id: Uuid,
-) -> Option<DateTime<Utc>> {
+pub async fn check_grace_period(pool: &PgPool, key_id: Uuid) -> Option<DateTime<Utc>> {
     sqlx::query_scalar!(
         r#"
         SELECT grace_period_end

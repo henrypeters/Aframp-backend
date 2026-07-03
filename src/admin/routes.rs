@@ -3,7 +3,7 @@ use crate::admin::middleware::*;
 use crate::admin::transaction_handlers::*;
 use axum::{
     middleware::{self},
-    routing::{get, post, delete, patch},
+    routing::{delete, get, patch, post},
     Router,
 };
 use std::sync::Arc;
@@ -34,8 +34,14 @@ pub fn admin_account_routes() -> Router<Arc<AdminServices>> {
         .route("/accounts/statistics", get(get_admin_statistics_handler))
         .route("/accounts/:admin_id", get(get_admin_account_handler))
         .route("/accounts/:admin_id/role", patch(update_admin_role_handler))
-        .route("/accounts/:admin_id/suspend", post(suspend_admin_account_handler))
-        .route("/accounts/:admin_id/reinstate", post(reinstate_admin_account_handler))
+        .route(
+            "/accounts/:admin_id/suspend",
+            post(suspend_admin_account_handler),
+        )
+        .route(
+            "/accounts/:admin_id/reinstate",
+            post(reinstate_admin_account_handler),
+        )
         .layer(middleware::from_fn_with_state(
             Arc::new(AdminAuthState::default()),
             require_permission!("admin.create"),
@@ -69,7 +75,10 @@ pub fn admin_security_routes() -> Router<Arc<AdminServices>> {
     Router::new()
         // Security monitoring routes
         .route("/security/events", get(get_security_events_handler))
-        .route("/security/events/:event_id/resolve", post(resolve_security_event_handler))
+        .route(
+            "/security/events/:event_id/resolve",
+            post(resolve_security_event_handler),
+        )
         .route("/security/statistics", get(get_security_statistics_handler))
         .layer(middleware::from_fn_with_state(
             Arc::new(AdminAuthState::default()),
@@ -80,8 +89,14 @@ pub fn admin_security_routes() -> Router<Arc<AdminServices>> {
 pub fn admin_sensitive_action_routes() -> Router<Arc<AdminServices>> {
     Router::new()
         // Sensitive action routes
-        .route("/sensitive-actions/confirm", post(request_sensitive_action_confirmation_handler))
-        .route("/sensitive-actions/:action_type/execute", post(execute_sensitive_action_handler))
+        .route(
+            "/sensitive-actions/confirm",
+            post(request_sensitive_action_confirmation_handler),
+        )
+        .route(
+            "/sensitive-actions/:action_type/execute",
+            post(execute_sensitive_action_handler),
+        )
         .layer(middleware::from_fn_with_state(
             Arc::new(AdminAuthState::default()),
             sensitive_action_middleware,
@@ -105,12 +120,27 @@ pub fn operations_routes() -> Router<Arc<AdminAuthState>> {
         // Transaction admin routes
         .route("/transactions", get(list_transactions_handler))
         .route("/transactions/:tx_id", get(get_transaction_handler))
-        .route("/transactions/:tx_id/retry", post(retry_transaction_handler))
-        .route("/transactions/:tx_id/refund", post(refund_transaction_handler))
+        .route(
+            "/transactions/:tx_id/retry",
+            post(retry_transaction_handler),
+        )
+        .route(
+            "/transactions/:tx_id/refund",
+            post(refund_transaction_handler),
+        )
         // KYC routes (stubs — implemented separately)
-        .route("/kyc/review", get(|| async { axum::Json("KYC review list") }))
-        .route("/kyc/:id/approve", post(|| async { axum::Json("KYC approved") }))
-        .route("/kyc/:id/reject", post(|| async { axum::Json("KYC rejected") }))
+        .route(
+            "/kyc/review",
+            get(|| async { axum::Json("KYC review list") }),
+        )
+        .route(
+            "/kyc/:id/approve",
+            post(|| async { axum::Json("KYC approved") }),
+        )
+        .route(
+            "/kyc/:id/reject",
+            post(|| async { axum::Json("KYC rejected") }),
+        )
         .layer(middleware::from_fn_with_state(
             Arc::new(AdminAuthState::default()),
             require_operations_admin_middleware,
@@ -120,9 +150,18 @@ pub fn operations_routes() -> Router<Arc<AdminAuthState>> {
 pub fn compliance_routes() -> Router<Arc<AdminServices>> {
     Router::new()
         // Compliance admin routes
-        .route("/reports", get(|| async { axum::Json("Compliance reports") }))
-        .route("/regulatory", get(|| async { axum::Json("Regulatory data") }))
-        .route("/audit/export", get(|| async { axum::Json("Audit export") }))
+        .route(
+            "/reports",
+            get(|| async { axum::Json("Compliance reports") }),
+        )
+        .route(
+            "/regulatory",
+            get(|| async { axum::Json("Regulatory data") }),
+        )
+        .route(
+            "/audit/export",
+            get(|| async { axum::Json("Audit export") }),
+        )
         .layer(middleware::from_fn_with_state(
             Arc::new(AdminAuthState::default()),
             require_compliance_admin_middleware,
@@ -155,10 +194,13 @@ pub fn all_admin_routes() -> Router<Arc<AdminServices>> {
         .merge(operations_routes())
         .merge(compliance_routes())
         .merge(system_routes())
-        .route("/metrics", get(|| async {
-            // Prometheus metrics endpoint
-            axum::response::Html("Prometheus metrics would be here")
-        }))
+        .route(
+            "/metrics",
+            get(|| async {
+                // Prometheus metrics endpoint
+                axum::response::Html("Prometheus metrics would be here")
+            }),
+        )
         .layer(middleware::from_fn_with_state(
             Arc::new(AdminAuthState::default()),
             endpoint_permission_middleware,
@@ -172,7 +214,7 @@ pub fn all_admin_routes() -> Router<Arc<AdminServices>> {
 // Route organization by category
 pub mod auth_routes {
     use super::*;
-    
+
     pub fn routes() -> Router<Arc<AdminAuthState>> {
         Router::new()
             .route("/auth/login", post(login_handler))
@@ -185,7 +227,7 @@ pub mod auth_routes {
 
 pub mod account_routes {
     use super::*;
-    
+
     pub fn routes() -> Router<Arc<AdminServices>> {
         Router::new()
             .route("/accounts", post(create_admin_account_handler))
@@ -193,14 +235,17 @@ pub mod account_routes {
             .route("/accounts/:id", get(get_admin_account_handler))
             .route("/accounts/:id/role", patch(update_admin_role_handler))
             .route("/accounts/:id/suspend", post(suspend_admin_account_handler))
-            .route("/accounts/:id/reinstate", post(reinstate_admin_account_handler))
+            .route(
+                "/accounts/:id/reinstate",
+                post(reinstate_admin_account_handler),
+            )
             .route("/accounts/statistics", get(get_admin_statistics_handler))
     }
 }
 
 pub mod session_routes {
     use super::*;
-    
+
     pub fn routes() -> Router<Arc<AdminServices>> {
         Router::new()
             .route("/sessions", get(get_active_sessions_handler))
@@ -211,7 +256,7 @@ pub mod session_routes {
 
 pub mod audit_routes {
     use super::*;
-    
+
     pub fn routes() -> Router<Arc<AdminServices>> {
         Router::new()
             .route("/audit", get(get_audit_trail_handler))
@@ -221,37 +266,44 @@ pub mod audit_routes {
 
 pub mod security_routes {
     use super::*;
-    
+
     pub fn routes() -> Router<Arc<AdminServices>> {
         Router::new()
             .route("/security/events", get(get_security_events_handler))
-            .route("/security/events/:id/resolve", post(resolve_security_event_handler))
+            .route(
+                "/security/events/:id/resolve",
+                post(resolve_security_event_handler),
+            )
             .route("/security/statistics", get(get_security_statistics_handler))
-            .route("/security/monitoring", get(|| async { axum::Json("Security monitoring dashboard") }))
+            .route(
+                "/security/monitoring",
+                get(|| async { axum::Json("Security monitoring dashboard") }),
+            )
     }
 }
 
 pub mod permission_routes {
     use super::*;
-    
+
     pub fn routes() -> Router<Arc<AdminAuthState>> {
         Router::new()
             .route("/permissions", get(get_permissions_handler))
-            .route("/permissions/roles/:role", get(get_role_permissions_handler))
+            .route(
+                "/permissions/roles/:role",
+                get(get_role_permissions_handler),
+            )
             .route("/permissions/roles", get(get_role_configs_handler))
     }
 }
 
 // API versioning support
 pub fn v1_admin_routes() -> Router<Arc<AdminServices>> {
-    Router::new()
-        .nest("/api/v1/admin", all_admin_routes())
+    Router::new().nest("/api/v1/admin", all_admin_routes())
 }
 
 pub fn v2_admin_routes() -> Router<Arc<AdminServices>> {
     // Future v2 routes with potentially different handlers
-    Router::new()
-        .nest("/api/v2/admin", all_admin_routes())
+    Router::new().nest("/api/v2/admin", all_admin_routes())
 }
 
 // Route documentation
@@ -325,5 +377,3 @@ All endpoints return JSON in the following format:
 - 429 Too Many Requests - Rate limit exceeded
 - 500 Internal Server Error - Server error
 "#;
-
-  

@@ -394,7 +394,9 @@ mod tests {
         // 5. Verify metadata
         assert_eq!(metadata.status, RefreshTokenStatus::Active);
         assert!(!RefreshTokenService::is_expired(metadata.expires_at));
-        assert!(!RefreshTokenService::is_family_expired(metadata.family_expires_at));
+        assert!(!RefreshTokenService::is_family_expired(
+            metadata.family_expires_at
+        ));
     }
 
     #[test]

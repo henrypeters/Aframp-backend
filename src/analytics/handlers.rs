@@ -222,5 +222,4 @@ pub async fn get_consumer_detail(
         "health_score": health_score,
         "features": features
     })))
-
 }

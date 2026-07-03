@@ -86,6 +86,15 @@ impl PaymentProvider for MpesaProvider {
         self.verify_payment(request).await
     }
 
+    async fn get_balance(&self, _currency: &str) -> PaymentResult<crate::payments::types::Money> {
+        Err(PaymentError::ProviderError {
+            provider: "mpesa".to_string(),
+            message: "balance lookup not implemented yet".to_string(),
+            provider_code: None,
+            retryable: false,
+        })
+    }
+
     fn name(&self) -> ProviderName {
         ProviderName::Mpesa
     }

@@ -33,7 +33,11 @@ pub struct ApiError {
 }
 
 fn ok<T: Serialize>(data: T) -> Json<ApiResponse<T>> {
-    Json(ApiResponse { success: true, data, message: None })
+    Json(ApiResponse {
+        success: true,
+        data,
+        message: None,
+    })
 }
 
 fn ok_msg<T: Serialize>(data: T, msg: &str) -> Json<ApiResponse<T>> {
@@ -50,9 +54,10 @@ fn map_error(e: RouterError) -> (StatusCode, Json<ApiError>) {
         RouterError::Suspended(_) => (StatusCode::FORBIDDEN, "CORRIDOR_SUSPENDED"),
         RouterError::BelowMinimum(_, _) => (StatusCode::UNPROCESSABLE_ENTITY, "BELOW_MINIMUM"),
         RouterError::ExceedsMaximum(_, _) => (StatusCode::UNPROCESSABLE_ENTITY, "EXCEEDS_MAXIMUM"),
-        RouterError::UnsupportedDeliveryMethod(_) => {
-            (StatusCode::UNPROCESSABLE_ENTITY, "UNSUPPORTED_DELIVERY_METHOD")
-        }
+        RouterError::UnsupportedDeliveryMethod(_) => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "UNSUPPORTED_DELIVERY_METHOD",
+        ),
         RouterError::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR"),
     };
     (
@@ -106,9 +111,7 @@ pub async fn get_corridor_handler(
         .await
         .map_err(map_error)?
         .map(ok)
-        .ok_or_else(|| {
-            map_error(RouterError::NotSupported(id.to_string(), String::new()))
-        })
+        .ok_or_else(|| map_error(RouterError::NotSupported(id.to_string(), String::new())))
 }
 
 /// GET /api/corridors/:id/health

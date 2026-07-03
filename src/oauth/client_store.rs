@@ -18,7 +18,10 @@ impl OAuthClientRepository {
     }
 
     /// Fetch a client by its public client_id.
-    pub async fn find_by_client_id(&self, client_id: &str) -> Result<Option<OAuthClient>, OAuthError> {
+    pub async fn find_by_client_id(
+        &self,
+        client_id: &str,
+    ) -> Result<Option<OAuthClient>, OAuthError> {
         let row = sqlx::query!(
             r#"
             SELECT id, client_id, client_secret_hash, client_name,
@@ -120,8 +123,8 @@ pub struct CreateClientInput {
 
 // ── Authorization code store (Redis-backed) ───────────────────────────────────
 
-use crate::cache::{Cache, RedisCache};
 use super::types::AuthorizationCode;
+use crate::cache::{Cache, RedisCache};
 
 pub const AUTH_CODE_TTL_SECS: u64 = 600; // 10 minutes
 

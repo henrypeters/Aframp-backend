@@ -108,22 +108,38 @@ impl OfframpTransactionStatus {
     pub fn can_transition_to(&self, next: &OfframpTransactionStatus) -> bool {
         match (self, next) {
             // Normal successful flow
-            (OfframpTransactionStatus::PendingPayment, OfframpTransactionStatus::CngnReceived) => true,
-            (OfframpTransactionStatus::CngnReceived, OfframpTransactionStatus::VerifyingAmount) => true,
-            (OfframpTransactionStatus::VerifyingAmount, OfframpTransactionStatus::ProcessingWithdrawal) => true,
-            (OfframpTransactionStatus::ProcessingWithdrawal, OfframpTransactionStatus::TransferPending) => true,
-            (OfframpTransactionStatus::TransferPending, OfframpTransactionStatus::Completed) => true,
+            (OfframpTransactionStatus::PendingPayment, OfframpTransactionStatus::CngnReceived) => {
+                true
+            }
+            (OfframpTransactionStatus::CngnReceived, OfframpTransactionStatus::VerifyingAmount) => {
+                true
+            }
+            (
+                OfframpTransactionStatus::VerifyingAmount,
+                OfframpTransactionStatus::ProcessingWithdrawal,
+            ) => true,
+            (
+                OfframpTransactionStatus::ProcessingWithdrawal,
+                OfframpTransactionStatus::TransferPending,
+            ) => true,
+            (OfframpTransactionStatus::TransferPending, OfframpTransactionStatus::Completed) => {
+                true
+            }
 
             // Failure/Expiry transitions
             (OfframpTransactionStatus::PendingPayment, OfframpTransactionStatus::Expired) => true,
             (_, OfframpTransactionStatus::RefundInitiated) => true, // Can initiate refund from most states
-            (OfframpTransactionStatus::RefundInitiated, OfframpTransactionStatus::Refunding) => true,
+            (OfframpTransactionStatus::RefundInitiated, OfframpTransactionStatus::Refunding) => {
+                true
+            }
             (OfframpTransactionStatus::Refunding, OfframpTransactionStatus::Refunded) => true,
 
             // Failed can be set from certain states
             (OfframpTransactionStatus::CngnReceived, OfframpTransactionStatus::Failed) => true,
             (OfframpTransactionStatus::VerifyingAmount, OfframpTransactionStatus::Failed) => true,
-            (OfframpTransactionStatus::ProcessingWithdrawal, OfframpTransactionStatus::Failed) => true,
+            (OfframpTransactionStatus::ProcessingWithdrawal, OfframpTransactionStatus::Failed) => {
+                true
+            }
             (OfframpTransactionStatus::TransferPending, OfframpTransactionStatus::Failed) => true,
             (OfframpTransactionStatus::Refunding, OfframpTransactionStatus::Failed) => true,
 
@@ -250,11 +266,9 @@ impl WithdrawalTransaction {
     pub fn time_to_expiry(&self) -> Option<std::time::Duration> {
         let now = Utc::now();
         if now < self.expires_at {
-            Some(
-                std::time::Duration::from_secs(
-                    (self.expires_at - now).num_seconds() as u64,
-                ),
-            )
+            Some(std::time::Duration::from_secs(
+                (self.expires_at - now).num_seconds() as u64,
+            ))
         } else {
             None
         }
@@ -357,15 +371,15 @@ pub struct WithdrawalMetadata {
 /// );
 ///
 /// -- Index on memo for fast payment matching
-/// CREATE INDEX idx_transaction_memo 
+/// CREATE INDEX idx_transaction_memo
 ///   ON transactions USING GIN ((metadata->>'payment_memo'));
 ///
 /// -- Index on wallet for transaction history
-/// CREATE INDEX idx_transaction_wallet 
+/// CREATE INDEX idx_transaction_wallet
 ///   ON transactions (wallet_address, created_at DESC);
 ///
 /// -- Index on status for monitoring
-/// CREATE INDEX idx_transaction_status 
+/// CREATE INDEX idx_transaction_status
 ///   ON transactions (status, created_at DESC);
 /// ```
 
@@ -415,10 +429,8 @@ mod tests {
             .can_transition_to(&OfframpTransactionStatus::Completed));
 
         // Invalid transition
-        assert!(
-            !OfframpTransactionStatus::Completed
-                .can_transition_to(&OfframpTransactionStatus::Failed)
-        );
+        assert!(!OfframpTransactionStatus::Completed
+            .can_transition_to(&OfframpTransactionStatus::Failed));
     }
 
     #[test]

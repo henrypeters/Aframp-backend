@@ -18,10 +18,10 @@ use crate::database::Repository;
 
 // ── Token lifetime constants (in seconds) ────────────────────────────────────
 
-pub const MOBILE_CLIENT_TTL_SECS: i64 = 3_600;        // 1 hour
-pub const PARTNER_TTL_SECS: i64 = 1_800;              // 30 minutes
-pub const MICROSERVICE_TTL_SECS: i64 = 900;           // 15 minutes
-pub const ADMIN_TTL_SECS: i64 = 900;                  // 15 minutes
+pub const MOBILE_CLIENT_TTL_SECS: i64 = 3_600; // 1 hour
+pub const PARTNER_TTL_SECS: i64 = 1_800; // 30 minutes
+pub const MICROSERVICE_TTL_SECS: i64 = 900; // 15 minutes
+pub const ADMIN_TTL_SECS: i64 = 900; // 15 minutes
 
 // ── Consumer types ───────────────────────────────────────────────────────────
 

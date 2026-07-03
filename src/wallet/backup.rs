@@ -20,12 +20,19 @@ pub fn verify_backup_challenge(
         .iter()
         .zip(user_answers.iter())
         .all(|(&idx, &answer)| {
-            mnemonic_words.get(idx).map(|w| *w == answer).unwrap_or(false)
+            mnemonic_words
+                .get(idx)
+                .map(|w| *w == answer)
+                .unwrap_or(false)
         })
 }
 
 /// Compute backup health status for a wallet.
-pub fn backup_health(confirmed: bool, confirmed_days_ago: Option<i64>, warning_threshold_days: i64) -> &'static str {
+pub fn backup_health(
+    confirmed: bool,
+    confirmed_days_ago: Option<i64>,
+    warning_threshold_days: i64,
+) -> &'static str {
     if !confirmed {
         return "red";
     }

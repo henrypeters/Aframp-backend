@@ -1,8 +1,8 @@
 use crate::payments::error::PaymentResult;
 use crate::payments::provider::PaymentProvider;
 use crate::payments::types::{
-    PaymentRequest, PaymentResponse, PaymentState, ProviderName, StatusRequest, StatusResponse,
-    WebhookEvent, WebhookVerificationResult, WithdrawalRequest, WithdrawalResponse,
+    Money, PaymentRequest, PaymentResponse, PaymentState, ProviderName, StatusRequest,
+    StatusResponse, WebhookEvent, WebhookVerificationResult, WithdrawalRequest, WithdrawalResponse,
 };
 use async_trait::async_trait;
 
@@ -58,6 +58,13 @@ impl PaymentProvider for MockProvider {
 
     async fn get_payment_status(&self, request: StatusRequest) -> PaymentResult<StatusResponse> {
         self.verify_payment(request).await
+    }
+
+    async fn get_balance(&self, _currency: &str) -> PaymentResult<Money> {
+        Ok(Money {
+            amount: "0".to_string(),
+            currency: _currency.to_string(),
+        })
     }
 
     fn name(&self) -> ProviderName {

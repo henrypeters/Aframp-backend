@@ -7,12 +7,16 @@
 //!   - Invalid key rejection
 //!   - Revoked key rejection
 //!   - Max keys per consumer enforcement
+//!
+//! # Note on unwrap/expect usage
+//! All `unwrap()` calls in this file are intentional test-fixture boilerplate:
+//! generating API keys for known-valid inputs. Panicking on failure is
+//! correct and idiomatic in `#[test]` functions — it produces a clear,
+//! immediate error message. No production code paths are involved.
 
 #[cfg(feature = "integration")]
 mod api_key_tests {
-    use Bitmesh_backend::api_keys::generator::{
-        generate_api_key, verify_api_key, KeyEnvironment,
-    };
+    use Bitmesh_backend::api_keys::generator::{generate_api_key, verify_api_key, KeyEnvironment};
 
     // ── Generation tests ──────────────────────────────────────────────────────
 

@@ -12,10 +12,9 @@ pub fn verify_stellar_signature(pubkey_str: &str, message: &[u8], sig_hex: &str)
         Strkey::PublicKeyEd25519(k) => k.0,
         _ => return Err(anyhow::anyhow!("Not an Ed25519 public key")),
     };
-    let vk = VerifyingKey::from_bytes(&raw)
-        .map_err(|e| anyhow::anyhow!("Invalid key bytes: {}", e))?;
-    let sig_bytes = hex::decode(sig_hex)
-        .map_err(|_| anyhow::anyhow!("Invalid signature hex"))?;
+    let vk =
+        VerifyingKey::from_bytes(&raw).map_err(|e| anyhow::anyhow!("Invalid key bytes: {}", e))?;
+    let sig_bytes = hex::decode(sig_hex).map_err(|_| anyhow::anyhow!("Invalid signature hex"))?;
     let sig = Signature::from_slice(&sig_bytes)
         .map_err(|e| anyhow::anyhow!("Invalid signature: {}", e))?;
     Ok(vk.verify(message, &sig).is_ok())

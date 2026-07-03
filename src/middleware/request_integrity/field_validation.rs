@@ -7,7 +7,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::cache::cache::Cache;
-use crate::chains::stellar::types::is_valid_stellar_address;
+// REMOVED: use crate::chains::stellar::types::is_valid_stellar_address;
 use crate::database::provider_config_repository::ProviderConfigRepository;
 use crate::services::onramp_quote::StoredQuote;
 
@@ -69,20 +69,44 @@ async fn validate_offramp_initiate(
     let bank_details = payload
         .get("bank_details")
         .and_then(Value::as_object)
-        .ok_or_else(|| IntegrityError::field("INVALID_BANK_DETAILS", "bank_details must be an object", Some("bank_details".to_string())))?;
+        .ok_or_else(|| {
+            IntegrityError::field(
+                "INVALID_BANK_DETAILS",
+                "bank_details must be an object",
+                Some("bank_details".to_string()),
+            )
+        })?;
 
     let bank_code = bank_details
         .get("bank_code")
         .and_then(Value::as_str)
-        .ok_or_else(|| IntegrityError::field("INVALID_BANK_CODE", "bank_code must be a string", Some("bank_details.bank_code".to_string())))?;
+        .ok_or_else(|| {
+            IntegrityError::field(
+                "INVALID_BANK_CODE",
+                "bank_code must be a string",
+                Some("bank_details.bank_code".to_string()),
+            )
+        })?;
     let account_number = bank_details
         .get("account_number")
         .and_then(Value::as_str)
-        .ok_or_else(|| IntegrityError::field("INVALID_ACCOUNT_NUMBER", "account_number must be a string", Some("bank_details.account_number".to_string())))?;
+        .ok_or_else(|| {
+            IntegrityError::field(
+                "INVALID_ACCOUNT_NUMBER",
+                "account_number must be a string",
+                Some("bank_details.account_number".to_string()),
+            )
+        })?;
     let account_name = bank_details
         .get("account_name")
         .and_then(Value::as_str)
-        .ok_or_else(|| IntegrityError::field("INVALID_ACCOUNT_NAME", "account_name must be a string", Some("bank_details.account_name".to_string())))?;
+        .ok_or_else(|| {
+            IntegrityError::field(
+                "INVALID_ACCOUNT_NAME",
+                "account_name must be a string",
+                Some("bank_details.account_name".to_string()),
+            )
+        })?;
 
     if bank_code.len() != 3 || !bank_code.chars().all(|c| c.is_ascii_digit()) {
         return Err(IntegrityError::field(
@@ -120,7 +144,13 @@ fn validate_batch_cngn(payload: &Value, ctx: &mut ValidationContext) -> Result<(
     let transfers = payload
         .get("transfers")
         .and_then(Value::as_array)
-        .ok_or_else(|| IntegrityError::field("INVALID_TRANSFERS", "transfers must be an array", Some("transfers".to_string())))?;
+        .ok_or_else(|| {
+            IntegrityError::field(
+                "INVALID_TRANSFERS",
+                "transfers must be an array",
+                Some("transfers".to_string()),
+            )
+        })?;
     if transfers.is_empty() {
         return Err(IntegrityError::field(
             "EMPTY_BATCH",
@@ -141,13 +171,32 @@ fn validate_batch_cngn(payload: &Value, ctx: &mut ValidationContext) -> Result<(
         let destination_wallet = item_obj
             .get("destination_wallet")
             .and_then(Value::as_str)
-            .ok_or_else(|| IntegrityError::field("INVALID_DESTINATION_WALLET", "destination_wallet must be a string", Some(format!("transfers[{index}].destination_wallet"))))?;
-        validate_stellar_wallet(&format!("transfers[{index}].destination_wallet"), destination_wallet)?;
+            .ok_or_else(|| {
+                IntegrityError::field(
+                    "INVALID_DESTINATION_WALLET",
+                    "destination_wallet must be a string",
+                    Some(format!("transfers[{index}].destination_wallet")),
+                )
+            })?;
+        validate_stellar_wallet(
+            &format!("transfers[{index}].destination_wallet"),
+            destination_wallet,
+        )?;
         let amount = item_obj
             .get("amount_cngn")
             .and_then(Value::as_str)
-            .ok_or_else(|| IntegrityError::field("INVALID_AMOUNT", "amount_cngn must be a string", Some(format!("transfers[{index}].amount_cngn"))))?;
-        let parsed = validate_amount(amount, CurrencyKind::Cngn, Some(format!("transfers[{index}].amount_cngn")))?;
+            .ok_or_else(|| {
+                IntegrityError::field(
+                    "INVALID_AMOUNT",
+                    "amount_cngn must be a string",
+                    Some(format!("transfers[{index}].amount_cngn")),
+                )
+            })?;
+        let parsed = validate_amount(
+            amount,
+            CurrencyKind::Cngn,
+            Some(format!("transfers[{index}].amount_cngn")),
+        )?;
         total += parsed;
     }
 
@@ -159,7 +208,13 @@ fn validate_batch_fiat(payload: &Value, ctx: &mut ValidationContext) -> Result<(
     let payouts = payload
         .get("payouts")
         .and_then(Value::as_array)
-        .ok_or_else(|| IntegrityError::field("INVALID_PAYOUTS", "payouts must be an array", Some("payouts".to_string())))?;
+        .ok_or_else(|| {
+            IntegrityError::field(
+                "INVALID_PAYOUTS",
+                "payouts must be an array",
+                Some("payouts".to_string()),
+            )
+        })?;
     if payouts.is_empty() {
         return Err(IntegrityError::field(
             "EMPTY_BATCH",
@@ -180,7 +235,13 @@ fn validate_batch_fiat(payload: &Value, ctx: &mut ValidationContext) -> Result<(
         let bank_code = item_obj
             .get("bank_code")
             .and_then(Value::as_str)
-            .ok_or_else(|| IntegrityError::field("INVALID_BANK_CODE", "bank_code must be a string", Some(format!("payouts[{index}].bank_code"))))?;
+            .ok_or_else(|| {
+                IntegrityError::field(
+                    "INVALID_BANK_CODE",
+                    "bank_code must be a string",
+                    Some(format!("payouts[{index}].bank_code")),
+                )
+            })?;
         if bank_code.len() != 3 || !bank_code.chars().all(|c| c.is_ascii_digit()) {
             return Err(IntegrityError::field(
                 "INVALID_BANK_CODE",
@@ -191,7 +252,13 @@ fn validate_batch_fiat(payload: &Value, ctx: &mut ValidationContext) -> Result<(
         let account_number = item_obj
             .get("bank_account_number")
             .and_then(Value::as_str)
-            .ok_or_else(|| IntegrityError::field("INVALID_BANK_ACCOUNT", "bank_account_number must be a string", Some(format!("payouts[{index}].bank_account_number"))))?;
+            .ok_or_else(|| {
+                IntegrityError::field(
+                    "INVALID_BANK_ACCOUNT",
+                    "bank_account_number must be a string",
+                    Some(format!("payouts[{index}].bank_account_number")),
+                )
+            })?;
         if account_number.len() != 10 || !account_number.chars().all(|c| c.is_ascii_digit()) {
             return Err(IntegrityError::field(
                 "INVALID_BANK_ACCOUNT",
@@ -202,16 +269,31 @@ fn validate_batch_fiat(payload: &Value, ctx: &mut ValidationContext) -> Result<(
         let amount = item_obj
             .get("amount_ngn")
             .and_then(Value::as_str)
-            .ok_or_else(|| IntegrityError::field("INVALID_AMOUNT", "amount_ngn must be a string", Some(format!("payouts[{index}].amount_ngn"))))?;
-        total += validate_amount(amount, CurrencyKind::Ngn, Some(format!("payouts[{index}].amount_ngn")))?;
+            .ok_or_else(|| {
+                IntegrityError::field(
+                    "INVALID_AMOUNT",
+                    "amount_ngn must be a string",
+                    Some(format!("payouts[{index}].amount_ngn")),
+                )
+            })?;
+        total += validate_amount(
+            amount,
+            CurrencyKind::Ngn,
+            Some(format!("payouts[{index}].amount_ngn")),
+        )?;
     }
 
     ctx.batch_total = Some(total);
     Ok(())
 }
 
-async fn validate_provider_id(provider: &str, state: &RequestIntegrityState) -> Result<(), IntegrityError> {
-    let static_allowed: HashSet<&str> = ["flutterwave", "paystack", "mpesa", "mock"].into_iter().collect();
+async fn validate_provider_id(
+    provider: &str,
+    state: &RequestIntegrityState,
+) -> Result<(), IntegrityError> {
+    let static_allowed: HashSet<&str> = ["flutterwave", "paystack", "mpesa", "mock"]
+        .into_iter()
+        .collect();
     if static_allowed.contains(provider) {
         return Ok(());
     }
@@ -243,7 +325,10 @@ async fn validate_provider_id(provider: &str, state: &RequestIntegrityState) -> 
     }
 }
 
-async fn load_quote(quote_id: &str, state: &RequestIntegrityState) -> Result<StoredQuote, IntegrityError> {
+async fn load_quote(
+    quote_id: &str,
+    state: &RequestIntegrityState,
+) -> Result<StoredQuote, IntegrityError> {
     let cache = state.cache.as_ref().ok_or_else(|| {
         IntegrityError::field(
             "QUOTE_LOOKUP_UNAVAILABLE",
@@ -253,10 +338,13 @@ async fn load_quote(quote_id: &str, state: &RequestIntegrityState) -> Result<Sto
     })?;
 
     let cache_key = crate::cache::keys::onramp::QuoteKey::new(quote_id).to_string();
-    let quote: Option<StoredQuote> = cache
-        .get(&cache_key)
-        .await
-        .map_err(|_| IntegrityError::field("INVALID_QUOTE_ID", "quote_id could not be resolved", Some("quote_id".to_string())))?;
+    let quote: Option<StoredQuote> = cache.get(&cache_key).await.map_err(|_| {
+        IntegrityError::field(
+            "INVALID_QUOTE_ID",
+            "quote_id could not be resolved",
+            Some("quote_id".to_string()),
+        )
+    })?;
 
     quote.ok_or_else(|| {
         IntegrityError::field(
@@ -386,10 +474,13 @@ fn validate_amount(
 }
 
 fn required_string<'a>(payload: &'a Value, field: &str) -> Result<&'a str, IntegrityError> {
-    payload
-        .get(field)
-        .and_then(Value::as_str)
-        .ok_or_else(|| IntegrityError::field("INVALID_FIELD", format!("{field} must be a string"), Some(field.to_string())))
+    payload.get(field).and_then(Value::as_str).ok_or_else(|| {
+        IntegrityError::field(
+            "INVALID_FIELD",
+            format!("{field} must be a string"),
+            Some(field.to_string()),
+        )
+    })
 }
 
 #[cfg(test)]
@@ -398,7 +489,8 @@ mod tests {
 
     #[test]
     fn amount_precision_is_enforced() {
-        let err = validate_amount("12.123", CurrencyKind::Ngn, Some("amount".to_string())).unwrap_err();
+        let err =
+            validate_amount("12.123", CurrencyKind::Ngn, Some("amount".to_string())).unwrap_err();
         assert_eq!(err.code, "INVALID_AMOUNT_PRECISION");
     }
 

@@ -216,7 +216,8 @@ pub async fn request_integrity_middleware(
         return error.into_response();
     }
 
-    if let Some(assessment) = evaluate_anomaly(endpoint, &payload, &consumer_id, &state, &ctx).await {
+    if let Some(assessment) = evaluate_anomaly(endpoint, &payload, &consumer_id, &state, &ctx).await
+    {
         debug!(
             consumer_id = %consumer_id,
             endpoint = endpoint.as_str(),
@@ -248,7 +249,12 @@ fn resolve_consumer_id(req: &Request<Body>) -> String {
 fn flatten_headers(headers: &axum::http::HeaderMap) -> HashMap<String, String> {
     headers
         .iter()
-        .filter_map(|(name, value)| value.to_str().ok().map(|v| (name.to_string(), v.to_string())))
+        .filter_map(|(name, value)| {
+            value
+                .to_str()
+                .ok()
+                .map(|v| (name.to_string(), v.to_string()))
+        })
         .collect()
 }
 

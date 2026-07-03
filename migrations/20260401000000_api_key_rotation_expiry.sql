@@ -1,4 +1,3 @@
--- migrate:up
 -- API Key Rotation & Expiry Management (Issue #137)
 --
 -- Adds:
@@ -12,9 +11,17 @@
 -- expires_at already exists (nullable). Add a CHECK so new rows must supply it.
 -- Existing NULL rows are left as-is; the application layer enforces the policy
 -- for new issuances.
-ALTER TABLE api_keys
-    ADD CONSTRAINT chk_api_keys_expires_at_required
-        CHECK (expires_at IS NOT NULL);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_api_keys_expires_at_required'
+    ) THEN
+        ALTER TABLE api_keys
+            ADD CONSTRAINT chk_api_keys_expires_at_required
+                CHECK (expires_at IS NOT NULL);
+    END IF;
+END $$;
 
 -- ─── 2. Max lifetime per consumer type ───────────────────────────────────────
 ALTER TABLE consumer_types
@@ -50,6 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_key_rotations_new_key  ON key_rotations (new_key_
 CREATE INDEX IF NOT EXISTS idx_key_rotations_status   ON key_rotations (status) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_key_rotations_grace_end ON key_rotations (grace_period_end) WHERE status = 'active';
 
+DROP TRIGGER IF EXISTS trg_key_rotations_updated_at ON key_rotations;
 CREATE TRIGGER trg_key_rotations_updated_at
     BEFORE UPDATE ON key_rotations
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

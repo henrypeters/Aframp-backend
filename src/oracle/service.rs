@@ -6,7 +6,7 @@
 //! Price freeze: if ALL sources fail, OracleState transitions to PriceFrozen.
 
 use super::{
-    adapters::PriceAdapter,
+    adapters::{DynPriceAdapter, PriceAdapter},
     aggregator::Aggregator,
     types::{OraclePrice, OracleState, RawPrice, SourceHealth},
 };
@@ -20,13 +20,30 @@ const HEARTBEAT_SECS: u64 = 30;
 const DEVIATION_THRESHOLD_PCT: f64 = 0.5;
 const MAX_SOURCE_FAILURES: u32 = 3;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::oracle::adapters::{BandProtocolAdapter, BinanceAdapter, CoinbaseAdapter};
+
+    #[test]
+    fn oracle_service_accepts_boxed_adapters() {
+        let adapters: Vec<DynPriceAdapter> = vec![
+            Box::new(BinanceAdapter::new()) as DynPriceAdapter,
+            Box::new(CoinbaseAdapter::new()) as DynPriceAdapter,
+            Box::new(BandProtocolAdapter::new()) as DynPriceAdapter,
+        ];
+
+        let _service = OracleService::new(adapters, "XLM/USD", None);
+    }
+}
+
 #[derive(Clone)]
 pub struct OracleService {
     inner: Arc<Inner>,
 }
 
 struct Inner {
-    adapters: Vec<Box<dyn PriceAdapter>>,
+    adapters: Vec<DynPriceAdapter>,
     aggregator: Aggregator,
     pair: String,
     state: RwLock<OracleState>,
@@ -36,13 +53,25 @@ struct Inner {
 }
 
 impl OracleService {
-    pub fn new(adapters: Vec<Box<dyn PriceAdapter>>, pair: impl Into<String>, pool: Option<PgPool>) -> Self {
+    pub fn new(
+        adapters: Vec<DynPriceAdapter>,
+        pair: impl Into<String>,
+        pool: Option<PgPool>,
+    ) -> Self {
         let pair = pair.into();
         let health: HashMap<String, SourceHealth> = adapters
             .iter()
             .map(|a| {
                 let name = a.name().to_string();
-                (name.clone(), SourceHealth { name, healthy: true, last_seen: None, failures: 0 })
+                (
+                    name.clone(),
+                    SourceHealth {
+                        name,
+                        healthy: true,
+                        last_seen: None,
+                        failures: 0,
+                    },
+                )
             })
             .collect();
 
@@ -142,7 +171,10 @@ impl OracleService {
         for adapter in &self.inner.adapters {
             // Only query sources that haven't been slashed
             let src_health = health.get(adapter.name());
-            if src_health.map(|h| h.failures >= MAX_SOURCE_FAILURES).unwrap_or(false) {
+            if src_health
+                .map(|h| h.failures >= MAX_SOURCE_FAILURES)
+                .unwrap_or(false)
+            {
                 continue;
             }
             // We can't move adapter into async block directly (it's behind &),
@@ -184,7 +216,8 @@ impl OracleService {
                 if h.failures >= MAX_SOURCE_FAILURES {
                     if h.healthy {
                         warn!(source = %name, "Oracle source slashed — too many consecutive failures");
-                        self.audit_exclusion_unlocked(name, "consecutive_failures").await;
+                        self.audit_exclusion_unlocked(name, "consecutive_failures")
+                            .await;
                     }
                     h.healthy = false;
                 }

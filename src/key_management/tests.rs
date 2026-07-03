@@ -7,8 +7,15 @@ mod tests {
     use crate::key_management::{
         catalogue::{KeyStatus, KeyType},
         escrow::{reconstruct, split, EscrowError},
-        rotation::{days_until_rotation, is_in_grace_period, DEFAULT_GRACE_PERIOD_DAYS, JWT_GRACE_PERIOD_DAYS},
+        rotation::{
+            days_until_rotation, is_in_grace_period, DEFAULT_GRACE_PERIOD_DAYS,
+            JWT_GRACE_PERIOD_DAYS,
+        },
     };
+
+    // `unwrap()` is intentional throughout these tests: a panic is the correct
+    // failure signal when an operation that must succeed in the given test
+    // scenario returns an error.
 
     // -----------------------------------------------------------------------
     // Rotation schedule calculation
@@ -103,8 +110,16 @@ mod tests {
         let secret = b"consistent-secret-value-here!!!";
         let shares = split(secret, 3, 5).unwrap();
 
-        let r1 = reconstruct(&[shares[0].clone(), shares[2].clone(), shares[4].clone()], 3).unwrap();
-        let r2 = reconstruct(&[shares[1].clone(), shares[3].clone(), shares[4].clone()], 3).unwrap();
+        let r1 = reconstruct(
+            &[shares[0].clone(), shares[2].clone(), shares[4].clone()],
+            3,
+        )
+        .unwrap();
+        let r2 = reconstruct(
+            &[shares[1].clone(), shares[3].clone(), shares[4].clone()],
+            3,
+        )
+        .unwrap();
         assert_eq!(r1.as_slice(), secret);
         assert_eq!(r2.as_slice(), secret);
     }
@@ -114,14 +129,20 @@ mod tests {
         let secret = b"secret";
         let shares = split(secret, 3, 5).unwrap();
         let result = reconstruct(&shares[..2], 3);
-        assert!(matches!(result, Err(EscrowError::InsufficientShares { needed: 3, got: 2 })));
+        assert!(matches!(
+            result,
+            Err(EscrowError::InsufficientShares { needed: 3, got: 2 })
+        ));
     }
 
     #[test]
     fn test_shamir_invalid_threshold_fails() {
         assert!(matches!(
             split(b"secret", 6, 5),
-            Err(EscrowError::InvalidThreshold { threshold: 6, total: 5 })
+            Err(EscrowError::InvalidThreshold {
+                threshold: 6,
+                total: 5
+            })
         ));
     }
 

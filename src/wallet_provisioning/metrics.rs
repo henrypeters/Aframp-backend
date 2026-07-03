@@ -1,8 +1,6 @@
 //! Prometheus metrics for wallet provisioning (Issue #322).
 
-use prometheus::{
-    register_counter_vec, register_gauge_vec, CounterVec, GaugeVec,
-};
+use prometheus::{register_counter_vec, register_gauge_vec, CounterVec, GaugeVec};
 use std::sync::OnceLock;
 
 static PROVISIONING_INITIATIONS: OnceLock<CounterVec> = OnceLock::new();

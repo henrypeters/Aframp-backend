@@ -25,8 +25,14 @@ mod tests {
         assert_eq!(DisputeStatus::Open.as_str(), "open");
         assert_eq!(DisputeStatus::UnderReview.as_str(), "under_review");
         assert_eq!(DisputeStatus::Mediation.as_str(), "mediation");
-        assert_eq!(DisputeStatus::ResolvedCustomer.as_str(), "resolved_customer");
-        assert_eq!(DisputeStatus::ResolvedMerchant.as_str(), "resolved_merchant");
+        assert_eq!(
+            DisputeStatus::ResolvedCustomer.as_str(),
+            "resolved_customer"
+        );
+        assert_eq!(
+            DisputeStatus::ResolvedMerchant.as_str(),
+            "resolved_merchant"
+        );
         assert_eq!(DisputeStatus::ResolvedPartial.as_str(), "resolved_partial");
         assert_eq!(DisputeStatus::Closed.as_str(), "closed");
     }

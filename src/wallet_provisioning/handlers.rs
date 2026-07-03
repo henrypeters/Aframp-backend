@@ -19,17 +19,13 @@ pub type ProvisioningState = Arc<WalletProvisioningService>;
 // ---------------------------------------------------------------------------
 
 /// GET /v1/wallet/keypair-guidance
-pub async fn get_keypair_guidance(
-    State(svc): State<ProvisioningState>,
-) -> impl IntoResponse {
+pub async fn get_keypair_guidance(State(svc): State<ProvisioningState>) -> impl IntoResponse {
     let guidance = svc.get_keypair_guidance();
     (StatusCode::OK, Json(json!({ "data": guidance }))).into_response()
 }
 
 /// GET /v1/wallet/mnemonic-challenge
-pub async fn get_mnemonic_challenge(
-    State(svc): State<ProvisioningState>,
-) -> impl IntoResponse {
+pub async fn get_mnemonic_challenge(State(svc): State<ProvisioningState>) -> impl IntoResponse {
     let challenge = svc.get_mnemonic_challenge();
     (StatusCode::OK, Json(json!({ "data": challenge }))).into_response()
 }
@@ -74,7 +70,10 @@ pub async fn initiate_trustline(
     Path(wallet_id): Path<Uuid>,
     Query(params): Query<WalletAddressQuery>,
 ) -> impl IntoResponse {
-    match svc.initiate_trustline(wallet_id, &params.wallet_address).await {
+    match svc
+        .initiate_trustline(wallet_id, &params.wallet_address)
+        .await
+    {
         Ok(resp) => (StatusCode::OK, Json(json!({ "data": resp }))).into_response(),
         Err(e) => e.into_response(),
     }
@@ -87,7 +86,10 @@ pub async fn submit_trustline(
     Query(params): Query<WalletAddressQuery>,
     Json(req): Json<TrustlineSubmitRequest>,
 ) -> impl IntoResponse {
-    match svc.submit_trustline(wallet_id, &params.wallet_address, req).await {
+    match svc
+        .submit_trustline(wallet_id, &params.wallet_address, req)
+        .await
+    {
         Ok(_) => (
             StatusCode::OK,
             Json(json!({ "message": "Trustline submitted successfully" })),
@@ -118,9 +120,7 @@ pub async fn get_readiness(
 // ---------------------------------------------------------------------------
 
 /// GET /v1/admin/wallet/funding-account
-pub async fn get_funding_account(
-    State(svc): State<ProvisioningState>,
-) -> impl IntoResponse {
+pub async fn get_funding_account(State(svc): State<ProvisioningState>) -> impl IntoResponse {
     match svc.get_funding_account_status().await {
         Ok(status) => (StatusCode::OK, Json(json!({ "data": status }))).into_response(),
         Err(e) => e.into_response(),

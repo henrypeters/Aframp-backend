@@ -294,10 +294,9 @@ pub async fn update_key_scopes(
     };
 
     // Delete existing scope grants
-    if let Err(e) =
-        sqlx::query!("DELETE FROM key_scopes WHERE api_key_id = $1", key_id)
-            .execute(&mut *tx)
-            .await
+    if let Err(e) = sqlx::query!("DELETE FROM key_scopes WHERE api_key_id = $1", key_id)
+        .execute(&mut *tx)
+        .await
     {
         error!("Failed to delete existing scopes: {}", e);
         let _ = tx.rollback().await;

@@ -33,7 +33,11 @@ impl Default for AnomalyDetectionConfig {
 }
 
 impl AnomalyDetector {
-    pub fn new(pool: Arc<PgPool>, repo: Arc<AnalyticsRepository>, config: AnomalyDetectionConfig) -> Self {
+    pub fn new(
+        pool: Arc<PgPool>,
+        repo: Arc<AnalyticsRepository>,
+        config: AnomalyDetectionConfig,
+    ) -> Self {
         Self { pool, repo, config }
     }
 
@@ -64,7 +68,7 @@ impl AnomalyDetector {
         // Persist anomalies
         for anomaly in &anomalies {
             self.repo.insert_anomaly(anomaly).await?;
-            
+
             // Update metrics
             crate::analytics::metrics::anomalies_detected_total()
                 .with_label_values(&[&anomaly.anomaly_type, &anomaly.severity])
@@ -83,7 +87,7 @@ impl AnomalyDetector {
 
     async fn get_recent_consumers(&self) -> Result<Vec<String>, anyhow::Error> {
         let lookback = Utc::now() - Duration::days(self.config.rolling_average_window_days);
-        
+
         let consumers = sqlx::query_scalar!(
             r#"
             SELECT DISTINCT actor_id
@@ -98,7 +102,10 @@ impl AnomalyDetector {
         Ok(consumers.into_iter().flatten().collect())
     }
 
-    async fn detect_volume_drop(&self, consumer_id: &str) -> Result<Option<ConsumerUsageAnomaly>, anyhow::Error> {
+    async fn detect_volume_drop(
+        &self,
+        consumer_id: &str,
+    ) -> Result<Option<ConsumerUsageAnomaly>, anyhow::Error> {
         let now = Utc::now();
         let last_24h_start = now - Duration::hours(24);
         let rolling_window_start = now - Duration::days(self.config.rolling_average_window_days);
@@ -179,7 +186,10 @@ impl AnomalyDetector {
         }
     }
 
-    async fn detect_error_spike(&self, consumer_id: &str) -> Result<Option<ConsumerUsageAnomaly>, anyhow::Error> {
+    async fn detect_error_spike(
+        &self,
+        consumer_id: &str,
+    ) -> Result<Option<ConsumerUsageAnomaly>, anyhow::Error> {
         let now = Utc::now();
         let last_24h_start = now - Duration::hours(24);
         let rolling_window_start = now - Duration::days(self.config.rolling_average_window_days);
@@ -203,7 +213,8 @@ impl AnomalyDetector {
             return Ok(None);
         }
 
-        let current_error_rate = (current_stats.failures as f64 / current_stats.total as f64) * 100.0;
+        let current_error_rate =
+            (current_stats.failures as f64 / current_stats.total as f64) * 100.0;
 
         // Get rolling average error rate
         let rolling_avg_error_rate = sqlx::query_scalar!(
@@ -227,7 +238,8 @@ impl AnomalyDetector {
             return Ok(None);
         }
 
-        let spike_percent = ((current_error_rate - rolling_avg_error_rate) / rolling_avg_error_rate) * 100.0;
+        let spike_percent =
+            ((current_error_rate - rolling_avg_error_rate) / rolling_avg_error_rate) * 100.0;
 
         if spike_percent >= self.config.error_spike_threshold_percent {
             let severity = if current_error_rate >= 20.0 {
@@ -266,7 +278,10 @@ impl AnomalyDetector {
         }
     }
 
-    async fn detect_inactivity(&self, consumer_id: &str) -> Result<Option<ConsumerUsageAnomaly>, anyhow::Error> {
+    async fn detect_inactivity(
+        &self,
+        consumer_id: &str,
+    ) -> Result<Option<ConsumerUsageAnomaly>, anyhow::Error> {
         let now = Utc::now();
         let inactivity_threshold = now - Duration::hours(self.config.inactivity_window_hours);
 
@@ -284,7 +299,7 @@ impl AnomalyDetector {
         if let Some(last_activity) = last_activity {
             if last_activity < inactivity_threshold {
                 let hours_inactive = (now - last_activity).num_hours();
-                
+
                 let severity = if hours_inactive >= 168 {
                     "high"
                 } else {

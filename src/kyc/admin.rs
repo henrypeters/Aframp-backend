@@ -5,20 +5,21 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use bigdecimal::BigDecimal;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, Row};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use crate::auth::AuthenticatedAdmin;
 use crate::database::kyc_repository::{
-    KycRepository, KycRecord, KycDocument, KycEvent, KycTier, KycStatus,
-    ManualReviewQueue, EnhancedDueDiligenceCase, EddStatus
+    EddStatus, EnhancedDueDiligenceCase, KycDocument, KycEvent, KycRecord, KycRepository,
+    KycStatus, KycTier, ManualReviewQueue,
 };
-use crate::kyc::service::{KycService, KycServiceError};
-use crate::kyc::limits::KycLimitsEnforcer;
 use crate::error::ApiError;
+use crate::kyc::limits::KycLimitsEnforcer;
+use crate::kyc::service::{KycService, KycServiceError};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ManualReviewQueueItem {
@@ -86,7 +87,7 @@ pub struct DowngradeKycRequest {
     pub new_tier: KycTier,
     pub reason: String,
     pub notify_consumer: Option<bool>,
-    pub temporary: Option<bool>, // If true, tier can be restored later
+    pub temporary: Option<bool>,    // If true, tier can be restored later
     pub duration_days: Option<i32>, // For temporary downgrades
 }
 
@@ -102,7 +103,7 @@ pub struct KycHistoryResponse {
     pub edd_cases: Vec<EnhancedDueDiligenceCase>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct KycDecision {
     pub id: Uuid,
     pub kyc_record_id: Uuid,
@@ -166,24 +167,25 @@ async fn get_manual_review_queue(
     let offset = (page - 1) * limit;
 
     // Get manual review queue items
-    let queue_items = kyc_service.repository
+    let queue_items = kyc_service
+        .repository
         .get_manual_review_queue(Some(limit), Some(offset))
         .await
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     // Get total count
-    let total_count = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM manual_review_queue WHERE resolved_at IS NULL"
-    )
-    .fetch_one(&kyc_service.repository.pool)
-    .await
-    .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
-    .unwrap_or(0);
+    let total_count =
+        sqlx::query_scalar!("SELECT COUNT(*) FROM manual_review_queue WHERE resolved_at IS NULL")
+            .fetch_one(&kyc_service.repository.pool)
+            .await
+            .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
+            .unwrap_or(0);
 
     // Enrich with consumer and KYC details
     let mut enriched_items = Vec::new();
     for item in queue_items {
-        let consumer_info = get_consumer_info(&kyc_service.repository.pool, item.consumer_id).await?;
+        let consumer_info =
+            get_consumer_info(&kyc_service.repository.pool, item.consumer_id).await?;
         let kyc_details = get_kyc_details(&kyc_service.repository, item.kyc_record_id).await?;
 
         enriched_items.push(ManualReviewQueueItem {
@@ -221,19 +223,22 @@ async fn approve_kyc(
     Json(request): Json<ApproveKycRequest>,
 ) -> Result<Json<AdminActionResponse>, ApiError> {
     // Get current KYC record
-    let kyc_record = kyc_service.repository
+    let kyc_record = kyc_service
+        .repository
         .get_kyc_record_by_consumer(consumer_id)
         .await
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("KYC record not found".to_string()))?;
 
     // Update KYC tier and status
-    kyc_service.repository
+    kyc_service
+        .repository
         .update_kyc_tier(kyc_record.id, request.tier)
         .await
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
-    kyc_service.repository
+    kyc_service
+        .repository
         .update_kyc_status(
             kyc_record.id,
             KycStatus::Approved,
@@ -254,19 +259,25 @@ async fn approve_kyc(
     .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     // Log the decision
-    kyc_service.repository.create_event(
-        consumer_id,
-        Some(kyc_record.id),
-        crate::database::kyc_repository::KycEventType::DecisionMade,
-        Some(format!("Manually approved by admin: {:?}", request.reviewer_notes)),
-        None,
-        Some(serde_json::json!({
-            "admin_id": _auth.admin_id,
-            "approved_tier": format!("{:?}", request.tier),
-            "reviewer_notes": request.reviewer_notes
-        }))
-    ).await
-    .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
+    kyc_service
+        .repository
+        .create_event(
+            consumer_id,
+            Some(kyc_record.id),
+            crate::database::kyc_repository::KycEventType::DecisionMade,
+            Some(format!(
+                "Manually approved by admin: {:?}",
+                request.reviewer_notes
+            )),
+            None,
+            Some(serde_json::json!({
+                "admin_id": _auth.admin_id,
+                "approved_tier": format!("{:?}", request.tier),
+                "reviewer_notes": request.reviewer_notes
+            })),
+        )
+        .await
+        .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     // TODO: Send notification to consumer if requested
 
@@ -286,14 +297,16 @@ async fn reject_kyc(
     Json(request): Json<RejectKycRequest>,
 ) -> Result<Json<AdminActionResponse>, ApiError> {
     // Get current KYC record
-    let kyc_record = kyc_service.repository
+    let kyc_record = kyc_service
+        .repository
         .get_kyc_record_by_consumer(consumer_id)
         .await
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("KYC record not found".to_string()))?;
 
     // Update KYC status
-    kyc_service.repository
+    kyc_service
+        .repository
         .update_kyc_status(
             kyc_record.id,
             KycStatus::Rejected,
@@ -334,21 +347,24 @@ async fn reject_kyc(
     .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     // Log the decision
-    kyc_service.repository.create_event(
-        consumer_id,
-        Some(kyc_record.id),
-        crate::database::kyc_repository::KycEventType::DecisionMade,
-        Some(format!("Rejected by admin: {}", request.rejection_reason)),
-        None,
-        Some(serde_json::json!({
-            "admin_id": _auth.admin_id,
-            "rejection_reason": request.rejection_reason,
-            "reviewer_notes": request.reviewer_notes,
-            "allow_resubmission": allow_resubmission,
-            "resubmission_days": resubmission_days
-        }))
-    ).await
-    .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
+    kyc_service
+        .repository
+        .create_event(
+            consumer_id,
+            Some(kyc_record.id),
+            crate::database::kyc_repository::KycEventType::DecisionMade,
+            Some(format!("Rejected by admin: {}", request.rejection_reason)),
+            None,
+            Some(serde_json::json!({
+                "admin_id": _auth.admin_id,
+                "rejection_reason": request.rejection_reason,
+                "reviewer_notes": request.reviewer_notes,
+                "allow_resubmission": allow_resubmission,
+                "resubmission_days": resubmission_days
+            })),
+        )
+        .await
+        .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     // TODO: Send notification to consumer if requested
 
@@ -368,7 +384,8 @@ async fn downgrade_kyc(
     Json(request): Json<DowngradeKycRequest>,
 ) -> Result<Json<AdminActionResponse>, ApiError> {
     // Get current KYC record
-    let kyc_record = kyc_service.repository
+    let kyc_record = kyc_service
+        .repository
         .get_kyc_record_by_consumer(consumer_id)
         .await
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
@@ -376,7 +393,9 @@ async fn downgrade_kyc(
 
     // Validate new tier is lower than current
     if request.new_tier as i32 >= kyc_record.tier as i32 {
-        return Err(ApiError::BadRequest("New tier must be lower than current tier".to_string()));
+        return Err(ApiError::BadRequest(
+            "New tier must be lower than current tier".to_string(),
+        ));
     }
 
     // Update effective tier (or both tiers if not temporary)
@@ -397,29 +416,33 @@ async fn downgrade_kyc(
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
     } else {
         // Update both tiers for permanent downgrade
-        kyc_service.repository
+        kyc_service
+            .repository
             .update_kyc_tier(kyc_record.id, request.new_tier)
             .await
             .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
     }
 
     // Log the downgrade
-    kyc_service.repository.create_event(
-        consumer_id,
-        Some(kyc_record.id),
-        crate::database::kyc_repository::KycEventType::TierChanged,
-        Some(format!("Tier downgraded by admin: {}", request.reason)),
-        None,
-        Some(serde_json::json!({
-            "admin_id": _auth.admin_id,
-            "previous_tier": format!("{:?}", kyc_record.tier),
-            "new_tier": format!("{:?}", request.new_tier),
-            "reason": request.reason,
-            "temporary": request.temporary,
-            "duration_days": request.duration_days
-        }))
-    ).await
-    .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
+    kyc_service
+        .repository
+        .create_event(
+            consumer_id,
+            Some(kyc_record.id),
+            crate::database::kyc_repository::KycEventType::TierChanged,
+            Some(format!("Tier downgraded by admin: {}", request.reason)),
+            None,
+            Some(serde_json::json!({
+                "admin_id": _auth.admin_id,
+                "previous_tier": format!("{:?}", kyc_record.tier),
+                "new_tier": format!("{:?}", request.new_tier),
+                "reason": request.reason,
+                "temporary": request.temporary,
+                "duration_days": request.duration_days
+            })),
+        )
+        .await
+        .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     // TODO: Send notification to consumer if requested
     // TODO: Schedule tier restoration if temporary
@@ -439,39 +462,40 @@ async fn get_consumer_kyc_history(
     Path(consumer_id): Path<Uuid>,
 ) -> Result<Json<KycHistoryResponse>, ApiError> {
     // Get all KYC records for the consumer
-    let all_records = sqlx::query_as!(
-        KycRecord,
-        "SELECT * FROM kyc_records WHERE consumer_id = $1 ORDER BY created_at DESC",
-        consumer_id
-    )
+    let all_records =
+        sqlx::query_as::<_, KycRecord>("SELECT * FROM kyc_records WHERE consumer_id = $1 ORDER BY created_at DESC")
+            .bind(consumer_id)
     .fetch_all(&kyc_service.repository.pool)
     .await
     .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     if all_records.is_empty() {
-        return Err(ApiError::NotFound("No KYC records found for consumer".to_string()));
+        return Err(ApiError::NotFound(
+            "No KYC records found for consumer".to_string(),
+        ));
     }
 
     let current_record = all_records[0].clone();
     let historical_records = all_records[1..].to_vec();
 
     // Get related data
-    let documents = kyc_service.repository
+    let documents = kyc_service
+        .repository
         .get_documents_by_kyc_record(current_record.id)
         .await
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
-    let events = kyc_service.repository
+    let events = kyc_service
+        .repository
         .get_events_by_consumer(consumer_id, Some(1000))
         .await
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     // Get decisions
-    let decisions = sqlx::query_as!(
-        KycDecision,
+    let decisions = sqlx::query_as::<_, KycDecision>(
         "SELECT * FROM kyc_decisions WHERE kyc_record_id = $1 ORDER BY timestamp DESC",
-        current_record.id
     )
+    .bind(current_record.id)
     .fetch_all(&kyc_service.repository.pool)
     .await
     .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
@@ -487,11 +511,10 @@ async fn get_consumer_kyc_history(
     .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     // Get EDD cases
-    let edd_cases = sqlx::query_as!(
-        EnhancedDueDiligenceCase,
+    let edd_cases = sqlx::query_as::<_, EnhancedDueDiligenceCase>(
         "SELECT * FROM enhanced_due_diligence_cases WHERE consumer_id = $1 ORDER BY created_at DESC",
-        consumer_id
     )
+    .bind(consumer_id)
     .fetch_all(&kyc_service.repository.pool)
     .await
     .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
@@ -512,8 +535,7 @@ async fn get_active_edd_cases(
     State(kyc_service): State<KycService>,
     _auth: AuthenticatedAdmin,
 ) -> Result<Json<Vec<EnhancedDueDiligenceCase>>, ApiError> {
-    let cases = sqlx::query_as!(
-        EnhancedDueDiligenceCase,
+    let cases = sqlx::query_as::<_, EnhancedDueDiligenceCase>(
         r#"
         SELECT edc.* 
         FROM enhanced_due_diligence_cases edc
@@ -535,11 +557,9 @@ async fn resolve_edd_case(
     Json(request): Json<serde_json::Value>, // Could include resolution notes, actions taken, etc.
 ) -> Result<Json<AdminActionResponse>, ApiError> {
     // Get EDD case
-    let edd_case = sqlx::query_as!(
-        EnhancedDueDiligenceCase,
-        "SELECT * FROM enhanced_due_diligence_cases WHERE id = $1",
-        case_id
-    )
+    let edd_case =
+        sqlx::query_as::<_, EnhancedDueDiligenceCase>("SELECT * FROM enhanced_due_diligence_cases WHERE id = $1")
+            .bind(case_id)
     .fetch_optional(&kyc_service.repository.pool)
     .await
     .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
@@ -554,7 +574,10 @@ async fn resolve_edd_case(
         "#,
         Utc::now(),
         Some(_auth.admin_id),
-        request.get("notes").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        request
+            .get("notes")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
         case_id
     )
     .execute(&kyc_service.repository.pool)
@@ -562,24 +585,34 @@ async fn resolve_edd_case(
     .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     // Restore consumer's effective tier if it was reduced
-    if let Err(e) = kyc_service.repository.restore_effective_tier(edd_case.consumer_id, "EDD case resolved".to_string()).await {
-        warn!("Failed to restore effective tier for consumer {}: {}", edd_case.consumer_id, e);
+    if let Err(e) = kyc_service
+        .repository
+        .restore_effective_tier(edd_case.consumer_id, "EDD case resolved".to_string())
+        .await
+    {
+        warn!(
+            "Failed to restore effective tier for consumer {}: {}",
+            edd_case.consumer_id, e
+        );
     }
 
     // Log the resolution
-    kyc_service.repository.create_event(
-        edd_case.consumer_id,
-        Some(edd_case.kyc_record_id),
-        crate::database::kyc_repository::KycEventType::StatusUpdated,
-        Some("EDD case resolved".to_string()),
-        None,
-        Some(serde_json::json!({
-            "admin_id": _auth.admin_id,
-            "edd_case_id": case_id,
-            "resolution_notes": request.get("notes")
-        }))
-    ).await
-    .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
+    kyc_service
+        .repository
+        .create_event(
+            edd_case.consumer_id,
+            Some(edd_case.kyc_record_id),
+            crate::database::kyc_repository::KycEventType::StatusUpdated,
+            Some("EDD case resolved".to_string()),
+            None,
+            Some(serde_json::json!({
+                "admin_id": _auth.admin_id,
+                "edd_case_id": case_id,
+                "resolution_notes": request.get("notes")
+            })),
+        )
+        .await
+        .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
     Ok(Json(AdminActionResponse {
         success: true,
@@ -595,17 +628,15 @@ async fn get_kyc_statistics(
     _auth: AuthenticatedAdmin,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Get various KYC statistics
-    let total_verifications = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM kyc_records"
-    )
-    .fetch_one(&kyc_service.repository.pool)
-    .await
-    .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
-    .unwrap_or(0);
+    let total_verifications = sqlx::query_scalar!("SELECT COUNT(*) FROM kyc_records")
+        .fetch_one(&kyc_service.repository.pool)
+        .await
+        .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
+        .unwrap_or(0);
 
-    let verifications_by_tier = sqlx::query!(
+    let verifications_by_tier = sqlx::query(
         r#"
-        SELECT tier, COUNT(*) as count
+        SELECT tier::text AS tier, COUNT(*)::bigint AS count
         FROM kyc_records
         GROUP BY tier
         ORDER BY tier
@@ -630,13 +661,12 @@ async fn get_kyc_statistics(
     .await
     .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
-    let queue_depth = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM manual_review_queue WHERE resolved_at IS NULL"
-    )
-    .fetch_one(&kyc_service.repository.pool)
-    .await
-    .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
-    .unwrap_or(0);
+    let queue_depth =
+        sqlx::query_scalar!("SELECT COUNT(*) FROM manual_review_queue WHERE resolved_at IS NULL")
+            .fetch_one(&kyc_service.repository.pool)
+            .await
+            .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
+            .unwrap_or(0);
 
     let active_edd_cases = sqlx::query_scalar!(
         "SELECT COUNT(*) FROM enhanced_due_diligence_cases WHERE status IN ('active', 'under_review')"
@@ -667,10 +697,13 @@ async fn get_kyc_statistics(
 }
 
 // Helper functions
-async fn get_consumer_info(pool: &sqlx::PgPool, consumer_id: Uuid) -> Result<ConsumerInfo, ApiError> {
+async fn get_consumer_info(
+    pool: &sqlx::PgPool,
+    consumer_id: Uuid,
+) -> Result<ConsumerInfo, ApiError> {
     let consumer = sqlx::query!(
         r#"
-        SELECT c.id, c.email, c.full_name, c.created_at
+        SELECT c.id, NULL::text AS email, NULL::text AS full_name, c.created_at
         FROM consumers c
         WHERE c.id = $1
         "#,
@@ -683,18 +716,18 @@ async fn get_consumer_info(pool: &sqlx::PgPool, consumer_id: Uuid) -> Result<Con
 
     Ok(ConsumerInfo {
         consumer_id: consumer.id,
-        email: consumer.email,
-        full_name: consumer.full_name,
+        email: consumer.try_get::<Option<String>, _>("email").unwrap_or(None),
+        full_name: consumer.try_get::<Option<String>, _>("full_name").unwrap_or(None),
         registration_date: consumer.created_at,
     })
 }
 
-async fn get_kyc_details(repository: &KycRepository, kyc_record_id: Uuid) -> Result<KycDetails, ApiError> {
-    let kyc_record = sqlx::query_as!(
-        KycRecord,
-        "SELECT * FROM kyc_records WHERE id = $1",
-        kyc_record_id
-    )
+async fn get_kyc_details(
+    repository: &KycRepository,
+    kyc_record_id: Uuid,
+) -> Result<KycDetails, ApiError> {
+    let kyc_record = sqlx::query_as::<_, KycRecord>("SELECT * FROM kyc_records WHERE id = $1")
+        .bind(kyc_record_id)
     .fetch_one(&repository.pool)
     .await
     .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
@@ -704,15 +737,18 @@ async fn get_kyc_details(repository: &KycRepository, kyc_record_id: Uuid) -> Res
         .await
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?;
 
-    let document_summaries: Vec<DocumentSummary> = documents.into_iter().map(|doc| DocumentSummary {
-        id: doc.id,
-        document_type: format!("{:?}", doc.document_type),
-        document_number: doc.document_number,
-        issuing_country: doc.issuing_country,
-        verification_outcome: doc.verification_outcome.map(|s| format!("{:?}", s)),
-        rejection_reason: doc.rejection_reason,
-        created_at: doc.created_at,
-    }).collect();
+    let document_summaries: Vec<DocumentSummary> = documents
+        .into_iter()
+        .map(|doc| DocumentSummary {
+            id: doc.id,
+            document_type: format!("{:?}", doc.document_type),
+            document_number: doc.document_number,
+            issuing_country: doc.issuing_country,
+            verification_outcome: doc.verification_outcome.map(|s| format!("{:?}", s)),
+            rejection_reason: doc.rejection_reason,
+            created_at: doc.created_at,
+        })
+        .collect();
 
     Ok(KycDetails {
         tier: kyc_record.tier,

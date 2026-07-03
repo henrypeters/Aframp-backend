@@ -1,4 +1,3 @@
--- migrate:up
 -- #5 Implement Payment Provider and Bill Payment Schema
 -- Purpose: Create schema for tracking payment provider integrations, bill payment operations, and webhook events.
 -- Requirements: 

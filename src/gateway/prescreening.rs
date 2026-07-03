@@ -37,9 +37,13 @@ pub fn check_auth_header<B>(req: &Request<B>) -> Result<(), RejectionReason> {
     if path == "/health" || path == "/ready" || path == "/metrics" {
         return Ok(());
     }
-    let has_auth = req.headers().contains_key("authorization")
-        || req.headers().contains_key("x-api-key");
-    if has_auth { Ok(()) } else { Err(RejectionReason::MissingAuthHeader) }
+    let has_auth =
+        req.headers().contains_key("authorization") || req.headers().contains_key("x-api-key");
+    if has_auth {
+        Ok(())
+    } else {
+        Err(RejectionReason::MissingAuthHeader)
+    }
 }
 
 /// Validate Content-Type on mutating methods.
@@ -130,7 +134,10 @@ mod tests {
     #[test]
     fn test_missing_auth_rejected() {
         let r = req("GET", "/api/v1/wallet", &[]);
-        assert_eq!(check_auth_header(&r), Err(RejectionReason::MissingAuthHeader));
+        assert_eq!(
+            check_auth_header(&r),
+            Err(RejectionReason::MissingAuthHeader)
+        );
     }
 
     #[test]
@@ -156,15 +163,22 @@ mod tests {
     #[test]
     fn test_post_without_content_type_rejected() {
         let r = req("POST", "/api/v1/onramp", &[("authorization", "Bearer tok")]);
-        assert_eq!(check_content_type(&r), Err(RejectionReason::UnsupportedContentType));
+        assert_eq!(
+            check_content_type(&r),
+            Err(RejectionReason::UnsupportedContentType)
+        );
     }
 
     #[test]
     fn test_post_with_json_accepted() {
-        let r = req("POST", "/api/v1/onramp", &[
-            ("authorization", "Bearer tok"),
-            ("content-type", "application/json"),
-        ]);
+        let r = req(
+            "POST",
+            "/api/v1/onramp",
+            &[
+                ("authorization", "Bearer tok"),
+                ("content-type", "application/json"),
+            ],
+        );
         assert_eq!(check_content_type(&r), Ok(()));
     }
 
@@ -178,19 +192,31 @@ mod tests {
 
     #[test]
     fn test_path_traversal_rejected() {
-        let r = req("GET", "/api/v1/../admin/secret", &[("authorization", "Bearer tok")]);
+        let r = req(
+            "GET",
+            "/api/v1/../admin/secret",
+            &[("authorization", "Bearer tok")],
+        );
         assert_eq!(check_url(&r), Err(RejectionReason::PathTraversal));
     }
 
     #[test]
     fn test_encoded_path_traversal_rejected() {
-        let r = req("GET", "/api/v1/%2e%2e/admin", &[("authorization", "Bearer tok")]);
+        let r = req(
+            "GET",
+            "/api/v1/%2e%2e/admin",
+            &[("authorization", "Bearer tok")],
+        );
         assert_eq!(check_url(&r), Err(RejectionReason::PathTraversal));
     }
 
     #[test]
     fn test_normal_path_accepted() {
-        let r = req("GET", "/api/v1/wallet/balance", &[("authorization", "Bearer tok")]);
+        let r = req(
+            "GET",
+            "/api/v1/wallet/balance",
+            &[("authorization", "Bearer tok")],
+        );
         assert_eq!(check_url(&r), Ok(()));
     }
 
@@ -205,7 +231,11 @@ mod tests {
 
     #[test]
     fn test_disallowed_method_rejected() {
-        let r = req("TRACE", "/api/v1/wallet", &[("authorization", "Bearer tok")]);
+        let r = req(
+            "TRACE",
+            "/api/v1/wallet",
+            &[("authorization", "Bearer tok")],
+        );
         assert_eq!(check_method(&r), Err(RejectionReason::MethodNotAllowed));
     }
 

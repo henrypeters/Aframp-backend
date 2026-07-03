@@ -89,12 +89,9 @@ impl ScopeHierarchy {
         // webhooks:* includes all webhooks scopes
         hierarchy.insert(
             "webhooks:*".to_string(),
-            vec![
-                "webhooks:read".to_string(),
-                "webhooks:manage".to_string(),
-            ]
-            .into_iter()
-            .collect(),
+            vec!["webhooks:read".to_string(), "webhooks:manage".to_string()]
+                .into_iter()
+                .collect(),
         );
 
         // batch:* includes all batch scopes
@@ -111,12 +108,9 @@ impl ScopeHierarchy {
         // recurring:* includes all recurring scopes
         hierarchy.insert(
             "recurring:*".to_string(),
-            vec![
-                "recurring:read".to_string(),
-                "recurring:manage".to_string(),
-            ]
-            .into_iter()
-            .collect(),
+            vec!["recurring:read".to_string(), "recurring:manage".to_string()]
+                .into_iter()
+                .collect(),
         );
 
         Self { hierarchy }
@@ -150,13 +144,17 @@ impl ScopeHierarchy {
     /// Check if all required scopes are satisfied
     pub fn satisfies_all(&self, granted_scopes: &[&str], required_scopes: &[&str]) -> bool {
         let resolved = self.resolve_scopes(granted_scopes);
-        required_scopes.iter().all(|scope| resolved.contains(*scope))
+        required_scopes
+            .iter()
+            .all(|scope| resolved.contains(*scope))
     }
 
     /// Check if any required scope is satisfied
     pub fn satisfies_any(&self, granted_scopes: &[&str], required_scopes: &[&str]) -> bool {
         let resolved = self.resolve_scopes(granted_scopes);
-        required_scopes.iter().any(|scope| resolved.contains(*scope))
+        required_scopes
+            .iter()
+            .any(|scope| resolved.contains(*scope))
     }
 
     /// Get all child scopes for a parent scope

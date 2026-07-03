@@ -10,42 +10,52 @@ static CNGN_TOTAL_CIRCULATION: OnceLock<GaugeVec> = OnceLock::new();
 static ISSUER_FLAGS_OK: OnceLock<GaugeVec> = OnceLock::new();
 static ISSUER_MASTER_WEIGHT: OnceLock<GaugeVec> = OnceLock::new();
 
+// Each accessor panics if called before `register()` — an unrecoverable
+// startup-ordering bug. `#[track_caller]` makes the panic point at the
+// call site rather than this module, simplifying diagnosis.
+
+#[track_caller]
 pub fn issuer_account_xlm_balance() -> &'static GaugeVec {
     ISSUER_ACCOUNT_XLM_BALANCE
         .get()
-        .expect("issuer metrics not initialised")
+        .expect("issuer metrics not initialised — call metrics::register_all() at startup")
 }
 
+#[track_caller]
 pub fn distribution_account_xlm_balance() -> &'static GaugeVec {
     DISTRIBUTION_ACCOUNT_XLM_BALANCE
         .get()
-        .expect("issuer metrics not initialised")
+        .expect("issuer metrics not initialised — call metrics::register_all() at startup")
 }
 
+#[track_caller]
 pub fn fee_account_balance_xlm() -> &'static GaugeVec {
     FEE_ACCOUNT_XLM_BALANCE
         .get()
-        .expect("issuer metrics not initialised")
+        .expect("issuer metrics not initialised — call metrics::register_all() at startup")
 }
 
+#[track_caller]
 pub fn cngn_total_circulation() -> &'static GaugeVec {
     CNGN_TOTAL_CIRCULATION
         .get()
-        .expect("issuer metrics not initialised")
+        .expect("issuer metrics not initialised — call metrics::register_all() at startup")
 }
 
 /// 1.0 = flags correctly set, 0.0 = one or more flags missing (alert condition).
+#[track_caller]
 pub fn issuer_flags_ok() -> &'static GaugeVec {
     ISSUER_FLAGS_OK
         .get()
-        .expect("issuer metrics not initialised")
+        .expect("issuer metrics not initialised — call metrics::register_all() at startup")
 }
 
 /// 0.0 = master weight is zero (correct), >0 = master weight non-zero (alert condition).
+#[track_caller]
 pub fn issuer_master_weight() -> &'static GaugeVec {
     ISSUER_MASTER_WEIGHT
         .get()
-        .expect("issuer metrics not initialised")
+        .expect("issuer metrics not initialised — call metrics::register_all() at startup")
 }
 
 /// Register all issuer metrics with the global registry.

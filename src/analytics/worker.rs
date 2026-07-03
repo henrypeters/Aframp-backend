@@ -1,8 +1,8 @@
-use super::anomaly::{AnomalyDetector, AnomalyDetectionConfig};
+use super::anomaly::{AnomalyDetectionConfig, AnomalyDetector};
 use super::health::HealthScoreCalculator;
 use super::models::SnapshotPeriod;
-use super::repository::AnalyticsRepository;
 use super::reports::ReportGenerator;
+use super::repository::AnalyticsRepository;
 use super::snapshot::SnapshotGenerator;
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use sqlx::PgPool;
@@ -51,10 +51,7 @@ impl Default for AnalyticsWorkerConfig {
 }
 
 impl AnalyticsWorker {
-    pub fn new(
-        pool: Arc<PgPool>,
-        config: AnalyticsWorkerConfig,
-    ) -> Self {
+    pub fn new(pool: Arc<PgPool>, config: AnalyticsWorkerConfig) -> Self {
         let repo = Arc::new(AnalyticsRepository::new(pool.as_ref().clone()));
         let snapshot_generator = Arc::new(SnapshotGenerator::new(pool.clone(), repo.clone()));
         let health_calculator = Arc::new(HealthScoreCalculator::new(pool.clone(), repo.clone()));
@@ -78,7 +75,9 @@ impl AnalyticsWorker {
 
     pub async fn run(&self, mut shutdown: watch::Receiver<bool>) {
         info!("Analytics worker started");
-        let mut ticker = interval(std::time::Duration::from_secs(self.config.check_interval_secs));
+        let mut ticker = interval(std::time::Duration::from_secs(
+            self.config.check_interval_secs,
+        ));
 
         loop {
             tokio::select! {
@@ -108,7 +107,7 @@ impl AnalyticsWorker {
         // Daily snapshots (at midnight)
         if self.config.daily_snapshot_enabled && now.hour() == 0 && now.minute() == 0 {
             self.generate_daily_snapshot(now).await?;
-            
+
             // Calculate health scores after daily snapshot
             if self.config.health_score_enabled {
                 self.calculate_all_health_scores().await?;
@@ -116,23 +115,27 @@ impl AnalyticsWorker {
         }
 
         // Weekly snapshots (Monday at midnight)
-        if self.config.weekly_snapshot_enabled 
-            && now.weekday() == chrono::Weekday::Mon 
-            && now.hour() == 0 
-            && now.minute() == 0 {
+        if self.config.weekly_snapshot_enabled
+            && now.weekday() == chrono::Weekday::Mon
+            && now.hour() == 0
+            && now.minute() == 0
+        {
             self.generate_weekly_snapshot(now).await?;
-            
+
             // Generate weekly report
             if self.config.weekly_report_enabled {
-                self.report_generator.generate_weekly_platform_report().await?;
+                self.report_generator
+                    .generate_weekly_platform_report()
+                    .await?;
             }
         }
 
         // Monthly snapshots (1st of month at midnight)
-        if self.config.monthly_snapshot_enabled 
-            && now.day() == 1 
-            && now.hour() == 0 
-            && now.minute() == 0 {
+        if self.config.monthly_snapshot_enabled
+            && now.day() == 1
+            && now.hour() == 0
+            && now.minute() == 0
+        {
             self.generate_monthly_snapshot(now).await?;
         }
 
@@ -150,44 +153,44 @@ impl AnalyticsWorker {
     async fn generate_hourly_snapshot(&self, now: DateTime<Utc>) -> Result<(), anyhow::Error> {
         let period_end = now;
         let period_start = now - Duration::hours(1);
-        
+
         self.snapshot_generator
             .generate_snapshots(SnapshotPeriod::Hourly, period_start, period_end)
             .await?;
-        
+
         Ok(())
     }
 
     async fn generate_daily_snapshot(&self, now: DateTime<Utc>) -> Result<(), anyhow::Error> {
         let period_end = now;
         let period_start = now - Duration::days(1);
-        
+
         self.snapshot_generator
             .generate_snapshots(SnapshotPeriod::Daily, period_start, period_end)
             .await?;
-        
+
         Ok(())
     }
 
     async fn generate_weekly_snapshot(&self, now: DateTime<Utc>) -> Result<(), anyhow::Error> {
         let period_end = now;
         let period_start = now - Duration::days(7);
-        
+
         self.snapshot_generator
             .generate_snapshots(SnapshotPeriod::Weekly, period_start, period_end)
             .await?;
-        
+
         Ok(())
     }
 
     async fn generate_monthly_snapshot(&self, now: DateTime<Utc>) -> Result<(), anyhow::Error> {
         let period_end = now;
         let period_start = now - Duration::days(30);
-        
+
         self.snapshot_generator
             .generate_snapshots(SnapshotPeriod::Monthly, period_start, period_end)
             .await?;
-        
+
         Ok(())
     }
 
@@ -206,7 +209,11 @@ impl AnalyticsWorker {
 
         let mut calculated = 0;
         for consumer_id in consumers.into_iter().flatten() {
-            if let Err(e) = self.health_calculator.calculate_health_score(&consumer_id).await {
+            if let Err(e) = self
+                .health_calculator
+                .calculate_health_score(&consumer_id)
+                .await
+            {
                 error!(consumer_id = %consumer_id, error = %e, "Failed to calculate health score");
             } else {
                 calculated += 1;

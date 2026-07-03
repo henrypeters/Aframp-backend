@@ -1,4 +1,4 @@
-use crate::chains::stellar::client::StellarClient;
+// REMOVED: use crate::chains::stellar::client::StellarClient;
 use crate::wallet::repository::{InsertHistoryEntry, TransactionHistoryRepository};
 use anyhow::Result;
 use sqlx::types::BigDecimal;
@@ -14,7 +14,10 @@ pub struct StellarHistorySyncer {
 
 impl StellarHistorySyncer {
     pub fn new(stellar_client: StellarClient, repo: TransactionHistoryRepository) -> Self {
-        Self { stellar_client, repo }
+        Self {
+            stellar_client,
+            repo,
+        }
     }
 
     pub async fn sync_wallet(&self, wallet_id: Uuid, address: &str) -> Result<usize> {
@@ -29,7 +32,11 @@ impl StellarHistorySyncer {
 
         for tx in &page.records {
             // Skip if already stored (deduplication)
-            if self.repo.exists_by_stellar_hash(wallet_id, &tx.hash).await? {
+            if self
+                .repo
+                .exists_by_stellar_hash(wallet_id, &tx.hash)
+                .await?
+            {
                 continue;
             }
 
@@ -40,7 +47,13 @@ impl StellarHistorySyncer {
                 .unwrap_or_default();
 
             for op in &ops {
-                if let Some(entry) = map_operation_to_entry(wallet_id, address, op, &tx.hash, tx.paging_token.as_deref()) {
+                if let Some(entry) = map_operation_to_entry(
+                    wallet_id,
+                    address,
+                    op,
+                    &tx.hash,
+                    tx.paging_token.as_deref(),
+                ) {
                     if let Err(e) = self.repo.insert(&entry).await {
                         warn!(wallet_id = %wallet_id, hash = %tx.hash, error = %e, "Failed to insert history entry");
                     } else {
@@ -73,7 +86,11 @@ fn map_operation_to_entry(
         "payment" => {
             let to = op.get("to")?.as_str()?;
             let from = op.get("from")?.as_str()?;
-            let direction = if to == wallet_address { "credit" } else { "debit" };
+            let direction = if to == wallet_address {
+                "credit"
+            } else {
+                "debit"
+            };
             let counterparty = if direction == "credit" { from } else { to };
             let asset_type = op.get("asset_type")?.as_str()?;
             let (code, issuer) = if asset_type == "native" {
@@ -81,22 +98,52 @@ fn map_operation_to_entry(
             } else {
                 (
                     op.get("asset_code")?.as_str()?.to_string(),
-                    op.get("asset_issuer").and_then(|v| v.as_str()).map(String::from),
+                    op.get("asset_issuer")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
                 )
             };
             let amount = op.get("amount")?.as_str()?.to_string();
-            ("payment", direction, code, issuer, amount, counterparty.to_string())
+            (
+                "payment",
+                direction,
+                code,
+                issuer,
+                amount,
+                counterparty.to_string(),
+            )
         }
         "change_trust" => {
             let code = op.get("asset_code")?.as_str()?.to_string();
-            let issuer = op.get("asset_issuer").and_then(|v| v.as_str()).map(String::from);
-            ("trustline-establishment", "debit", code, issuer, "0".to_string(), String::new())
+            let issuer = op
+                .get("asset_issuer")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            (
+                "trustline-establishment",
+                "debit",
+                code,
+                issuer,
+                "0".to_string(),
+                String::new(),
+            )
         }
         "create_account" => {
             let funder = op.get("funder")?.as_str()?;
-            let direction = if funder == wallet_address { "debit" } else { "credit" };
+            let direction = if funder == wallet_address {
+                "debit"
+            } else {
+                "credit"
+            };
             let amount = op.get("starting_balance")?.as_str()?.to_string();
-            ("account-funding", direction, "XLM".to_string(), None, amount, funder.to_string())
+            (
+                "account-funding",
+                direction,
+                "XLM".to_string(),
+                None,
+                amount,
+                funder.to_string(),
+            )
         }
         _ => return None,
     };
@@ -112,7 +159,11 @@ fn map_operation_to_entry(
         fiat_equivalent: None,
         fiat_currency: None,
         exchange_rate: None,
-        counterparty: if counterparty.is_empty() { None } else { Some(counterparty) },
+        counterparty: if counterparty.is_empty() {
+            None
+        } else {
+            Some(counterparty)
+        },
         platform_transaction_id: None,
         stellar_transaction_hash: Some(tx_hash.to_string()),
         parent_entry_id: None,
@@ -138,13 +189,7 @@ mod tests {
             "asset_type": "native",
             "amount": "10.0000000"
         });
-        let entry = map_operation_to_entry(
-            Uuid::new_v4(),
-            wallet,
-            &op,
-            "hash123",
-            Some("cursor1"),
-        );
+        let entry = map_operation_to_entry(Uuid::new_v4(), wallet, &op, "hash123", Some("cursor1"));
         assert!(entry.is_some());
         let e = entry.unwrap();
         assert_eq!(e.direction, "credit");

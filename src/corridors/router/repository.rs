@@ -1,7 +1,7 @@
 //! Database repository for the corridor router.
 
+// REMOVED: use crate::compliance_registry::models::CorridorStatus;
 use crate::corridors::router::models::*;
-use crate::compliance_registry::models::CorridorStatus;
 use crate::database::error::DatabaseError;
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -21,9 +21,15 @@ impl CorridorRouterRepository {
     // Corridor CRUD
     // -----------------------------------------------------------------------
 
-    pub async fn create(&self, req: &CreateCorridorConfigRequest) -> Result<CorridorConfig, DatabaseError> {
+    pub async fn create(
+        &self,
+        req: &CreateCorridorConfigRequest,
+    ) -> Result<CorridorConfig, DatabaseError> {
         let risk_score = req.risk_score.unwrap_or(50);
-        let kyc_tier = req.required_kyc_tier.clone().unwrap_or_else(|| "basic".to_string());
+        let kyc_tier = req
+            .required_kyc_tier
+            .clone()
+            .unwrap_or_else(|| "basic".to_string());
         let config = req.config.clone().unwrap_or(serde_json::json!({}));
 
         let row = sqlx::query_as!(
@@ -236,11 +242,7 @@ impl CorridorRouterRepository {
         reason: Option<String>,
         updated_by: Option<Uuid>,
     ) -> Result<CorridorConfig, DatabaseError> {
-        let new_status = if enabled {
-            "active"
-        } else {
-            "suspended"
-        };
+        let new_status = if enabled { "active" } else { "suspended" };
 
         let row = sqlx::query_as!(
             CorridorConfig,
@@ -377,13 +379,12 @@ impl CorridorRouterRepository {
         &self,
         corridor_id: Uuid,
     ) -> Result<CorridorHealthSummary, DatabaseError> {
-        let corridor = self
-            .get_by_id(corridor_id)
-            .await?
-            .ok_or_else(|| DatabaseError::new(crate::database::error::DatabaseErrorKind::NotFound {
+        let corridor = self.get_by_id(corridor_id).await?.ok_or_else(|| {
+            DatabaseError::new(crate::database::error::DatabaseErrorKind::NotFound {
                 entity: "PaymentCorridor".to_string(),
                 id: corridor_id.to_string(),
-            }))?;
+            })
+        })?;
 
         let agg = sqlx::query!(
             r#"

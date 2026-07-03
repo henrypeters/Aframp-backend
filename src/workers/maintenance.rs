@@ -94,7 +94,7 @@ pub struct MaintenanceConfig {
 impl Default for MaintenanceConfig {
     fn default() -> Self {
         Self {
-            interval: Duration::from_secs(86_400), // 24 h
+            interval: Duration::from_secs(86_400),                   // 24 h
             transaction_retention: Duration::from_secs(90 * 86_400), // 90 days
             webhook_retention: Duration::from_secs(30 * 86_400),     // 30 days
             nonce_retention: Duration::from_secs(86_400),            // 1 day
@@ -117,14 +117,8 @@ impl MaintenanceConfig {
             };
         }
         env_secs!("MAINTENANCE_INTERVAL_SECS", c.interval);
-        env_secs!(
-            "MAINTENANCE_TX_RETENTION_SECS",
-            c.transaction_retention
-        );
-        env_secs!(
-            "MAINTENANCE_WEBHOOK_RETENTION_SECS",
-            c.webhook_retention
-        );
+        env_secs!("MAINTENANCE_TX_RETENTION_SECS", c.transaction_retention);
+        env_secs!("MAINTENANCE_WEBHOOK_RETENTION_SECS", c.webhook_retention);
         env_secs!("MAINTENANCE_NONCE_RETENTION_SECS", c.nonce_retention);
         env_secs!(
             "MAINTENANCE_RATE_HISTORY_RETENTION_SECS",
@@ -287,15 +281,11 @@ impl MaintenanceWorker {
         }
 
         // Update Prometheus counters
-        metrics()
-            .archived
-            .inc_by(transactions_archived as u64);
+        metrics().archived.inc_by(transactions_archived as u64);
         metrics().deleted.inc_by(
             (quotes_deleted + webhooks_deleted + nonces_deleted + rate_history_deleted) as u64,
         );
-        metrics()
-            .analyzed
-            .set(HIGH_TRAFFIC_TABLES.len() as i64);
+        metrics().analyzed.set(HIGH_TRAFFIC_TABLES.len() as i64);
 
         Ok(report)
     }
@@ -557,8 +547,8 @@ mod tests {
             transaction_retention: Duration::from_secs(90 * 86_400),
             ..Default::default()
         };
-        let cutoff = chrono::Utc::now()
-            - chrono::Duration::from_std(config.transaction_retention).unwrap();
+        let cutoff =
+            chrono::Utc::now() - chrono::Duration::from_std(config.transaction_retention).unwrap();
         assert!(cutoff < chrono::Utc::now());
     }
 
@@ -594,8 +584,7 @@ mod tests {
     #[test]
     fn test_retention_cutoff_respects_duration() {
         let retention = Duration::from_secs(7 * 86_400); // 7 days
-        let cutoff =
-            chrono::Utc::now() - chrono::Duration::from_std(retention).unwrap();
+        let cutoff = chrono::Utc::now() - chrono::Duration::from_std(retention).unwrap();
         let old_record = chrono::Utc::now() - chrono::Duration::days(8);
         let new_record = chrono::Utc::now() - chrono::Duration::days(6);
         assert!(old_record < cutoff, "8-day-old record should be archived");

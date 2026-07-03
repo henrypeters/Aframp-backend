@@ -33,11 +33,15 @@ mod tests {
 
         let wallet_scopes = catalog.by_category(ScopeCategory::Wallet);
         assert!(!wallet_scopes.is_empty());
-        assert!(wallet_scopes.iter().all(|s| s.category == ScopeCategory::Wallet));
+        assert!(wallet_scopes
+            .iter()
+            .all(|s| s.category == ScopeCategory::Wallet));
 
         let admin_scopes = catalog.by_category(ScopeCategory::Admin);
         assert!(!admin_scopes.is_empty());
-        assert!(admin_scopes.iter().all(|s| s.category == ScopeCategory::Admin));
+        assert!(admin_scopes
+            .iter()
+            .all(|s| s.category == ScopeCategory::Admin));
     }
 
     #[test]
@@ -71,12 +75,7 @@ mod tests {
     #[test]
     fn test_scope_catalog_add() {
         let mut catalog = ScopeCatalog::new();
-        let scope = ScopeDefinition::new(
-            "test:read",
-            "Test scope",
-            ScopeCategory::Wallet,
-            false,
-        );
+        let scope = ScopeDefinition::new("test:read", "Test scope", ScopeCategory::Wallet, false);
 
         assert!(catalog.add(scope.clone()).is_ok());
         assert!(catalog.get("test:read").is_some());
@@ -179,14 +178,14 @@ mod tests {
         let hierarchy = ScopeHierarchy::new();
 
         let children = hierarchy.get_children("wallet:*");
-        assert!(children.is_some());
-        let children = children.unwrap();
-        assert_eq!(children.len(), 3);
+        assert!(children.is_some(), "wallet:* should have children");
+        let children = children.expect("wallet:* children should exist");
+        assert_eq!(children.len(), 3, "wallet:* should have exactly 3 children");
 
         let children = hierarchy.get_children("admin:*");
-        assert!(children.is_some());
-        let children = children.unwrap();
-        assert_eq!(children.len(), 3);
+        assert!(children.is_some(), "admin:* should have children");
+        let children = children.expect("admin:* children should exist");
+        assert_eq!(children.len(), 3, "admin:* should have exactly 3 children");
     }
 
     // ── Partial Consent Tests ────────────────────────────────────────────────
@@ -225,14 +224,50 @@ mod tests {
         let catalog = ScopeCatalog::with_defaults();
 
         // Verify sensitive scopes
-        assert!(catalog.get("onramp:initiate").unwrap().is_sensitive);
-        assert!(catalog.get("admin:transactions").unwrap().is_sensitive);
-        assert!(catalog.get("wallet:trustline").unwrap().is_sensitive);
+        assert!(
+            catalog
+                .get("onramp:initiate")
+                .expect("onramp:initiate should exist in catalog")
+                .is_sensitive,
+            "onramp:initiate should be marked as sensitive"
+        );
+        assert!(
+            catalog
+                .get("admin:transactions")
+                .expect("admin:transactions should exist in catalog")
+                .is_sensitive,
+            "admin:transactions should be marked as sensitive"
+        );
+        assert!(
+            catalog
+                .get("wallet:trustline")
+                .expect("wallet:trustline should exist in catalog")
+                .is_sensitive,
+            "wallet:trustline should be marked as sensitive"
+        );
 
         // Verify non-sensitive scopes
-        assert!(!catalog.get("wallet:read").unwrap().is_sensitive);
-        assert!(!catalog.get("onramp:quote").unwrap().is_sensitive);
-        assert!(!catalog.get("rates:read").unwrap().is_sensitive);
+        assert!(
+            !catalog
+                .get("wallet:read")
+                .expect("wallet:read should exist in catalog")
+                .is_sensitive,
+            "wallet:read should not be marked as sensitive"
+        );
+        assert!(
+            !catalog
+                .get("onramp:quote")
+                .expect("onramp:quote should exist in catalog")
+                .is_sensitive,
+            "onramp:quote should not be marked as sensitive"
+        );
+        assert!(
+            !catalog
+                .get("rates:read")
+                .expect("rates:read should exist in catalog")
+                .is_sensitive,
+            "rates:read should not be marked as sensitive"
+        );
     }
 
     #[test]

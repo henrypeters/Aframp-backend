@@ -4,75 +4,132 @@
 
 use lazy_static::lazy_static;
 use prometheus::{
-    register_counter_vec, register_histogram_vec, register_int_gauge_vec, CounterVec, Encoder,
-    HistogramVec, IntGaugeVec, TextEncoder,
+    CounterVec, Encoder, HistogramOpts, HistogramVec, IntGaugeVec, Opts, TextEncoder,
 };
 use std::collections::HashMap;
 
+fn register_counter_vec_safe(name: &str, help: &str, label_names: &[&str]) -> CounterVec {
+    let opts = Opts::new(name, help);
+    match CounterVec::new(opts, label_names) {
+        Ok(metric) => {
+            if let Err(e) = prometheus::register(Box::new(metric.clone())) {
+                tracing::warn!(
+                    metric = name,
+                    error = %e,
+                    "Failed to register counter vector; continuing using unregistered metric"
+                );
+            }
+            metric
+        }
+        Err(e) => {
+            // Documented unrecoverable invariant: metric names and label configurations must be valid at build time.
+            tracing::error!(
+                metric = name,
+                error = %e,
+                "Critical: Failed to create counter vector metric"
+            );
+            panic!("Critical: Failed to create counter vector metric '{}': {}", name, e);
+        }
+    }
+}
+
+fn register_histogram_vec_safe(name: &str, help: &str, label_names: &[&str]) -> HistogramVec {
+    let opts = HistogramOpts::new(name, help);
+    match HistogramVec::new(opts, label_names) {
+        Ok(metric) => {
+            if let Err(e) = prometheus::register(Box::new(metric.clone())) {
+                tracing::warn!(
+                    metric = name,
+                    error = %e,
+                    "Failed to register histogram vector; continuing using unregistered metric"
+                );
+            }
+            metric
+        }
+        Err(e) => {
+            // Documented unrecoverable invariant: metric names and label configurations must be valid at build time.
+            tracing::error!(
+                metric = name,
+                error = %e,
+                "Critical: Failed to create histogram vector metric"
+            );
+            panic!("Critical: Failed to create histogram vector metric '{}': {}", name, e);
+        }
+    }
+}
+
+fn register_int_gauge_vec_safe(name: &str, help: &str, label_names: &[&str]) -> IntGaugeVec {
+    let opts = Opts::new(name, help);
+    match IntGaugeVec::new(opts, label_names) {
+        Ok(metric) => {
+            if let Err(e) = prometheus::register(Box::new(metric.clone())) {
+                tracing::warn!(
+                    metric = name,
+                    error = %e,
+                    "Failed to register int gauge vector; continuing using unregistered metric"
+                );
+            }
+            metric
+        }
+        Err(e) => {
+            // Documented unrecoverable invariant: metric names and label configurations must be valid at build time.
+            tracing::error!(
+                metric = name,
+                error = %e,
+                "Critical: Failed to create int gauge vector metric"
+            );
+            panic!("Critical: Failed to create int gauge vector metric '{}': {}", name, e);
+        }
+    }
+}
+
 /// Geo-restriction policy evaluation metrics
 lazy_static! {
-    pub static ref GEO_POLICY_EVALUATIONS: CounterVec = register_counter_vec!(
+    pub static ref GEO_POLICY_EVALUATIONS: CounterVec = register_counter_vec_safe(
         "geo_restriction_policy_evaluations_total",
         "Total number of geo-restriction policy evaluations",
         &["result", "country_code", "policy_type"]
-    )
-    .expect("Can't create geo policy evaluations metric");
-
-    pub static ref GEO_POLICY_EVALUATION_DURATION: HistogramVec = register_histogram_vec!(
+    );
+    pub static ref GEO_POLICY_EVALUATION_DURATION: HistogramVec = register_histogram_vec_safe(
         "geo_restriction_policy_evaluation_duration_seconds",
         "Time spent evaluating geo-restriction policies",
         &["result"]
-    )
-    .expect("Can't create geo policy evaluation duration metric");
-
-    pub static ref GEO_GEOLOCATION_LOOKUPS: CounterVec = register_counter_vec!(
+    );
+    pub static ref GEO_GEOLOCATION_LOOKUPS: CounterVec = register_counter_vec_safe(
         "geo_restriction_geolocation_lookups_total",
         "Total number of IP geolocation lookups",
         &["result", "cache_hit"]
-    )
-    .expect("Can't create geolocation lookups metric");
-
-    pub static ref GEO_GEOLOCATION_CACHE_SIZE: IntGaugeVec = register_int_gauge_vec!(
+    );
+    pub static ref GEO_GEOLOCATION_CACHE_SIZE: IntGaugeVec = register_int_gauge_vec_safe(
         "geo_restriction_geolocation_cache_size",
         "Number of entries in geolocation cache",
         &[]
-    )
-    .expect("Can't create geolocation cache size metric");
-
-    pub static ref GEO_POLICY_CACHE_SIZE: IntGaugeVec = register_int_gauge_vec!(
+    );
+    pub static ref GEO_POLICY_CACHE_SIZE: IntGaugeVec = register_int_gauge_vec_safe(
         "geo_restriction_policy_cache_size",
         "Number of entries in policy evaluation cache",
         &[]
-    )
-    .expect("Can't create policy cache size metric");
-
-    pub static ref GEO_AUDIT_EVENTS: CounterVec = register_counter_vec!(
+    );
+    pub static ref GEO_AUDIT_EVENTS: CounterVec = register_counter_vec_safe(
         "geo_restriction_audit_events_total",
         "Total number of geo-restriction audit events logged",
         &["action", "result"]
-    )
-    .expect("Can't create audit events metric");
-
-    pub static ref GEO_BLOCKED_REQUESTS: CounterVec = register_counter_vec!(
+    );
+    pub static ref GEO_BLOCKED_REQUESTS: CounterVec = register_counter_vec_safe(
         "geo_restriction_blocked_requests_total",
         "Total number of requests blocked by geo-restriction",
         &["country_code", "reason"]
-    )
-    .expect("Can't create blocked requests metric");
-
-    pub static ref GEO_RESTRICTED_REQUESTS: CounterVec = register_counter_vec!(
+    );
+    pub static ref GEO_RESTRICTED_REQUESTS: CounterVec = register_counter_vec_safe(
         "geo_restriction_restricted_requests_total",
         "Total number of requests restricted by geo-restriction",
         &["country_code", "reason"]
-    )
-    .expect("Can't create restricted requests metric");
-
-    pub static ref GEO_VERIFICATION_REQUIRED: CounterVec = register_counter_vec!(
+    );
+    pub static ref GEO_VERIFICATION_REQUIRED: CounterVec = register_counter_vec_safe(
         "geo_restriction_verification_required_total",
         "Total number of requests requiring enhanced verification",
         &["country_code"]
-    )
-    .expect("Can't create verification required metric");
+    );
 }
 
 /// Metrics collector for geo-restriction
@@ -121,23 +178,17 @@ impl GeoRestrictionMetrics {
 
     /// Update geolocation cache size
     pub fn update_geolocation_cache_size(&self, size: i64) {
-        GEO_GEOLOCATION_CACHE_SIZE
-            .with_label_values(&[])
-            .set(size);
+        GEO_GEOLOCATION_CACHE_SIZE.with_label_values(&[]).set(size);
     }
 
     /// Update policy cache size
     pub fn update_policy_cache_size(&self, size: i64) {
-        GEO_POLICY_CACHE_SIZE
-            .with_label_values(&[])
-            .set(size);
+        GEO_POLICY_CACHE_SIZE.with_label_values(&[]).set(size);
     }
 
     /// Record audit event
     pub fn record_audit_event(&self, action: &str, result: &str) {
-        GEO_AUDIT_EVENTS
-            .with_label_values(&[action, result])
-            .inc();
+        GEO_AUDIT_EVENTS.with_label_values(&[action, result]).inc();
     }
 
     /// Record blocked request

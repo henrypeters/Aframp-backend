@@ -5,11 +5,11 @@
 //! - Monitoring of automated blocking rates
 //! - Cache management and health checks
 
+use crate::cache::RedisCache;
 use crate::database::ip_reputation_repository::IpReputationRepository;
 use crate::database::Repository;
 use crate::metrics;
 use crate::services::ip_detection::{IpDetectionConfig, IpDetectionService};
-use crate::cache::RedisCache;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
@@ -26,8 +26,8 @@ pub struct IpDetectionWorkerConfig {
 impl Default for IpDetectionWorkerConfig {
     fn default() -> Self {
         Self {
-            cleanup_interval_secs: 300, // 5 minutes
-            blocking_rate_check_interval_secs: 60, // 1 minute
+            cleanup_interval_secs: 300,               // 5 minutes
+            blocking_rate_check_interval_secs: 60,    // 1 minute
             blocking_rate_threshold_per_minute: 10.0, // Alert if > 10 blocks per minute
         }
     }
@@ -40,14 +40,18 @@ impl IpDetectionWorkerConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(300),
-            blocking_rate_check_interval_secs: std::env::var("IP_DETECTION_RATE_CHECK_INTERVAL_SECS")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(60),
-            blocking_rate_threshold_per_minute: std::env::var("IP_DETECTION_BLOCKING_RATE_THRESHOLD")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(10.0),
+            blocking_rate_check_interval_secs: std::env::var(
+                "IP_DETECTION_RATE_CHECK_INTERVAL_SECS",
+            )
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(60),
+            blocking_rate_threshold_per_minute: std::env::var(
+                "IP_DETECTION_BLOCKING_RATE_THRESHOLD",
+            )
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10.0),
         }
     }
 }
@@ -80,8 +84,11 @@ impl IpDetectionWorker {
             "Starting IP detection worker"
         );
 
-        let mut cleanup_interval = time::interval(Duration::from_secs(self.config.cleanup_interval_secs));
-        let mut rate_check_interval = time::interval(Duration::from_secs(self.config.blocking_rate_check_interval_secs));
+        let mut cleanup_interval =
+            time::interval(Duration::from_secs(self.config.cleanup_interval_secs));
+        let mut rate_check_interval = time::interval(Duration::from_secs(
+            self.config.blocking_rate_check_interval_secs,
+        ));
 
         // Track blocking rate over the last 5 minutes
         let mut recent_blocks: Vec<chrono::DateTime<chrono::Utc>> = Vec::new();

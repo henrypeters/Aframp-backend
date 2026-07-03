@@ -1,11 +1,12 @@
 use crate::admin::models::*;
 use prometheus::{
-    Counter, Histogram, Gauge, IntCounter, IntGauge, Registry, TextEncoder, Encoder,
-    opts, register_counter_vec, register_histogram_vec, register_gauge_vec, register_int_counter_vec, register_int_gauge_vec
+    opts, register_counter_vec, register_gauge_vec, register_histogram_vec,
+    register_int_counter_vec, register_int_gauge_vec, Counter, Encoder, Gauge, Histogram,
+    IntCounter, IntGauge, Registry, TextEncoder,
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 #[derive(Clone)]
 pub struct AdminMetrics {
@@ -52,32 +53,50 @@ impl AdminMetrics {
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         // Authentication metrics
         let login_attempts_total = register_int_counter_vec!(
-            opts!("admin_login_attempts_total", "Total number of admin login attempts"),
+            opts!(
+                "admin_login_attempts_total",
+                "Total number of admin login attempts"
+            ),
             &["role", "outcome"]
         )?;
 
         let login_success_total = register_int_counter_vec!(
-            opts!("admin_login_success_total", "Total number of successful admin logins"),
+            opts!(
+                "admin_login_success_total",
+                "Total number of successful admin logins"
+            ),
             &["role", "mfa_method"]
         )?;
 
         let login_failure_total = register_int_counter_vec!(
-            opts!("admin_login_failure_total", "Total number of failed admin logins"),
+            opts!(
+                "admin_login_failure_total",
+                "Total number of failed admin logins"
+            ),
             &["role", "reason"]
         )?;
 
         let mfa_verification_total = register_int_counter_vec!(
-            opts!("admin_mfa_verification_total", "Total number of MFA verification attempts"),
+            opts!(
+                "admin_mfa_verification_total",
+                "Total number of MFA verification attempts"
+            ),
             &["role", "method"]
         )?;
 
         let mfa_verification_failure_total = register_int_counter_vec!(
-            opts!("admin_mfa_verification_failure_total", "Total number of failed MFA verification attempts"),
+            opts!(
+                "admin_mfa_verification_failure_total",
+                "Total number of failed MFA verification attempts"
+            ),
             &["role", "method", "reason"]
         )?;
 
         let account_lockouts_total = register_int_counter_vec!(
-            opts!("admin_account_lockouts_total", "Total number of admin account lockouts"),
+            opts!(
+                "admin_account_lockouts_total",
+                "Total number of admin account lockouts"
+            ),
             &["role"]
         )?;
 
@@ -88,76 +107,112 @@ impl AdminMetrics {
         )?;
 
         let sessions_created_total = register_int_counter_vec!(
-            opts!("admin_sessions_created_total", "Total number of admin sessions created"),
+            opts!(
+                "admin_sessions_created_total",
+                "Total number of admin sessions created"
+            ),
             &["role"]
         )?;
 
         let sessions_terminated_total = register_int_counter_vec!(
-            opts!("admin_sessions_terminated_total", "Total number of admin sessions terminated"),
+            opts!(
+                "admin_sessions_terminated_total",
+                "Total number of admin sessions terminated"
+            ),
             &["role", "reason"]
         )?;
 
         let session_duration_seconds = register_histogram_vec!(
-            opts!("admin_session_duration_seconds", "Duration of admin sessions"),
+            opts!(
+                "admin_session_duration_seconds",
+                "Duration of admin sessions"
+            ),
             &["role"],
             vec![60.0, 300.0, 900.0, 1800.0, 3600.0, 7200.0, 14400.0, 28800.0]
         )?;
 
         // Permission metrics
         let permission_denials_total = register_int_counter_vec!(
-            opts!("admin_permission_denials_total", "Total number of admin permission denials"),
+            opts!(
+                "admin_permission_denials_total",
+                "Total number of admin permission denials"
+            ),
             &["role", "endpoint", "required_permission"]
         )?;
 
         let permission_checks_total = register_int_counter_vec!(
-            opts!("admin_permission_checks_total", "Total number of admin permission checks"),
+            opts!(
+                "admin_permission_checks_total",
+                "Total number of admin permission checks"
+            ),
             &["role", "outcome"]
         )?;
 
         // Sensitive action metrics
         let sensitive_action_confirmations_total = register_int_counter_vec!(
-            opts!("admin_sensitive_action_confirmations_total", "Total number of sensitive action confirmations"),
+            opts!(
+                "admin_sensitive_action_confirmations_total",
+                "Total number of sensitive action confirmations"
+            ),
             &["role", "action_type", "method"]
         )?;
 
         let sensitive_action_executions_total = register_int_counter_vec!(
-            opts!("admin_sensitive_action_executions_total", "Total number of sensitive action executions"),
+            opts!(
+                "admin_sensitive_action_executions_total",
+                "Total number of sensitive action executions"
+            ),
             &["role", "action_type"]
         )?;
 
         // Audit trail metrics
         let audit_entries_total = register_int_counter_vec!(
-            opts!("admin_audit_entries_total", "Total number of audit trail entries"),
+            opts!(
+                "admin_audit_entries_total",
+                "Total number of audit trail entries"
+            ),
             &["action_type", "role"]
         )?;
 
         let audit_trail_verification_duration_seconds = register_histogram!(
-            opts!("admin_audit_trail_verification_duration_seconds", "Duration of audit trail verification"),
+            opts!(
+                "admin_audit_trail_verification_duration_seconds",
+                "Duration of audit trail verification"
+            ),
             vec![0.1, 0.5, 1.0, 2.5, 5.0, 10.0]
         )?;
 
-        let audit_replication_success_total = register_int_counter!(
-            opts!("admin_audit_replication_success_total", "Total number of successful audit replications")
-        )?;
+        let audit_replication_success_total = register_int_counter!(opts!(
+            "admin_audit_replication_success_total",
+            "Total number of successful audit replications"
+        ))?;
 
-        let audit_replication_failure_total = register_int_counter!(
-            opts!("admin_audit_replication_failure_total", "Total number of failed audit replications")
-        )?;
+        let audit_replication_failure_total = register_int_counter!(opts!(
+            "admin_audit_replication_failure_total",
+            "Total number of failed audit replications"
+        ))?;
 
         // Security monitoring metrics
         let security_events_total = register_int_counter_vec!(
-            opts!("admin_security_events_total", "Total number of security events"),
+            opts!(
+                "admin_security_events_total",
+                "Total number of security events"
+            ),
             &["event_type", "severity"]
         )?;
 
         let suspicious_login_attempts_total = register_int_counter_vec!(
-            opts!("admin_suspicious_login_attempts_total", "Total number of suspicious login attempts"),
+            opts!(
+                "admin_suspicious_login_attempts_total",
+                "Total number of suspicious login attempts"
+            ),
             &["type", "role"]
         )?;
 
-        let impossible_travel_events_total = register_int_counter!(
-            opts!("admin_impossible_travel_events_total", "Total number of impossible travel events")
-        )?;
+        let impossible_travel_events_total = register_int_counter!(opts!(
+            "admin_impossible_travel_events_total",
+            "Total number of impossible travel events"
+        ))?;
 
         // System metrics
         let admin_accounts_total = register_int_gauge_vec!(
@@ -166,13 +221,17 @@ impl AdminMetrics {
         )?;
 
         let admin_accounts_by_status = register_int_gauge_vec!(
-            opts!("admin_accounts_by_status", "Number of admin accounts by status"),
+            opts!(
+                "admin_accounts_by_status",
+                "Number of admin accounts by status"
+            ),
             &["status"]
         )?;
 
-        let failed_login_attempts_total = register_int_gauge!(
-            opts!("admin_failed_login_attempts_total", "Total number of failed login attempts")
-        )?;
+        let failed_login_attempts_total = register_int_gauge!(opts!(
+            "admin_failed_login_attempts_total",
+            "Total number of failed login attempts"
+        ))?;
 
         Ok(Self {
             login_attempts_total,
@@ -203,23 +262,33 @@ impl AdminMetrics {
     }
 
     pub fn record_login_attempt(&self, role: &str, outcome: &str) {
-        self.login_attempts_total.with_label_values(&[role, outcome]).inc();
+        self.login_attempts_total
+            .with_label_values(&[role, outcome])
+            .inc();
     }
 
     pub fn record_login_success(&self, role: &str, mfa_method: &str) {
-        self.login_success_total.with_label_values(&[role, mfa_method]).inc();
+        self.login_success_total
+            .with_label_values(&[role, mfa_method])
+            .inc();
     }
 
     pub fn record_login_failure(&self, role: &str, reason: &str) {
-        self.login_failure_total.with_label_values(&[role, reason]).inc();
+        self.login_failure_total
+            .with_label_values(&[role, reason])
+            .inc();
     }
 
     pub fn record_mfa_verification(&self, role: &str, method: &str) {
-        self.mfa_verification_total.with_label_values(&[role, method]).inc();
+        self.mfa_verification_total
+            .with_label_values(&[role, method])
+            .inc();
     }
 
     pub fn record_mfa_verification_failure(&self, role: &str, method: &str, reason: &str) {
-        self.mfa_verification_failure_total.with_label_values(&[role, method, reason]).inc();
+        self.mfa_verification_failure_total
+            .with_label_values(&[role, method, reason])
+            .inc();
     }
 
     pub fn record_account_lockout(&self, role: &str) {
@@ -235,35 +304,55 @@ impl AdminMetrics {
     }
 
     pub fn record_session_terminated(&self, role: &str, reason: &str) {
-        self.sessions_terminated_total.with_label_values(&[role, reason]).inc();
+        self.sessions_terminated_total
+            .with_label_values(&[role, reason])
+            .inc();
     }
 
     pub fn record_session_duration(&self, role: &str, duration_seconds: f64) {
-        self.session_duration_seconds.with_label_values(&[role]).observe(duration_seconds);
+        self.session_duration_seconds
+            .with_label_values(&[role])
+            .observe(duration_seconds);
     }
 
     pub fn record_permission_denial(&self, role: &str, endpoint: &str, required_permission: &str) {
-        self.permission_denials_total.with_label_values(&[role, endpoint, required_permission]).inc();
+        self.permission_denials_total
+            .with_label_values(&[role, endpoint, required_permission])
+            .inc();
     }
 
     pub fn record_permission_check(&self, role: &str, outcome: &str) {
-        self.permission_checks_total.with_label_values(&[role, outcome]).inc();
+        self.permission_checks_total
+            .with_label_values(&[role, outcome])
+            .inc();
     }
 
-    pub fn record_sensitive_action_confirmation(&self, role: &str, action_type: &str, method: &str) {
-        self.sensitive_action_confirmations_total.with_label_values(&[role, action_type, method]).inc();
+    pub fn record_sensitive_action_confirmation(
+        &self,
+        role: &str,
+        action_type: &str,
+        method: &str,
+    ) {
+        self.sensitive_action_confirmations_total
+            .with_label_values(&[role, action_type, method])
+            .inc();
     }
 
     pub fn record_sensitive_action_execution(&self, role: &str, action_type: &str) {
-        self.sensitive_action_executions_total.with_label_values(&[role, action_type]).inc();
+        self.sensitive_action_executions_total
+            .with_label_values(&[role, action_type])
+            .inc();
     }
 
     pub fn record_audit_entry(&self, action_type: &str, role: &str) {
-        self.audit_entries_total.with_label_values(&[action_type, role]).inc();
+        self.audit_entries_total
+            .with_label_values(&[action_type, role])
+            .inc();
     }
 
     pub fn record_audit_trail_verification_duration(&self, duration_seconds: f64) {
-        self.audit_trail_verification_duration_seconds.observe(duration_seconds);
+        self.audit_trail_verification_duration_seconds
+            .observe(duration_seconds);
     }
 
     pub fn record_audit_replication_success(&self) {
@@ -275,11 +364,15 @@ impl AdminMetrics {
     }
 
     pub fn record_security_event(&self, event_type: &str, severity: &str) {
-        self.security_events_total.with_label_values(&[event_type, severity]).inc();
+        self.security_events_total
+            .with_label_values(&[event_type, severity])
+            .inc();
     }
 
     pub fn record_suspicious_login_attempt(&self, login_type: &str, role: &str) {
-        self.suspicious_login_attempts_total.with_label_values(&[login_type, role]).inc();
+        self.suspicious_login_attempts_total
+            .with_label_values(&[login_type, role])
+            .inc();
     }
 
     pub fn record_impossible_travel_event(&self) {
@@ -287,11 +380,15 @@ impl AdminMetrics {
     }
 
     pub fn update_admin_accounts_total(&self, role: &str, count: i64) {
-        self.admin_accounts_total.with_label_values(&[role]).set(count);
+        self.admin_accounts_total
+            .with_label_values(&[role])
+            .set(count);
     }
 
     pub fn update_admin_accounts_by_status(&self, status: &str, count: i64) {
-        self.admin_accounts_by_status.with_label_values(&[status]).set(count);
+        self.admin_accounts_by_status
+            .with_label_values(&[status])
+            .set(count);
     }
 
     pub fn update_failed_login_attempts_total(&self, count: i64) {
@@ -322,10 +419,14 @@ impl AdminObservability {
         registry.register(Box::new(metrics.session_duration_seconds.clone()))?;
         registry.register(Box::new(metrics.permission_denials_total.clone()))?;
         registry.register(Box::new(metrics.permission_checks_total.clone()))?;
-        registry.register(Box::new(metrics.sensitive_action_confirmations_total.clone()))?;
+        registry.register(Box::new(
+            metrics.sensitive_action_confirmations_total.clone(),
+        ))?;
         registry.register(Box::new(metrics.sensitive_action_executions_total.clone()))?;
         registry.register(Box::new(metrics.audit_entries_total.clone()))?;
-        registry.register(Box::new(metrics.audit_trail_verification_duration_seconds.clone()))?;
+        registry.register(Box::new(
+            metrics.audit_trail_verification_duration_seconds.clone(),
+        ))?;
         registry.register(Box::new(metrics.audit_replication_success_total.clone()))?;
         registry.register(Box::new(metrics.audit_replication_failure_total.clone()))?;
         registry.register(Box::new(metrics.security_events_total.clone()))?;
@@ -378,44 +479,69 @@ impl Default for AlertThresholds {
 
 impl AdminAlerting {
     pub fn new(thresholds: AlertThresholds) -> Self {
-        Self { alert_thresholds: thresholds }
+        Self {
+            alert_thresholds: thresholds,
+        }
     }
 
-    pub async fn check_and_alert(&self, metrics: &AdminMetrics, stats: &AdminStatistics, security_stats: &SecurityMonitoringStats) {
+    pub async fn check_and_alert(
+        &self,
+        metrics: &AdminMetrics,
+        stats: &AdminStatistics,
+        security_stats: &SecurityMonitoringStats,
+    ) {
         // Check for high failed login rate
         if stats.failed_login_attempts > self.alert_thresholds.failed_login_rate_threshold as i64 {
             self.send_alert(
                 "HIGH_FAILED_LOGIN_RATE",
-                &format!("Failed login rate exceeded threshold: {}/minute", stats.failed_login_attempts),
+                &format!(
+                    "Failed login rate exceeded threshold: {}/minute",
+                    stats.failed_login_attempts
+                ),
                 "high",
-            ).await;
+            )
+            .await;
         }
 
         // Check for impossible travel events
-        if security_stats.impossible_travel_events >= self.alert_thresholds.impossible_travel_threshold {
+        if security_stats.impossible_travel_events
+            >= self.alert_thresholds.impossible_travel_threshold
+        {
             self.send_alert(
                 "IMPOSSIBLE_TRAVEL_DETECTED",
-                &format!("Impossible travel events detected: {}", security_stats.impossible_travel_events),
+                &format!(
+                    "Impossible travel events detected: {}",
+                    security_stats.impossible_travel_events
+                ),
                 "critical",
-            ).await;
+            )
+            .await;
         }
 
         // Check for high concurrent sessions
         if stats.active_sessions >= self.alert_thresholds.concurrent_sessions_threshold {
             self.send_alert(
                 "HIGH_CONCURRENT_SESSIONS",
-                &format!("High number of concurrent sessions: {}", stats.active_sessions),
+                &format!(
+                    "High number of concurrent sessions: {}",
+                    stats.active_sessions
+                ),
                 "medium",
-            ).await;
+            )
+            .await;
         }
 
         // Check for unresolved high-severity security events
         if security_stats.high_severity_events > 0 {
             self.send_alert(
                 "UNRESOLVED_HIGH_SEVERITY_EVENTS",
-                &format!("Unresolved high-severity security events: {}", security_stats.high_severity_events),
+                &format!(
+                    "Unresolved high-severity security events: {}",
+                    security_stats.high_severity_events
+                ),
                 "high",
-            ).await;
+            )
+            .await;
         }
     }
 
@@ -439,33 +565,57 @@ impl AdminAlerting {
     pub async fn alert_account_lockout(&self, admin_id: uuid::Uuid, role: &str, ip_address: &str) {
         self.send_alert(
             "ADMIN_ACCOUNT_LOCKED",
-            &format!("Admin account {} ({}) locked due to repeated failed attempts from {}", admin_id, role, ip_address),
+            &format!(
+                "Admin account {} ({}) locked due to repeated failed attempts from {}",
+                admin_id, role, ip_address
+            ),
             "high",
-        ).await;
+        )
+        .await;
     }
 
-    pub async fn alert_suspicious_login(&self, admin_id: uuid::Uuid, event_type: &str, details: &str) {
+    pub async fn alert_suspicious_login(
+        &self,
+        admin_id: uuid::Uuid,
+        event_type: &str,
+        details: &str,
+    ) {
         self.send_alert(
             "SUSPICIOUS_LOGIN_DETECTED",
-            &format!("Suspicious login detected for admin {}: {} - {}", admin_id, event_type, details),
+            &format!(
+                "Suspicious login detected for admin {}: {} - {}",
+                admin_id, event_type, details
+            ),
             "medium",
-        ).await;
+        )
+        .await;
     }
 
-    pub async fn alert_audit_trail_tampering(&self, tampered_entries: &[crate::admin::models::TamperedEntry]) {
+    pub async fn alert_audit_trail_tampering(
+        &self,
+        tampered_entries: &[crate::admin::models::TamperedEntry],
+    ) {
         self.send_alert(
             "AUDIT_TRAIL_TAMPERING",
-            &format!("Audit trail tampering detected! {} entries affected", tampered_entries.len()),
+            &format!(
+                "Audit trail tampering detected! {} entries affected",
+                tampered_entries.len()
+            ),
             "critical",
-        ).await;
+        )
+        .await;
     }
 
     pub async fn alert_permission_denial_spike(&self, denials_per_minute: f64, role: &str) {
         self.send_alert(
             "PERMISSION_DENIAL_SPIKE",
-            &format!("Permission denial spike detected for {}: {}/minute", role, denials_per_minute),
+            &format!(
+                "Permission denial spike detected for {}: {}/minute",
+                role, denials_per_minute
+            ),
             "medium",
-        ).await;
+        )
+        .await;
     }
 }
 

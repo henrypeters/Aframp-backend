@@ -6,15 +6,15 @@
 //!
 //! Every step is idempotent and resumable across sessions.
 
+pub mod bip44;
+pub mod handlers;
+pub mod metrics;
 pub mod models;
 pub mod repository;
-pub mod service;
-pub mod handlers;
 pub mod routes;
-pub mod bip44;
-pub mod metrics;
+pub mod service;
 
 pub use models::*;
 pub use repository::ProvisioningRepository;
-pub use service::WalletProvisioningService;
 pub use routes::wallet_provisioning_routes;
+pub use service::WalletProvisioningService;

@@ -43,10 +43,7 @@ impl CorridorRouterService {
 
     /// Resolve the best route for a transfer request.
     /// Returns a specific error code when the corridor is unsupported.
-    pub async fn resolve_route(
-        &self,
-        req: &RouteRequest,
-    ) -> Result<RouteResponse, RouterError> {
+    pub async fn resolve_route(&self, req: &RouteRequest) -> Result<RouteResponse, RouterError> {
         // 1. Find active corridor.
         let corridor = self
             .repo
@@ -203,7 +200,11 @@ impl CorridorRouterService {
             .await
             .map_err(|e| RouterError::Database(e.to_string()))?;
 
-        let action = if req.enabled { "enabled" } else { "kill_switch" };
+        let action = if req.enabled {
+            "enabled"
+        } else {
+            "kill_switch"
+        };
 
         let _ = self
             .repo

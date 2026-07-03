@@ -5,9 +5,7 @@ use crate::masking::engine::{is_sensitive_field, strategy_for_field};
 
 /// Mask sensitive attributes in a span attribute map (key-value pairs).
 /// Returns the sanitised map.
-pub fn mask_span_attributes(
-    attrs: Vec<(String, String)>,
-) -> Vec<(String, String)> {
+pub fn mask_span_attributes(attrs: Vec<(String, String)>) -> Vec<(String, String)> {
     attrs
         .into_iter()
         .map(|(k, v)| {
@@ -58,7 +56,10 @@ mod tests {
 
     #[test]
     fn test_safe_metric_label_non_sensitive() {
-        assert_eq!(safe_metric_label("route", "/api/v1/wallet"), "/api/v1/wallet");
+        assert_eq!(
+            safe_metric_label("route", "/api/v1/wallet"),
+            "/api/v1/wallet"
+        );
     }
 
     #[test]

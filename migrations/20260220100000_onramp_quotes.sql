@@ -1,4 +1,3 @@
--- migrate:up
 -- Onramp quotes: time-bound NGN → cNGN conversion quotes
 
 CREATE TABLE IF NOT EXISTS onramp_quotes (

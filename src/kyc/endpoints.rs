@@ -5,16 +5,16 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use bigdecimal::BigDecimal;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use crate::auth::AuthenticatedConsumer;
-use crate::database::kyc_repository::{KycTier, KycStatus, DocumentType};
-use crate::kyc::service::{KycService, KycServiceError};
+use crate::database::kyc_repository::{DocumentType, KycStatus, KycTier};
 use crate::error::ApiError;
+use crate::kyc::service::{KycService, KycServiceError};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InitiateKycRequest {
@@ -150,9 +150,15 @@ async fn initiate_kyc_session(
         )
         .await
         .map_err(|e| match e {
-            KycServiceError::SessionAlreadyActive => ApiError::Conflict("KYC session already active".to_string()),
-            KycServiceError::ProviderError(e) => ApiError::BadRequest(format!("Provider error: {}", e)),
-            KycServiceError::ConfigurationError(e) => ApiError::InternalServerError(format!("Configuration error: {}", e)),
+            KycServiceError::SessionAlreadyActive => {
+                ApiError::Conflict("KYC session already active".to_string())
+            }
+            KycServiceError::ProviderError(e) => {
+                ApiError::BadRequest(format!("Provider error: {}", e))
+            }
+            KycServiceError::ConfigurationError(e) => {
+                ApiError::InternalServerError(format!("Configuration error: {}", e))
+            }
             _ => ApiError::InternalServerError("Failed to initiate KYC session".to_string()),
         })?;
 
@@ -182,9 +188,15 @@ async fn submit_document(
         )
         .await
         .map_err(|e| match e {
-            KycServiceError::SessionNotFound => ApiError::NotFound("KYC session not found".to_string()),
-            KycServiceError::SessionExpired => ApiError::BadRequest("KYC session has expired".to_string()),
-            KycServiceError::ProviderError(e) => ApiError::BadRequest(format!("Provider error: {}", e)),
+            KycServiceError::SessionNotFound => {
+                ApiError::NotFound("KYC session not found".to_string())
+            }
+            KycServiceError::SessionExpired => {
+                ApiError::BadRequest("KYC session has expired".to_string())
+            }
+            KycServiceError::ProviderError(e) => {
+                ApiError::BadRequest(format!("Provider error: {}", e))
+            }
             _ => ApiError::InternalServerError("Failed to submit document".to_string()),
         })?;
 
@@ -209,9 +221,15 @@ async fn submit_selfie(
         )
         .await
         .map_err(|e| match e {
-            KycServiceError::SessionNotFound => ApiError::NotFound("KYC session not found".to_string()),
-            KycServiceError::SessionExpired => ApiError::BadRequest("KYC session has expired".to_string()),
-            KycServiceError::ProviderError(e) => ApiError::BadRequest(format!("Provider error: {}", e)),
+            KycServiceError::SessionNotFound => {
+                ApiError::NotFound("KYC session not found".to_string())
+            }
+            KycServiceError::SessionExpired => {
+                ApiError::BadRequest("KYC session has expired".to_string())
+            }
+            KycServiceError::ProviderError(e) => {
+                ApiError::BadRequest(format!("Provider error: {}", e))
+            }
             _ => ApiError::InternalServerError("Failed to submit selfie".to_string()),
         })?;
 
@@ -231,12 +249,15 @@ async fn get_kyc_status(
         .get_kyc_status(auth.consumer_id)
         .await
         .map_err(|e| match e {
-            KycServiceError::KycRecordNotFound => ApiError::NotFound("KYC record not found".to_string()),
+            KycServiceError::KycRecordNotFound => {
+                ApiError::NotFound("KYC record not found".to_string())
+            }
             _ => ApiError::InternalServerError("Failed to get KYC status".to_string()),
         })?;
 
     // Get additional details from database
-    let kyc_record = kyc_service.repository
+    let kyc_record = kyc_service
+        .repository
         .get_kyc_record_by_consumer(auth.consumer_id)
         .await
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
@@ -264,19 +285,24 @@ async fn get_transaction_limits(
         .get_transaction_limits(auth.consumer_id)
         .await
         .map_err(|e| match e {
-            KycServiceError::KycRecordNotFound => ApiError::NotFound("KYC record not found".to_string()),
+            KycServiceError::KycRecordNotFound => {
+                ApiError::NotFound("KYC record not found".to_string())
+            }
             _ => ApiError::InternalServerError("Failed to get transaction limits".to_string()),
         })?;
 
     // Get current KYC record for tier info
-    let kyc_record = kyc_service.repository
+    let kyc_record = kyc_service
+        .repository
         .get_kyc_record_by_consumer(auth.consumer_id)
         .await
         .map_err(|e| ApiError::InternalServerError(format!("Database error: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("KYC record not found".to_string()))?;
 
     // Get tier definition for limits
-    let tier_def = crate::kyc::tier_requirements::KycTierRequirements::get_tier_definition(kyc_record.effective_tier);
+    let tier_def = crate::kyc::tier_requirements::KycTierRequirements::get_tier_definition(
+        kyc_record.effective_tier,
+    );
 
     Ok(Json(TransactionLimitsResponse {
         tier: kyc_record.tier,
@@ -322,9 +348,15 @@ async fn handle_webhook(
         .handle_webhook(internal_payload)
         .await
         .map_err(|e| match e {
-            KycServiceError::WebhookSignatureInvalid => ApiError::Unauthorized("Invalid webhook signature".to_string()),
-            KycServiceError::KycRecordNotFound => ApiError::NotFound("KYC record not found".to_string()),
-            KycServiceError::ProviderError(e) => ApiError::BadRequest(format!("Provider error: {}", e)),
+            KycServiceError::WebhookSignatureInvalid => {
+                ApiError::Unauthorized("Invalid webhook signature".to_string())
+            }
+            KycServiceError::KycRecordNotFound => {
+                ApiError::NotFound("KYC record not found".to_string())
+            }
+            KycServiceError::ProviderError(e) => {
+                ApiError::BadRequest(format!("Provider error: {}", e))
+            }
             _ => ApiError::InternalServerError("Failed to process webhook".to_string()),
         })?;
 
@@ -340,24 +372,26 @@ impl From<KycServiceError> for ApiError {
                 ApiError::NotFound(error.to_string())
             }
             KycServiceError::SessionExpired => ApiError::BadRequest(error.to_string()),
-            KycServiceError::ProviderNotFound(_) => ApiError::InternalServerError(error.to_string()),
-            KycServiceError::ConfigurationError(_) => ApiError::InternalServerError(error.to_string()),
+            KycServiceError::ProviderNotFound(_) => {
+                ApiError::InternalServerError(error.to_string())
+            }
+            KycServiceError::ConfigurationError(_) => {
+                ApiError::InternalServerError(error.to_string())
+            }
             KycServiceError::InvalidDecision(_) => ApiError::BadRequest(error.to_string()),
             KycServiceError::WebhookSignatureInvalid => ApiError::Unauthorized(error.to_string()),
-            KycServiceError::ProviderError(e) => {
-                match e {
-                    crate::kyc::provider::KycProviderError::InvalidRequest(_) => {
-                        ApiError::BadRequest(error.to_string())
-                    }
-                    crate::kyc::provider::KycProviderError::AuthenticationError(_) => {
-                        ApiError::Unauthorized(error.to_string())
-                    }
-                    crate::kyc::provider::KycProviderError::RateLimitExceeded => {
-                        ApiError::TooManyRequests(error.to_string())
-                    }
-                    _ => ApiError::InternalServerError(error.to_string()),
+            KycServiceError::ProviderError(e) => match e {
+                crate::kyc::provider::KycProviderError::InvalidRequest(_) => {
+                    ApiError::BadRequest(error.to_string())
                 }
-            }
+                crate::kyc::provider::KycProviderError::AuthenticationError(_) => {
+                    ApiError::Unauthorized(error.to_string())
+                }
+                crate::kyc::provider::KycProviderError::RateLimitExceeded => {
+                    ApiError::TooManyRequests(error.to_string())
+                }
+                _ => ApiError::InternalServerError(error.to_string()),
+            },
             KycServiceError::DatabaseError(_) | KycServiceError::RedisError(_) => {
                 ApiError::InternalServerError(error.to_string())
             }

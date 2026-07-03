@@ -6,22 +6,22 @@ pub struct AnalyticsCacheTTL;
 impl AnalyticsCacheTTL {
     /// Usage summary - 5 minutes (frequently updated)
     pub const USAGE_SUMMARY: Duration = Duration::from_secs(300);
-    
+
     /// Endpoint usage - 10 minutes (moderate update frequency)
     pub const ENDPOINT_USAGE: Duration = Duration::from_secs(600);
-    
+
     /// Feature adoption - 1 hour (low volatility)
     pub const FEATURE_ADOPTION: Duration = Duration::from_secs(3600);
-    
+
     /// Health scores - 15 minutes (updated daily but cached for performance)
     pub const HEALTH_SCORES: Duration = Duration::from_secs(900);
-    
+
     /// Consumer overview - 5 minutes (platform-wide stats)
     pub const CONSUMER_OVERVIEW: Duration = Duration::from_secs(300);
-    
+
     /// Reports list - 1 hour (historical data)
     pub const REPORTS_LIST: Duration = Duration::from_secs(3600);
-    
+
     /// Consumer detail - 10 minutes (comprehensive view)
     pub const CONSUMER_DETAIL: Duration = Duration::from_secs(600);
 }

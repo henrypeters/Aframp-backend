@@ -20,12 +20,11 @@ use serde_json::Value;
 use tower::util::ServiceExt;
 
 use Bitmesh_backend::middleware::hmac_signing::{sign_request, HmacAlgorithm};
-use Bitmesh_backend::middleware::signature_verification::{
-    constant_time_eq, is_high_value, validate_timestamp, SigningPolicy,
-    SignatureVerificationState,
-    signature_verification_middleware,
-};
 use Bitmesh_backend::middleware::signature_verification::errors::VerifyFailReason;
+use Bitmesh_backend::middleware::signature_verification::{
+    constant_time_eq, is_high_value, signature_verification_middleware, validate_timestamp,
+    SignatureVerificationState, SigningPolicy,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -175,8 +174,8 @@ fn wallet_does_not_require_sha512() {
 #[test]
 fn valid_sha256_signature_verifies() {
     use Bitmesh_backend::middleware::hmac_signing::{
-        build_canonical_request, compute_signature, derive_signing_key,
-        parse_signature_header_pub, sha256_hex,
+        build_canonical_request, compute_signature, derive_signing_key, parse_signature_header_pub,
+        sha256_hex,
     };
 
     let secret = b"integration-test-secret";
@@ -187,28 +186,24 @@ fn valid_sha256_signature_verifies() {
     ];
     let body = br#"{"from_currency":"KES","to_asset":"CNGN","amount":"5000"}"#;
 
-    let sig_header = sign_request(
-        HmacAlgorithm::Sha256,
-        "POST",
-        "/api/onramp/quote",
-        "",
-        headers_slice,
-        body,
-        secret,
-    );
-    let parsed = parse_signature_header_pub(&sig_header).unwrap();
+    let sig_header = sign_request($$$).unwrap();
+    let parsed = parse_signature_header_pub(&sig_header)
+        .expect("Failed to parse signature header");
 
     let signing_key = derive_signing_key(secret);
     let mut hmap = axum::http::HeaderMap::new();
     for (k, v) in headers_slice {
         hmap.insert(
-            axum::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
-            axum::http::HeaderValue::from_str(v).unwrap(),
+            axum::http::HeaderName::from_bytes(k.as_bytes())
+                .expect("Failed to parse header name"),
+            axum::http::HeaderValue::from_str(v)
+                .expect("Failed to parse header value"),
         );
     }
     let body_hash = sha256_hex(body);
     let canonical =
-        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash).unwrap();
+        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash)
+            .expect("Failed to build canonical request");
     let expected = compute_signature(HmacAlgorithm::Sha256, &signing_key, &canonical);
 
     assert!(constant_time_eq(&expected, &parsed.signature));
@@ -217,8 +212,8 @@ fn valid_sha256_signature_verifies() {
 #[test]
 fn valid_sha512_signature_verifies() {
     use Bitmesh_backend::middleware::hmac_signing::{
-        build_canonical_request, compute_signature, derive_signing_key,
-        parse_signature_header_pub, sha256_hex,
+        build_canonical_request, compute_signature, derive_signing_key, parse_signature_header_pub,
+        sha256_hex,
     };
 
     let secret = b"sha512-test-secret";
@@ -229,28 +224,24 @@ fn valid_sha512_signature_verifies() {
     ];
     let body = br#"{"wallet_address":"GXXX","amount":"100"}"#;
 
-    let sig_header = sign_request(
-        HmacAlgorithm::Sha512,
-        "POST",
-        "/api/onramp/initiate",
-        "",
-        headers_slice,
-        body,
-        secret,
-    );
-    let parsed = parse_signature_header_pub(&sig_header).unwrap();
+    let sig_header = sign_request($$$).unwrap();
+    let parsed = parse_signature_header_pub(&sig_header)
+        .expect("Failed to parse signature header");
 
     let signing_key = derive_signing_key(secret);
     let mut hmap = axum::http::HeaderMap::new();
     for (k, v) in headers_slice {
         hmap.insert(
-            axum::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
-            axum::http::HeaderValue::from_str(v).unwrap(),
+            axum::http::HeaderName::from_bytes(k.as_bytes())
+                .expect("Failed to parse header name"),
+            axum::http::HeaderValue::from_str(v)
+                .expect("Failed to parse header value"),
         );
     }
     let body_hash = sha256_hex(body);
     let canonical =
-        build_canonical_request("POST", "/api/onramp/initiate", "", &hmap, &body_hash).unwrap();
+        build_canonical_request("POST", "/api/onramp/initiate", "", &hmap, &body_hash)
+            .expect("Failed to build canonical request");
     let expected = compute_signature(HmacAlgorithm::Sha512, &signing_key, &canonical);
 
     assert!(constant_time_eq(&expected, &parsed.signature));
@@ -259,8 +250,8 @@ fn valid_sha512_signature_verifies() {
 #[test]
 fn tampered_body_signature_mismatch() {
     use Bitmesh_backend::middleware::hmac_signing::{
-        build_canonical_request, compute_signature, derive_signing_key,
-        parse_signature_header_pub, sha256_hex,
+        build_canonical_request, compute_signature, derive_signing_key, parse_signature_header_pub,
+        sha256_hex,
     };
 
     let secret = b"tamper-secret";
@@ -272,28 +263,24 @@ fn tampered_body_signature_mismatch() {
     let original = br#"{"amount":"100"}"#;
     let tampered = br#"{"amount":"99999"}"#;
 
-    let sig_header = sign_request(
-        HmacAlgorithm::Sha256,
-        "POST",
-        "/api/onramp/quote",
-        "",
-        headers_slice,
-        original,
-        secret,
-    );
-    let parsed = parse_signature_header_pub(&sig_header).unwrap();
+    let sig_header = sign_request($$$).unwrap();
+    let parsed = parse_signature_header_pub(&sig_header)
+        .expect("Failed to parse signature header");
 
     let signing_key = derive_signing_key(secret);
     let mut hmap = axum::http::HeaderMap::new();
     for (k, v) in headers_slice {
         hmap.insert(
-            axum::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
-            axum::http::HeaderValue::from_str(v).unwrap(),
+            axum::http::HeaderName::from_bytes(k.as_bytes())
+                .expect("Failed to parse header name"),
+            axum::http::HeaderValue::from_str(v)
+                .expect("Failed to parse header value"),
         );
     }
     let body_hash = sha256_hex(tampered);
     let canonical =
-        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash).unwrap();
+        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash)
+            .expect("Failed to build canonical request");
     let recomputed = compute_signature(HmacAlgorithm::Sha256, &signing_key, &canonical);
 
     assert!(!constant_time_eq(&recomputed, &parsed.signature));
@@ -302,8 +289,8 @@ fn tampered_body_signature_mismatch() {
 #[test]
 fn tampered_key_id_header_signature_mismatch() {
     use Bitmesh_backend::middleware::hmac_signing::{
-        build_canonical_request, compute_signature, derive_signing_key,
-        parse_signature_header_pub, sha256_hex,
+        build_canonical_request, compute_signature, derive_signing_key, parse_signature_header_pub,
+        sha256_hex,
     };
 
     let secret = b"header-tamper-secret";
@@ -319,28 +306,24 @@ fn tampered_key_id_header_signature_mismatch() {
     ];
     let body = br#"{"amount":"100"}"#;
 
-    let sig_header = sign_request(
-        HmacAlgorithm::Sha256,
-        "POST",
-        "/api/onramp/quote",
-        "",
-        original_headers,
-        body,
-        secret,
-    );
-    let parsed = parse_signature_header_pub(&sig_header).unwrap();
+    let sig_header = sign_request($$$).unwrap();
+    let parsed = parse_signature_header_pub(&sig_header)
+        .expect("Failed to parse signature header");
 
     let signing_key = derive_signing_key(secret);
     let mut hmap = axum::http::HeaderMap::new();
     for (k, v) in tampered_headers {
         hmap.insert(
-            axum::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
-            axum::http::HeaderValue::from_str(v).unwrap(),
+            axum::http::HeaderName::from_bytes(k.as_bytes())
+                .expect("Failed to parse header name"),
+            axum::http::HeaderValue::from_str(v)
+                .expect("Failed to parse header value"),
         );
     }
     let body_hash = sha256_hex(body);
     let canonical =
-        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash).unwrap();
+        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash)
+            .expect("Failed to build canonical request");
     let recomputed = compute_signature(HmacAlgorithm::Sha256, &signing_key, &canonical);
 
     assert!(!constant_time_eq(&recomputed, &parsed.signature));
@@ -360,15 +343,21 @@ async fn missing_signature_on_mandatory_endpoint_returns_401() {
             // The middleware returns 401 before touching DB when the
             // signature header is absent on a Mandatory endpoint.
             // We use a mock state approach via a simpler test router.
-            axum::middleware::from_fn(|req: Request<Body>, next: axum::middleware::Next| async move {
-                // Simulate: no X-Aframp-Signature → 401
-                if req.headers().get("x-aframp-signature").is_none() {
-                    return (StatusCode::UNAUTHORIZED, axum::Json(serde_json::json!({
-                        "error": { "code": "SIGNATURE_VERIFICATION_FAILED" }
-                    }))).into_response();
-                }
-                next.run(req).await
-            }),
+            axum::middleware::from_fn(
+                |req: Request<Body>, next: axum::middleware::Next| async move {
+                    // Simulate: no X-Aframp-Signature → 401
+                    if req.headers().get("x-aframp-signature").is_none() {
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            axum::Json(serde_json::json!({
+                                "error": { "code": "SIGNATURE_VERIFICATION_FAILED" }
+                            })),
+                        )
+                            .into_response();
+                    }
+                    next.run(req).await
+                },
+            ),
         )),
     );
 

@@ -13,8 +13,8 @@ use crate::cache::{Cache, RedisCache};
 
 // ── TTL constants ────────────────────────────────────────────────────────────
 
-pub const ACCESS_TOKEN_TTL_SECS: i64 = 3_600;       // 1 hour
-pub const REFRESH_TOKEN_TTL_SECS: i64 = 1_209_600;  // 14 days
+pub const ACCESS_TOKEN_TTL_SECS: i64 = 3_600; // 1 hour
+pub const REFRESH_TOKEN_TTL_SECS: i64 = 1_209_600; // 14 days
 
 // ── Token types & scopes ─────────────────────────────────────────────────────
 
@@ -180,12 +180,12 @@ pub fn generate_refresh_token(
 pub fn validate_token(token: &str, jwt_secret: &str) -> Result<TokenClaims, JwtError> {
     let token_data = decode::<TokenClaims>(token, &decoding_key(jwt_secret), &hs256_validation())
         .map_err(|e| {
-            use jsonwebtoken::errors::ErrorKind;
-            match e.kind() {
-                ErrorKind::ExpiredSignature => JwtError::TokenExpired,
-                _ => JwtError::InvalidToken,
-            }
-        })?;
+        use jsonwebtoken::errors::ErrorKind;
+        match e.kind() {
+            ErrorKind::ExpiredSignature => JwtError::TokenExpired,
+            _ => JwtError::InvalidToken,
+        }
+    })?;
 
     let claims = token_data.claims;
 
@@ -281,10 +281,7 @@ pub async fn blacklist_access_token(
 }
 
 /// Check whether an access token JTI is blacklisted.
-pub async fn is_access_token_blacklisted(
-    cache: &RedisCache,
-    jti: &str,
-) -> Result<bool, JwtError> {
+pub async fn is_access_token_blacklisted(cache: &RedisCache, jti: &str) -> Result<bool, JwtError> {
     let key = access_token_blacklist_key(jti);
     <RedisCache as Cache<String>>::exists(cache, &key)
         .await
@@ -307,17 +304,15 @@ pub fn verify_wallet_signature(
     use stellar_strkey::ed25519::PublicKey as StrkeyPublicKey;
 
     // Decode the Stellar G-address to raw public key bytes
-    let pubkey = StrkeyPublicKey::from_string(wallet_address)
-        .map_err(|_| JwtError::InvalidToken)?;
+    let pubkey =
+        StrkeyPublicKey::from_string(wallet_address).map_err(|_| JwtError::InvalidToken)?;
 
-    let verifying_key =
-        VerifyingKey::from_bytes(&pubkey.0).map_err(|_| JwtError::InvalidToken)?;
+    let verifying_key = VerifyingKey::from_bytes(&pubkey.0).map_err(|_| JwtError::InvalidToken)?;
 
     let sig_bytes = STANDARD
         .decode(signature_b64)
         .map_err(|_| JwtError::InvalidToken)?;
-    let signature =
-        Signature::from_slice(&sig_bytes).map_err(|_| JwtError::InvalidToken)?;
+    let signature = Signature::from_slice(&sig_bytes).map_err(|_| JwtError::InvalidToken)?;
 
     Ok(verifying_key.verify(message.as_bytes(), &signature).is_ok())
 }
@@ -354,6 +349,9 @@ impl JwtConfig {
 }
 
 #[cfg(test)]
+// unwrap() is intentional in tests — a panic fails the test with a clear message,
+// which is the correct and idiomatic Rust behaviour. All production code paths
+// return typed `JwtError` results; no unwrap/expect/panic! exists outside this module.
 mod tests {
     use super::*;
 
@@ -361,8 +359,7 @@ mod tests {
 
     #[test]
     fn test_generate_and_validate_access_token() {
-        let (token, claims) =
-            generate_access_token("GTEST123", Scope::User, SECRET).unwrap();
+        let (token, claims) = generate_access_token("GTEST123", Scope::User, SECRET).unwrap();
         assert!(!token.is_empty());
         let decoded = validate_token(&token, SECRET).unwrap();
         assert_eq!(decoded.sub, claims.sub);
@@ -372,8 +369,7 @@ mod tests {
 
     #[test]
     fn test_generate_and_validate_refresh_token() {
-        let (token, claims) =
-            generate_refresh_token("GTEST123", Scope::User, SECRET).unwrap();
+        let (token, claims) = generate_refresh_token("GTEST123", Scope::User, SECRET).unwrap();
         let decoded = validate_token(&token, SECRET).unwrap();
         assert_eq!(decoded.token_type, TokenType::Refresh);
         assert!(decoded.jti.is_some());
@@ -407,8 +403,7 @@ mod tests {
 
     #[test]
     fn test_admin_scope() {
-        let (token, _) =
-            generate_access_token("GADMIN123", Scope::Admin, SECRET).unwrap();
+        let (token, _) = generate_access_token("GADMIN123", Scope::Admin, SECRET).unwrap();
         let decoded = validate_token(&token, SECRET).unwrap();
         assert_eq!(decoded.scope, Scope::Admin);
     }

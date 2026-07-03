@@ -1,9 +1,11 @@
 //! Business logic for Wallet Creation & Stellar Account Provisioning (Issue #322).
 
-use crate::chains::stellar::client::StellarClient;
+// REMOVED: use crate::chains::stellar::client::StellarClient;
 use crate::error::Error;
 use crate::wallet_provisioning::{
-    bip44::{validate_stellar_public_key, KeypairGenerationGuidance, MnemonicConfirmationChallenge},
+    bip44::{
+        validate_stellar_public_key, KeypairGenerationGuidance, MnemonicConfirmationChallenge,
+    },
     metrics,
     models::*,
     repository::ProvisioningRepository,
@@ -59,12 +61,17 @@ impl WalletProvisioningService {
             .as_ref()
             .map(|fa| {
                 let balance: f64 = fa.current_xlm_balance.to_string().parse().unwrap_or(0.0);
-                let threshold: f64 = fa.min_balance_alert_threshold.to_string().parse().unwrap_or(100.0);
+                let threshold: f64 = fa
+                    .min_balance_alert_threshold
+                    .to_string()
+                    .parse()
+                    .unwrap_or(100.0);
                 balance > threshold
             })
             .unwrap_or(false);
 
-        let total = ACCOUNT_BASE_ENTRIES * BASE_RESERVE_XLM + TRUSTLINE_RESERVE_XLM + FEE_BUFFER_XLM;
+        let total =
+            ACCOUNT_BASE_ENTRIES * BASE_RESERVE_XLM + TRUSTLINE_RESERVE_XLM + FEE_BUFFER_XLM;
 
         Ok(FundingRequirements {
             wallet_id,
@@ -135,7 +142,12 @@ impl WalletProvisioningService {
                     .await
                     .map_err(|e| Error::Internal(e.to_string()))?;
                 self.repo
-                    .transition(wallet_id, "funded", Some("Account detected on Stellar"), "worker")
+                    .transition(
+                        wallet_id,
+                        "funded",
+                        Some("Account detected on Stellar"),
+                        "worker",
+                    )
                     .await
                     .map_err(|e| Error::Internal(e.to_string()))?;
 
@@ -218,7 +230,12 @@ impl WalletProvisioningService {
 
         // Advance state to trustline_pending
         self.repo
-            .transition(wallet_id, "trustline_pending", Some("Trustline envelope issued"), "system")
+            .transition(
+                wallet_id,
+                "trustline_pending",
+                Some("Trustline envelope issued"),
+                "system",
+            )
             .await
             .map_err(|e| Error::Internal(e.to_string()))?;
 
@@ -324,9 +341,7 @@ impl WalletProvisioningService {
                     });
 
                     let tl_active = cngn_trustline.is_some();
-                    let tl_authorized = cngn_trustline
-                        .map(|b| b.is_authorized)
-                        .unwrap_or(false);
+                    let tl_authorized = cngn_trustline.map(|b| b.is_authorized).unwrap_or(false);
 
                     (min_xlm, tl_active, tl_authorized)
                 }
@@ -360,10 +375,18 @@ impl WalletProvisioningService {
         }
 
         let mut pending_steps = Vec::new();
-        if !account_exists { pending_steps.push("Fund Stellar account".into()); }
-        if !min_xlm_met { pending_steps.push("Maintain minimum XLM balance".into()); }
-        if !trustline_active { pending_steps.push("Establish cNGN trustline".into()); }
-        if !trustline_authorized { pending_steps.push("Await issuer trustline authorization".into()); }
+        if !account_exists {
+            pending_steps.push("Fund Stellar account".into());
+        }
+        if !min_xlm_met {
+            pending_steps.push("Maintain minimum XLM balance".into());
+        }
+        if !trustline_active {
+            pending_steps.push("Establish cNGN trustline".into());
+        }
+        if !trustline_authorized {
+            pending_steps.push("Await issuer trustline authorization".into());
+        }
 
         Ok(ReadinessResponse {
             wallet_id,
@@ -392,7 +415,11 @@ impl WalletProvisioningService {
             .ok_or_else(|| Error::NotFound("No active funding account configured".into()))?;
 
         let balance: f64 = fa.current_xlm_balance.to_string().parse().unwrap_or(0.0);
-        let threshold: f64 = fa.min_balance_alert_threshold.to_string().parse().unwrap_or(100.0);
+        let threshold: f64 = fa
+            .min_balance_alert_threshold
+            .to_string()
+            .parse()
+            .unwrap_or(100.0);
         let per_account_cost = ACCOUNT_BASE_ENTRIES * BASE_RESERVE_XLM + TRUSTLINE_RESERVE_XLM;
         let remaining_capacity = if per_account_cost > 0.0 {
             ((balance - threshold) / per_account_cost).max(0.0) as i64
@@ -422,7 +449,9 @@ impl WalletProvisioningService {
         req: ReplenishmentRequest,
     ) -> Result<(), Error> {
         if req.requested_xlm_amount <= 0.0 {
-            return Err(Error::BadRequest("requested_xlm_amount must be positive".into()));
+            return Err(Error::BadRequest(
+                "requested_xlm_amount must be positive".into(),
+            ));
         }
 
         let fa = self
@@ -488,7 +517,9 @@ fn verify_envelope_signature(signed_xdr: &str, wallet_address: &str) -> Result<(
     // In production: decode XDR, extract signatures, verify against wallet public key
     // using ed25519-dalek. Here we do a basic non-empty check.
     if signed_xdr.is_empty() {
-        return Err(Error::BadRequest("Signed envelope XDR cannot be empty".into()));
+        return Err(Error::BadRequest(
+            "Signed envelope XDR cannot be empty".into(),
+        ));
     }
     Ok(())
 }

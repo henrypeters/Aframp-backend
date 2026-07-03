@@ -24,18 +24,31 @@ CREATE TABLE IF NOT EXISTS settlement_batches (
 -- Reconciliation reports table
 CREATE TABLE IF NOT EXISTS reconciliation_reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    batch_id UUID NOT NULL REFERENCES settlement_batches(id) ON DELETE CASCADE,
-    expected_amount NUMERIC(36,18) NOT NULL,
+    report_date DATE UNIQUE,
+    total_transactions INT NOT NULL DEFAULT 0,
+    matched_count INT NOT NULL DEFAULT 0,
+    discrepancy_count INT NOT NULL DEFAULT 0,
+    missing_mint_count INT NOT NULL DEFAULT 0,
+    unauthorized_mint_count INT NOT NULL DEFAULT 0,
+    amount_mismatch_count INT NOT NULL DEFAULT 0,
+    duplicate_payment_count INT NOT NULL DEFAULT 0,
+    has_open_discrepancies BOOLEAN NOT NULL DEFAULT false,
+    period_closed BOOLEAN NOT NULL DEFAULT false,
+    expected_amount NUMERIC(36,18),
     provider_reported_amount NUMERIC(36,18),
     discrepancy_amount NUMERIC(36,18),
     discrepancy_reason TEXT,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (
-        status IN ('matched', 'discrepant', 'pending_manual')
+    status TEXT DEFAULT 'pending' CHECK (
+        status IN ('matched', 'discrepant', 'pending_manual', 'pending')
     ),
     metadata JSONB DEFAULT '{}'::JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Add batch_id column if not already present
+ALTER TABLE reconciliation_reports
+    ADD COLUMN IF NOT EXISTS batch_id UUID REFERENCES settlement_batches(id) ON DELETE CASCADE;
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_settlement_batches_status_created 
@@ -63,10 +76,12 @@ END;
 $$ language 'plpgsql';
 
 -- Triggers
+DROP TRIGGER IF EXISTS update_settlement_batches_updated_at ON settlement_batches;
 CREATE TRIGGER update_settlement_batches_updated_at
     BEFORE UPDATE ON settlement_batches
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_reconciliation_reports_updated_at ON reconciliation_reports;
 CREATE TRIGGER update_reconciliation_reports_updated_at
     BEFORE UPDATE ON reconciliation_reports
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

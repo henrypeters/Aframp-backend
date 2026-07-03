@@ -3,14 +3,14 @@
 //! The application readiness gate must not return healthy until warming completes.
 //! Warming duration and entry counts are logged as structured events.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 use tracing::{error, info, warn};
 
-use crate::cache::l1::L1Cache;
-use crate::cache::cache::{Cache as CacheTrait, RedisCache};
 use crate::cache::cache::ttl;
+use crate::cache::cache::{Cache as CacheTrait, RedisCache};
+use crate::cache::l1::L1Cache;
 use crate::database::exchange_rate_repository::ExchangeRateRepository;
 use crate::database::fee_structure_repository::FeeStructureRepository;
 
@@ -50,13 +50,7 @@ const CURRENCY_PAIRS: &[(&str, &str)] = &[
 ];
 
 /// Known fee types to pre-warm in L1.
-const FEE_TYPES: &[&str] = &[
-    "onramp",
-    "offramp",
-    "transfer",
-    "conversion",
-    "withdrawal",
-];
+const FEE_TYPES: &[&str] = &["onramp", "offramp", "transfer", "conversion", "withdrawal"];
 
 /// Warm both cache levels. Called once at startup before traffic is accepted.
 pub async fn warm_caches(
@@ -79,7 +73,11 @@ pub async fn warm_caches(
                 let key = format!("v1:fee:structure:{}", fee_type);
                 l1.fee_structures.insert(key, &structures).await;
                 total_l1 += 1;
-                info!(fee_type, count = structures.len(), "L1 warmed fee structures");
+                info!(
+                    fee_type,
+                    count = structures.len(),
+                    "L1 warmed fee structures"
+                );
             }
             Ok(_) => {
                 debug!(fee_type, "No active fee structures found during warming");
@@ -95,10 +93,7 @@ pub async fn warm_caches(
         let key = format!("v1:rate:{}:{}", from, to);
         match rate_repo.get_current_rate(from, to).await {
             Ok(Some(rate)) => {
-                if let Err(e) = redis
-                    .set(&key, &rate, Some(ttl::EXCHANGE_RATES))
-                    .await
-                {
+                if let Err(e) = redis.set(&key, &rate, Some(ttl::EXCHANGE_RATES)).await {
                     warn!(from, to, error = %e, "Failed to warm L2 exchange rate");
                 } else {
                     total_l2 += 1;

@@ -41,17 +41,22 @@ impl ExternalFeedService {
         let score = self.fetch_abuseipdb_reputation(ip).await?;
 
         // Cache the result
-        self.cache.set_ex(
-            &cache_key,
-            &score.to_string(),
-            self.config.external_feed_cache_ttl_secs as usize,
-        ).await?;
+        self.cache
+            .set_ex(
+                &cache_key,
+                &score.to_string(),
+                self.config.external_feed_cache_ttl_secs as usize,
+            )
+            .await?;
 
         Ok(score)
     }
 
     /// Fetch reputation from AbuseIPDB
-    async fn fetch_abuseipdb_reputation(&self, ip: &str) -> Result<rust_decimal::Decimal, AppError> {
+    async fn fetch_abuseipdb_reputation(
+        &self,
+        ip: &str,
+    ) -> Result<rust_decimal::Decimal, AppError> {
         let api_key = std::env::var("ABUSEIPDB_API_KEY").ok();
         let api_url = std::env::var("ABUSEIPDB_API_URL")
             .unwrap_or_else(|_| "https://api.abuseipdb.com/api/v2/check".to_string());
@@ -63,7 +68,8 @@ impl ExternalFeedService {
 
         let api_key = api_key.unwrap();
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&api_url)
             .query(&[("ipAddress", ip)])
             .header("Key", api_key)
@@ -80,11 +86,10 @@ impl ExternalFeedService {
             return Ok(rust_decimal::Decimal::ZERO);
         }
 
-        let abuse_response: AbuseIpDbResponse = response.json().await
-            .map_err(|e| {
-                error!(error = %e, ip = %ip, "Failed to parse AbuseIPDB response");
-                AppError::ExternalServiceError(e.to_string())
-            })?;
+        let abuse_response: AbuseIpDbResponse = response.json().await.map_err(|e| {
+            error!(error = %e, ip = %ip, "Failed to parse AbuseIPDB response");
+            AppError::ExternalServiceError(e.to_string())
+        })?;
 
         // Convert AbuseIPDB score (0-100) to our scale (-100 to 0)
         // Higher AbuseIPDB score = more abusive = lower reputation score

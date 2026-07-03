@@ -2,8 +2,8 @@
 //! and triggers cNGN refunds on disbursement failure.
 
 use crate::corridors::ghana::models::GhanaTransferStatus;
-use crate::payments::providers::ghana::GhanaProvider;
 use crate::payments::provider::PaymentProvider;
+use crate::payments::providers::ghana::GhanaProvider;
 use crate::payments::types::PaymentState;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use sqlx::PgPool;
@@ -104,7 +104,9 @@ pub async fn handle_hubtel_ghana_webhook(
             }
         }
         Ok(_) => warn!(transfer_id = %transfer_id, "Hubtel Ghana webhook: no matching transfer"),
-        Err(e) => error!(transfer_id = %transfer_id, error = %e, "Failed to update from Hubtel webhook"),
+        Err(e) => {
+            error!(transfer_id = %transfer_id, error = %e, "Failed to update from Hubtel webhook")
+        }
     }
 
     (StatusCode::OK, Json(serde_json::json!({"status":"ok"}))).into_response()

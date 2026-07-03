@@ -1,4 +1,4 @@
-use crate::chains::stellar::client::StellarClient;
+// REMOVED: use crate::chains::stellar::client::StellarClient;
 use crate::wallet::repository::{InsertPortfolioSnapshot, PortfolioRepository};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -53,7 +53,10 @@ pub struct PortfolioService {
 
 impl PortfolioService {
     pub fn new(stellar_client: StellarClient, repo: PortfolioRepository) -> Self {
-        Self { stellar_client, repo }
+        Self {
+            stellar_client,
+            repo,
+        }
     }
 
     /// Aggregate balances across all wallet addresses for a user.
@@ -138,8 +141,17 @@ impl PortfolioService {
             .assets
             .iter()
             .map(|a| {
-                let val: f64 = a.fiat_value.as_deref().unwrap_or("0").parse().unwrap_or(0.0);
-                let pct = if total > 0.0 { val / total * 100.0 } else { 0.0 };
+                let val: f64 = a
+                    .fiat_value
+                    .as_deref()
+                    .unwrap_or("0")
+                    .parse()
+                    .unwrap_or(0.0);
+                let pct = if total > 0.0 {
+                    val / total * 100.0
+                } else {
+                    0.0
+                };
                 AssetAllocation {
                     asset_code: a.asset_code.clone(),
                     fiat_value: a.fiat_value.clone().unwrap_or_default(),
@@ -159,7 +171,11 @@ impl PortfolioService {
         let start: f64 = start_value.parse().unwrap_or(0.0);
         let end: f64 = end_value.parse().unwrap_or(0.0);
         let net = end - start;
-        let pct = if start > 0.0 { net / start * 100.0 } else { 0.0 };
+        let pct = if start > 0.0 {
+            net / start * 100.0
+        } else {
+            0.0
+        };
         PortfolioPerformance {
             period_days,
             start_value: start_value.to_string(),

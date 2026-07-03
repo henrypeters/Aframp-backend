@@ -18,7 +18,9 @@ pub struct Aggregator {
 
 impl Aggregator {
     pub fn new(outlier_pct: Option<f64>) -> Self {
-        Self { outlier_pct: outlier_pct.unwrap_or(DEFAULT_OUTLIER_PCT) }
+        Self {
+            outlier_pct: outlier_pct.unwrap_or(DEFAULT_OUTLIER_PCT),
+        }
     }
 
     /// Returns `(median_price, sources_used, excluded_sources)`.
@@ -69,7 +71,12 @@ mod tests {
     use chrono::Utc;
 
     fn raw(source: &str, price: f64) -> RawPrice {
-        RawPrice { source: source.into(), pair: "XLM/USD".into(), price, fetched_at: Utc::now() }
+        RawPrice {
+            source: source.into(),
+            pair: "XLM/USD".into(),
+            price,
+            fetched_at: Utc::now(),
+        }
     }
 
     #[test]
@@ -86,7 +93,12 @@ mod tests {
     fn test_outlier_excluded() {
         let agg = Aggregator::new(Some(2.0));
         // 0.50 is far from the 0.10–0.12 cluster
-        let prices = vec![raw("a", 0.10), raw("b", 0.11), raw("c", 0.12), raw("bad", 0.50)];
+        let prices = vec![
+            raw("a", 0.10),
+            raw("b", 0.11),
+            raw("c", 0.12),
+            raw("bad", 0.50),
+        ];
         let (_, used, excl) = agg.aggregate(&prices).unwrap();
         assert_eq!(used, 3);
         assert!(excl.contains(&"bad".to_string()));

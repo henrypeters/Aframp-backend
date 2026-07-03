@@ -116,7 +116,11 @@ pub async fn issue_key(
     };
 
     if req.issued_by.trim().is_empty() {
-        return err(StatusCode::BAD_REQUEST, "MISSING_ISSUED_BY", "issued_by is required");
+        return err(
+            StatusCode::BAD_REQUEST,
+            "MISSING_ISSUED_BY",
+            "issued_by is required",
+        );
     }
 
     let repo = ApiKeyRepository::new((*state.db).clone());
@@ -131,10 +135,20 @@ pub async fn issue_key(
 
     match consumer_exists {
         Ok(Some(true)) => {}
-        Ok(_) => return err(StatusCode::NOT_FOUND, "CONSUMER_NOT_FOUND", "Consumer not found"),
+        Ok(_) => {
+            return err(
+                StatusCode::NOT_FOUND,
+                "CONSUMER_NOT_FOUND",
+                "Consumer not found",
+            )
+        }
         Err(e) => {
             error!(error = %e, "DB error checking consumer");
-            return err(StatusCode::INTERNAL_SERVER_ERROR, "DB_ERROR", "Database error");
+            return err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DB_ERROR",
+                "Database error",
+            );
         }
     }
 
@@ -150,12 +164,20 @@ pub async fn issue_key(
             return err(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "MAX_KEYS_REACHED",
-                format!("Consumer already has {} active keys (maximum {})", count, max_keys_per_consumer()),
+                format!(
+                    "Consumer already has {} active keys (maximum {})",
+                    count,
+                    max_keys_per_consumer()
+                ),
             );
         }
         Err(e) => {
             error!(error = %e, "Failed to count active keys");
-            return err(StatusCode::INTERNAL_SERVER_ERROR, "DB_ERROR", "Database error");
+            return err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DB_ERROR",
+                "Database error",
+            );
         }
         Ok(_) => {}
     }
@@ -165,7 +187,11 @@ pub async fn issue_key(
         Ok(k) => k,
         Err(e) => {
             error!(error = %e, "Key generation failed");
-            return err(StatusCode::INTERNAL_SERVER_ERROR, "KEY_GEN_ERROR", "Failed to generate key");
+            return err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "KEY_GEN_ERROR",
+                "Failed to generate key",
+            );
         }
     };
 
@@ -186,7 +212,11 @@ pub async fn issue_key(
         Ok(k) => k,
         Err(e) => {
             error!(error = %e, "Failed to persist API key");
-            return err(StatusCode::INTERNAL_SERVER_ERROR, "DB_ERROR", "Failed to store key");
+            return err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DB_ERROR",
+                "Failed to store key",
+            );
         }
     };
 
@@ -261,7 +291,11 @@ pub async fn list_keys(
         }
         Err(e) => {
             error!(error = %e, "Failed to list keys");
-            err(StatusCode::INTERNAL_SERVER_ERROR, "DB_ERROR", "Failed to list keys")
+            err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DB_ERROR",
+                "Failed to list keys",
+            )
         }
     }
 }
@@ -311,7 +345,11 @@ pub async fn revoke_key(
         }
         Err(e) => {
             error!(error = %e, "Failed to revoke key");
-            err(StatusCode::INTERNAL_SERVER_ERROR, "DB_ERROR", "Failed to revoke key")
+            err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "DB_ERROR",
+                "Failed to revoke key",
+            )
         }
     }
 }

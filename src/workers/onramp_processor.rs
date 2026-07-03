@@ -14,15 +14,15 @@
 //! Every state transition is idempotent and race-condition proof via
 //! optimistic locking (WHERE status = '<expected>').
 
-use crate::chains::stellar::client::StellarClient;
-use crate::chains::stellar::errors::StellarError;
-use crate::chains::stellar::payment::{CngnMemo, CngnPaymentBuilder};
-use crate::chains::stellar::trustline::CngnTrustlineManager;
+use crate::audit::mint_log::MintAuditStore;
+// REMOVED: use crate::chains::stellar::client::StellarClient;
+// REMOVED: use crate::chains::stellar::errors::StellarError;
+// REMOVED: use crate::chains::stellar::payment::{CngnMemo, CngnPaymentBuilder};
+// REMOVED: use crate::chains::stellar::trustline::CngnTrustlineManager;
 use crate::database::transaction_repository::{Transaction, TransactionRepository};
-use crate::services::mint_queue::{MintQueueService, MintRequest};
 use crate::payments::factory::PaymentProviderFactory;
 use crate::payments::types::{PaymentState, ProviderName, StatusRequest};
-use crate::audit::mint_log::MintAuditStore;
+use crate::services::mint_queue::{MintQueueService, MintRequest};
 use bigdecimal::BigDecimal;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -435,11 +435,12 @@ impl OnrampProcessor {
             }
         };
 
-        let provider_enum: ProviderName = provider_name
-            .parse()
-            .map_err(|e: crate::payments::error::PaymentError| {
-                ProcessorError::PaymentProvider(e.to_string())
-            })?;
+        let provider_enum: ProviderName =
+            provider_name
+                .parse()
+                .map_err(|e: crate::payments::error::PaymentError| {
+                    ProcessorError::PaymentProvider(e.to_string())
+                })?;
 
         let provider = self
             .provider_factory
@@ -566,7 +567,8 @@ impl OnrampProcessor {
                         );
 
                         // Mark as completed
-                        self.mark_transaction_completed(&tx.transaction_id, tx_hash).await?;
+                        self.mark_transaction_completed(&tx.transaction_id, tx_hash)
+                            .await?;
                         metrics::inc_transfers_confirmed();
                     }
                 }
@@ -731,11 +733,8 @@ impl OnrampProcessor {
             amount_cngn = %tx.cngn_amount,
             "Enqueuing cNGN transfer for Stellar submission"
         );
-        self.record_mint_audit(
-            "MINT_REQUESTED",
-            self.mint_audit_payload(tx, None),
-        )
-        .await;
+        self.record_mint_audit("MINT_REQUESTED", self.mint_audit_payload(tx, None))
+            .await;
 
         let mint_req = MintRequest {
             transaction_id: tx.transaction_id,
@@ -898,14 +897,23 @@ impl OnrampProcessor {
         if let Err(e) = self
             .mint_audit
             .clone()
-            .append_event(actor_id, public_key, action_type.to_string(), request_payload)
+            .append_event(
+                actor_id,
+                public_key,
+                action_type.to_string(),
+                request_payload,
+            )
             .await
         {
             error!(error = %e, action_type = action_type, "Failed to write mint audit entry");
         }
     }
 
-    fn mint_audit_payload(&self, tx: &Transaction, extra: Option<serde_json::Value>) -> serde_json::Value {
+    fn mint_audit_payload(
+        &self,
+        tx: &Transaction,
+        extra: Option<serde_json::Value>,
+    ) -> serde_json::Value {
         let mut payload = json!({
             "transaction_id": tx.transaction_id,
             "wallet_address": tx.wallet_address,
@@ -980,13 +988,11 @@ impl OnrampProcessor {
                     &tx.transaction_id,
                     "processing",
                     FailureReason::StellarTransientError,
-                    &format!(
-                        "Stellar confirmation timed out after {} minutes",
-                        age_mins
-                    ),
+                    &format!("Stellar confirmation timed out after {} minutes", age_mins),
                 )
                 .await?;
-                self.initiate_refund(&tx, FailureReason::StellarTransientError).await?;
+                self.initiate_refund(&tx, FailureReason::StellarTransientError)
+                    .await?;
                 continue;
             }
 
@@ -1013,7 +1019,8 @@ impl OnrampProcessor {
                         "Stellar transaction failed on-chain",
                     )
                     .await?;
-                    self.initiate_refund(&tx, FailureReason::StellarPermanentError).await?;
+                    self.initiate_refund(&tx, FailureReason::StellarPermanentError)
+                        .await?;
                 }
                 Ok(None) => {
                     // Not yet visible on Horizon — still pending
@@ -1305,21 +1312,20 @@ impl OnrampProcessor {
     /// Attempt a single refund via the payment provider.
     /// Returns the provider's refund reference on success.
     async fn attempt_provider_refund(&self, tx: &Transaction) -> Result<String, ProcessorError> {
-        let provider_name = tx
-            .payment_provider
-            .as_deref()
-            .ok_or_else(|| ProcessorError::RefundFailed("No payment provider on transaction".to_string()))?;
+        let provider_name = tx.payment_provider.as_deref().ok_or_else(|| {
+            ProcessorError::RefundFailed("No payment provider on transaction".to_string())
+        })?;
 
-        let provider_ref = tx
-            .payment_reference
-            .as_deref()
-            .ok_or_else(|| ProcessorError::RefundFailed("No payment reference on transaction".to_string()))?;
+        let provider_ref = tx.payment_reference.as_deref().ok_or_else(|| {
+            ProcessorError::RefundFailed("No payment reference on transaction".to_string())
+        })?;
 
-        let provider_enum: ProviderName = provider_name
-            .parse()
-            .map_err(|e: crate::payments::error::PaymentError| {
-                ProcessorError::RefundFailed(e.to_string())
-            })?;
+        let provider_enum: ProviderName =
+            provider_name
+                .parse()
+                .map_err(|e: crate::payments::error::PaymentError| {
+                    ProcessorError::RefundFailed(e.to_string())
+                })?;
 
         let provider = self
             .provider_factory
@@ -1340,7 +1346,10 @@ impl OnrampProcessor {
             },
             withdrawal_method: crate::payments::types::WithdrawalMethod::BankTransfer,
             transaction_reference: format!("refund:{}", tx.transaction_id),
-            reason: Some(format!("Onramp refund for transaction {}", tx.transaction_id)),
+            reason: Some(format!(
+                "Onramp refund for transaction {}",
+                tx.transaction_id
+            )),
             metadata: Some(json!({
                 "original_reference": provider_ref,
                 "refund_type": "onramp_failure",

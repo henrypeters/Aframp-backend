@@ -98,7 +98,10 @@ fn extract_client_ip(request: &Request) -> Option<String> {
     }
 
     // Fallback to connection info
-    if let Some(peer_addr) = request.extensions().get::<axum::extract::ConnectInfo<std::net::SocketAddr>>() {
+    if let Some(peer_addr) = request
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+    {
         return Some(peer_addr.0.ip().to_string());
     }
 

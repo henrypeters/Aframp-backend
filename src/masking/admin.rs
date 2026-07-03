@@ -4,8 +4,8 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json, Router,
     routing::{delete, get, patch, post},
+    Json, Router,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -83,13 +83,26 @@ pub async fn update_rule(
     Json(req): Json<UpdateRuleRequest>,
 ) -> impl IntoResponse {
     match state.rules.get(&rule_id) {
-        None => (StatusCode::NOT_FOUND, Json(json!({"error": "rule not found"}))),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "rule not found"})),
+        ),
         Some(mut existing) => {
-            if let Some(f) = req.field_name { existing.field_name = f; }
-            if let Some(c) = req.category { existing.category = c; }
-            if let Some(s) = req.strategy { existing.strategy = s; }
-            if let Some(ch) = req.channels { existing.channels = ch; }
-            if let Some(e) = req.enabled { existing.enabled = e; }
+            if let Some(f) = req.field_name {
+                existing.field_name = f;
+            }
+            if let Some(c) = req.category {
+                existing.category = c;
+            }
+            if let Some(s) = req.strategy {
+                existing.strategy = s;
+            }
+            if let Some(ch) = req.channels {
+                existing.channels = ch;
+            }
+            if let Some(e) = req.enabled {
+                existing.enabled = e;
+            }
             state.rules.update(&rule_id, existing);
             (StatusCode::OK, Json(json!({ "updated": true })))
         }
@@ -104,7 +117,10 @@ pub async fn delete_rule(
     if state.rules.remove(&rule_id) {
         (StatusCode::OK, Json(json!({ "deleted": true })))
     } else {
-        (StatusCode::NOT_FOUND, Json(json!({ "error": "rule not found" })))
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "rule not found" })),
+        )
     }
 }
 
@@ -143,12 +159,19 @@ fn run_effectiveness_test() -> Vec<ChannelStatus> {
     results.push(ChannelStatus {
         channel: "log_message",
         passed: log_passed,
-        detail: if log_passed { "all patterns redacted" } else { "UNMASKED DATA DETECTED" },
+        detail: if log_passed {
+            "all patterns redacted"
+        } else {
+            "UNMASKED DATA DETECTED"
+        },
     });
 
     // Test structured field masking
     let mut test_event = serde_json::Map::new();
-    test_event.insert("password".into(), serde_json::Value::String("secret123".into()));
+    test_event.insert(
+        "password".into(),
+        serde_json::Value::String("secret123".into()),
+    );
     test_event.insert("amount".into(), serde_json::Value::Number(100.into()));
     crate::masking::engine::mask_log_event(&mut test_event);
     let field_passed = test_event["password"] != "secret123" && test_event["amount"] == 100;
@@ -159,14 +182,18 @@ fn run_effectiveness_test() -> Vec<ChannelStatus> {
     results.push(ChannelStatus {
         channel: "log_field",
         passed: field_passed,
-        detail: if field_passed { "sensitive fields masked" } else { "UNMASKED DATA DETECTED" },
+        detail: if field_passed {
+            "sensitive fields masked"
+        } else {
+            "UNMASKED DATA DETECTED"
+        },
     });
 
     // Test response masking
     let test_resp = serde_json::json!({"account_number": "0123456789", "nin": "12345678901"});
     let masked_resp = crate::masking::response::mask_consumer_response(test_resp);
-    let resp_passed = masked_resp["account_number"] != "0123456789"
-        && masked_resp.get("nin").is_none();
+    let resp_passed =
+        masked_resp["account_number"] != "0123456789" && masked_resp.get("nin").is_none();
     if !resp_passed {
         crate::masking::metrics::record_masking_alert("response");
         tracing::error!("MASKING EFFECTIVENESS TEST FAILED: response channel");
@@ -174,7 +201,11 @@ fn run_effectiveness_test() -> Vec<ChannelStatus> {
     results.push(ChannelStatus {
         channel: "response",
         passed: resp_passed,
-        detail: if resp_passed { "response fields masked" } else { "UNMASKED DATA DETECTED" },
+        detail: if resp_passed {
+            "response fields masked"
+        } else {
+            "UNMASKED DATA DETECTED"
+        },
     });
 
     results
@@ -187,7 +218,10 @@ fn run_effectiveness_test() -> Vec<ChannelStatus> {
 pub fn masking_admin_routes() -> Router<Arc<MaskingAdminState>> {
     Router::new()
         .route("/security/masking/rules", get(list_rules).post(create_rule))
-        .route("/security/masking/rules/:rule_id", patch(update_rule).delete(delete_rule))
+        .route(
+            "/security/masking/rules/:rule_id",
+            patch(update_rule).delete(delete_rule),
+        )
         .route("/security/masking/status", get(masking_status))
 }
 

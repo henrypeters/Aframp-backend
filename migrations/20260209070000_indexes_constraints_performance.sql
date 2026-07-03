@@ -1,4 +1,3 @@
--- migrate:up
 -- #5 Implement Database Indexes, Constraints, and Performance Optimization (AFRI extensions)
 -- Purpose: Add indexes and constraints for AFRI conversion audits, trustline ops, fee structures,
 --          and optimize exchange rate lookups.

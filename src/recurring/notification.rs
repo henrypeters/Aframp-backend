@@ -20,12 +20,7 @@ pub fn notify_success(
     );
 }
 
-pub fn notify_failure(
-    schedule_id: Uuid,
-    wallet_address: &str,
-    failure_count: i32,
-    reason: &str,
-) {
+pub fn notify_failure(schedule_id: Uuid, wallet_address: &str, failure_count: i32, reason: &str) {
     warn!(
         schedule_id = %schedule_id,
         wallet = %wallet_address,
@@ -35,11 +30,7 @@ pub fn notify_failure(
     );
 }
 
-pub fn notify_suspended(
-    schedule_id: Uuid,
-    wallet_address: &str,
-    failure_count: i32,
-) {
+pub fn notify_suspended(schedule_id: Uuid, wallet_address: &str, failure_count: i32) {
     error!(
         schedule_id = %schedule_id,
         wallet = %wallet_address,

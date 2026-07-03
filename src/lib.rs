@@ -4,253 +4,169 @@
 // Import soroban SDK items only when not using database feature
 #[cfg(not(feature = "database"))]
 use soroban_sdk::{
-    contract,
-    contracterror,
-    contractimpl,
-    contracttype,
-    token,
-    Address,
-    Env,
-    String,
-    Symbol,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, token, Address, Env, String, Symbol, Vec,
 };
 
-// Database module requires std and specific dependencies
+// ── Core infrastructure ────────────────────────────────────────────────────────
 #[cfg(feature = "database")]
 pub mod database;
 
-// Chains module for blockchain integrations
-#[cfg(feature = "database")]
-pub mod chains;
-
-// Error handling
 #[cfg(feature = "database")]
 pub mod error;
 
-// Middleware for request handling
+#[cfg(feature = "database")]
+pub mod config;
+
 #[cfg(feature = "database")]
 pub mod middleware;
 
-// Logging and tracing
 #[cfg(feature = "database")]
 pub mod logging;
 
 #[cfg(feature = "database")]
 pub mod telemetry;
 
-// Cache layer
-#[cfg(feature = "cache")]
-pub mod cache;
-
-// Services
-#[cfg(feature = "database")]
-pub mod services;
-
-// Payment providers
-#[cfg(feature = "database")]
-pub mod payments;
-
-// KYC (Know Your Customer) verification system
-#[cfg(feature = "database")]
-pub mod kyc;
-
-// Configuration module
-#[cfg(feature = "database")]
-pub mod config;
-
-// Admin access control system
-#[cfg(feature = "database")]
-pub mod admin;
-
-// Analytics dashboard data endpoints (Issue #113)
-#[cfg(feature = "database")]
-pub mod analytics;
-
-// LP Payout Engine — reward calculation and disbursement for Liquidity Providers
-#[cfg(feature = "database")]
-pub mod lp_payout;
-
-// Data classification framework — authoritative sensitivity taxonomy and
-// policy enforcement for every data field on the platform.
-#[cfg(feature = "database")]
-pub mod data_classification;
-
-// API handlers (exposed for integration tests)
-#[cfg(feature = "database")]
-pub mod api;
-
-// Auth module – JWT generation, validation, middleware
-#[cfg(feature = "database")]
-pub mod auth;
-
-// OAuth 2.0 authorization server
-#[cfg(feature = "database")]
-pub mod oauth;
-
-// Health check module
 #[cfg(feature = "database")]
 pub mod health;
 
-// Background workers
+// ── Cache & persistence ────────────────────────────────────────────────────────
 #[cfg(feature = "database")]
-pub mod workers;
+pub mod cache;
 
-// Recurring payment frequency helpers
+// ── Auth & identity ────────────────────────────────────────────────────────────
 #[cfg(feature = "database")]
-pub mod recurring;
+pub mod auth;
 
-// API key generation and issuance (Issue #131)
+#[cfg(feature = "database")]
+pub mod oauth;
+
 #[cfg(feature = "database")]
 pub mod api_keys;
 
-// Prometheus metrics
-#[cfg(feature = "database")]
-pub mod metrics;
-
-// DDoS protection and traffic shaping
-#[cfg(feature = "cache")]
-pub mod ddos;
-
-// Microservice-to-microservice authentication
-#[cfg(feature = "database")]
-pub mod service_auth;
-
-// End-to-end payload encryption (Issue — Data Security & Encryption)
 #[cfg(feature = "database")]
 pub mod crypto;
 
-// Platform key management framework (Issue — Key Management & Rotation)
 #[cfg(feature = "database")]
 pub mod key_management;
 
-// Penetration testing & security review framework
+// ── KYC / Verification ─────────────────────────────────────────────────────────
 #[cfg(feature = "database")]
-pub mod pentest;
+pub mod kyc;
 
-// Bug bounty programme & responsible disclosure
 #[cfg(feature = "database")]
-pub mod bug_bounty;
+pub mod verification;
 
-// Data masking & redaction system
+// ── Payments & Onramp/Offramp core ────────────────────────────────────────────
 #[cfg(feature = "database")]
-pub mod masking;
+pub mod payments;
 
-// Liquidity pool architecture
 #[cfg(feature = "database")]
-pub mod liquidity;
+pub mod settlement;
 
-// API gateway security policy enforcement
 #[cfg(feature = "database")]
-pub mod gateway;
+pub mod rate_engine;
 
-// Reserve Vault — NGN collateral management, M-of-N multi-sig, custodian integration
-#[cfg(feature = "database")]
-pub mod vault;
-
-// Treasury Emergency Intervention Framework — one-click peg stabilisation
-#[cfg(feature = "database")]
-pub mod treasury;
-
-// In-House CFO — Autonomous Agent Treasury Management
-#[cfg(feature = "database")]
-pub mod agent_cfo;
-
-// Agent Swarm Intelligence — decentralized P2P coordination layer
-#[cfg(feature = "database")]
-pub mod agent_swarm;
-// Agent Admin Dashboard — HITL control system for autonomous agents
-#[cfg(feature = "database")]
-pub mod agent_dashboard;
-
-// Multi-Signature Governance Framework — M-of-N signing for Mint/Burn/SetOptions
-#[cfg(feature = "database")]
-pub mod multisig;
-// Adaptive rate limiting and throttling system
-#[cfg(feature = "cache")]
-pub mod adaptive_rate_limit;
-// mTLS certificate lifecycle management
-#[cfg(feature = "database")]
-pub mod mtls;
-
-// Comprehensive audit logging system
-#[cfg(feature = "database")]
-pub mod audit;
-
-// Abuse detection and automated response system
-#[cfg(feature = "database")]
-pub mod abuse_detection;
-
-// Security module - anomaly detection and circuit breaker
-#[cfg(feature = "database")]
-pub mod security;
-
-// Oracle price feed — multi-source aggregator with weighted median (Issue #1.02)
-#[cfg(feature = "database")]
-pub mod oracle;
-// Compliance Registry — license tracking, regulatory constraints, corridor governance (Issue #2.02)
-#[cfg(feature = "database")]
-pub mod compliance_registry;
-
-// LP Onboarding & Partner Portal — institutional liquidity provider onboarding,
-// agreement lifecycle, Stellar key allowlisting
-#[cfg(feature = "database")]
-pub mod lp_onboarding;
-
-// Cross-border payment corridor implementations
 #[cfg(feature = "database")]
 pub mod corridors;
 
-// Issue #334 — Merchant CRM & Customer Insights
 #[cfg(feature = "database")]
-pub mod merchant_crm;
+pub mod oracle;
 
-// Issue #333 — Merchant Invoicing & Automated Tax Calculation
 #[cfg(feature = "database")]
-pub mod merchant_invoicing;
+pub mod banking;
 
-// Issue #336 — Merchant Multi-Sig & Treasury Controls
 #[cfg(feature = "database")]
-pub mod merchant_multisig;
+pub mod batching;
 
-// Issue #335 — Multi-Store & Franchise Management
 #[cfg(feature = "database")]
-pub mod franchise;
+pub mod recurring;
 
-// Issue #322 — Wallet Creation & Stellar Account Provisioning
+// ── Stellar / blockchain ───────────────────────────────────────────────────────
 #[cfg(feature = "database")]
-pub mod wallet_provisioning;
-// Non-custodial wallet architecture, recovery, history, and portfolio
+pub mod stellar;
+
+// ── Wallet ─────────────────────────────────────────────────────────────────────
 #[cfg(feature = "database")]
 pub mod wallet;
-// POS QR Payment System — Physical retail integration
-#[cfg(feature = "database")]
-pub mod pos;
 
-// Issue #338 — Open-Source AI Agent SDK for Stellar
-// Provides an intent-based API for autonomous AI agents to manage their own
-// economic lifecycle on the Stellar network using cNGN and the x402 protocol.
 #[cfg(feature = "database")]
-pub mod agent_sdk;
+pub mod wallet_provisioning;
 
-// Merchant Gateway — Commercial adoption entry point for businesses
+// ── Compliance & AML ──────────────────────────────────────────────────────────
 #[cfg(feature = "database")]
-pub mod merchant_gateway;
+pub mod aml;
 
-// Autonomous Bargaining Protocol — agent-to-agent negotiation with x402 entrance fee
-// and Soroban escrow-on-success (Issue #5.03)
 #[cfg(feature = "database")]
-pub mod negotiation;
-// KYA (Know Your Agent) — Decentralized Agent Identity & Reputation System
-// Provides DID-based identity registry, on-chain reputation, attestations,
-// zero-knowledge competence proofs, and cross-platform reputation portability
-#[cfg(feature = "database")]
-pub mod kya;
-// Issue #337 — Merchant Dispute Resolution & Clawback Management
-#[cfg(feature = "database")]
-pub mod dispute;
+pub mod sanctions;
 
-// Contract error enum for Soroban (only when not using database feature)
+#[cfg(feature = "database")]
+pub mod compliance;
+
+#[cfg(feature = "database")]
+pub mod compliance_effectiveness;
+
+#[cfg(feature = "database")]
+pub mod risk;
+
+// ── API layer ─────────────────────────────────────────────────────────────────
+#[cfg(feature = "database")]
+pub mod api;
+
+#[cfg(feature = "database")]
+pub mod routes;
+
+#[cfg(feature = "database")]
+pub mod gateway;
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+#[cfg(feature = "database")]
+pub mod admin;
+
+// ── Background workers ────────────────────────────────────────────────────────
+#[cfg(feature = "database")]
+pub mod workers;
+
+#[cfg(feature = "database")]
+pub mod jobs;
+
+#[cfg(feature = "database")]
+pub mod event_bus;
+
+// ── Observability ─────────────────────────────────────────────────────────────
+#[cfg(feature = "database")]
+pub mod metrics;
+
+#[cfg(feature = "database")]
+pub mod audit;
+
+#[cfg(feature = "database")]
+pub mod analytics;
+
+#[cfg(feature = "database")]
+pub mod reporting;
+
+// ── Security ──────────────────────────────────────────────────────────────────
+#[cfg(feature = "database")]
+pub mod security;
+
+#[cfg(feature = "database")]
+pub mod masking;
+
+// ── Services (email, notifications, etc.) ────────────────────────────────────
+#[cfg(feature = "database")]
+pub mod services;
+
+// ── Multi-region — removed for basic setup ──────────────────────────────────
+// pub mod multi_region;
+
+// ── Adaptive rate limiting ────────────────────────────────────────────────────
+// #[cfg(feature = "cache")]
+// pub mod adaptive_rate_limit;  // removed — not needed for basic onramp/offramp
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Soroban escrow contract (compiled when NOT using the database feature)
+// ─────────────────────────────────────────────────────────────────────────────
+
 #[cfg(not(feature = "database"))]
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -319,31 +235,32 @@ pub struct EscrowContract;
 #[cfg(not(feature = "database"))]
 #[contractimpl]
 impl EscrowContract {
-    /// Initialize the contract with admin settings
     pub fn initialize(
         env: Env,
         admin: Address,
         fee_rate: u32,
         fee_treasury: Address,
-        dispute_resolver: Address
+        dispute_resolver: Address,
     ) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
         if fee_rate > 1000 {
-            // Max 10% (1000 basis points)
             return Err(Error::InvalidFeeRate);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::FeeRate, &fee_rate);
-        env.storage().instance().set(&DataKey::FeeTreasury, &fee_treasury);
-        env.storage().instance().set(&DataKey::DisputeResolver, &dispute_resolver);
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeTreasury, &fee_treasury);
+        env.storage()
+            .instance()
+            .set(&DataKey::DisputeResolver, &dispute_resolver);
         env.storage().instance().set(&DataKey::IsPaused, &false);
         env.storage().instance().set(&DataKey::OrderCount, &0u64);
         Ok(())
     }
 
-    /// Transfer admin rights to a new address
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -355,7 +272,6 @@ impl EscrowContract {
         Ok(())
     }
 
-    /// Update the platform fee rate
     pub fn set_fee_rate(env: Env, new_fee_rate: u32) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -366,35 +282,12 @@ impl EscrowContract {
         if new_fee_rate > 1000 {
             return Err(Error::InvalidFeeRate);
         }
-        env.storage().instance().set(&DataKey::FeeRate, &new_fee_rate);
-        Ok(())
-    }
-
-    /// Update the fee treasury address
-    pub fn set_fee_treasury(env: Env, new_treasury: Address) -> Result<(), Error> {
-        let admin: Address = env
-            .storage()
+        env.storage()
             .instance()
-            .get(&DataKey::Admin)
-            .ok_or(Error::NotInitialized)?;
-        admin.require_auth();
-        env.storage().instance().set(&DataKey::FeeTreasury, &new_treasury);
+            .set(&DataKey::FeeRate, &new_fee_rate);
         Ok(())
     }
 
-    /// Update the dispute resolver address
-    pub fn set_dispute_resolver(env: Env, new_resolver: Address) -> Result<(), Error> {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .ok_or(Error::NotInitialized)?;
-        admin.require_auth();
-        env.storage().instance().set(&DataKey::DisputeResolver, &new_resolver);
-        Ok(())
-    }
-
-    /// Pause the contract operations
     pub fn pause(env: Env) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -406,7 +299,6 @@ impl EscrowContract {
         Ok(())
     }
 
-    /// Unpause the contract operations
     pub fn unpause(env: Env) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -418,670 +310,17 @@ impl EscrowContract {
         Ok(())
     }
 
-    /// Check if the contract is paused
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::IsPaused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::IsPaused)
+            .unwrap_or(false)
     }
 
-    /// Get the current admin address
     pub fn get_admin(env: Env) -> Result<Address, Error> {
-        env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)
-    }
-
-    /// Accept an open sell order and lock funds in escrow
-    pub fn accept_order(env: Env, order_id: u64, buyer: Address) -> Result<(), Error> {
-        buyer.require_auth();
-
-        let is_paused: bool = env.storage().instance().get(&DataKey::IsPaused).unwrap_or(false);
-        if is_paused {
-            return Err(Error::ContractPaused);
-        }
-
-        let mut order: Order = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Order(order_id))
-            .ok_or(Error::OrderNotFound)?;
-
-        Self::validate_order_acceptance(&env, &order, &buyer)?;
-
-        Self::lock_escrow_funds(&env, &order)?;
-
-        order.buyer = Some(buyer.clone());
-        order.status = OrderStatus::Locked;
-
-        env.storage().persistent().set(&DataKey::Order(order_id), &order);
-
-        Self::update_user_orders(&env, &buyer, order_id);
-
-        env.events().publish(
-            (Symbol::new(&env, "order_accepted"),),
-            (order_id, buyer.clone(), order.amount)
-        );
-
-        Ok(())
-    }
-
-    /// Validate that an order can be accepted by a buyer
-    fn validate_order_acceptance(env: &Env, order: &Order, buyer: &Address) -> Result<(), Error> {
-        if order.status != OrderStatus::Open {
-            return Err(Error::InvalidOrderStatus);
-        }
-
-        let current_time = env.ledger().timestamp();
-        if current_time > order.expires_at {
-            return Err(Error::OrderExpired);
-        }
-
-        if buyer == &order.seller {
-            return Err(Error::CannotAcceptOwnOrder);
-        }
-
-        Ok(())
-    }
-
-    /// Lock the seller's crypto funds in the escrow contract
-    fn lock_escrow_funds(env: &Env, order: &Order) -> Result<(), Error> {
-        let token_client = token::Client::new(env, &order.token);
-
-        token_client.transfer(&order.seller, &env.current_contract_address(), &order.amount);
-
-        Ok(())
-    }
-
-    /// Update the user's order list to include the new order
-    fn update_user_orders(env: &Env, user: &Address, order_id: u64) {
-        let mut user_orders: Vec<u64> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserOrders(user.clone()))
-            .unwrap_or(Vec::new(env));
-
-        user_orders.push_back(order_id);
-
-        env.storage().persistent().set(&DataKey::UserOrders(user.clone()), &user_orders);
-    }
-}
-
-#[cfg(all(test, not(feature = "database")))]
-mod tests {
-    use super::*;
-    use soroban_sdk::testutils::{ Address as _, Ledger };
-    use soroban_sdk::{ Address, Env };
-
-    fn create_env() -> Env {
-        Env::default()
-    }
-
-    fn create_addresses(env: &Env) -> (Address, Address, Address, Address) {
-        (
-            Address::generate(env),
-            Address::generate(env),
-            Address::generate(env),
-            Address::generate(env),
-        )
-    }
-
-    fn create_token(env: &Env, admin: &Address, user: &Address, amount: i128) -> Address {
-        let sac = env.register_stellar_asset_contract_v2(admin.clone());
-        sac.address()
-    }
-
-    fn create_mock_order(
-        env: &Env,
-        seller: &Address,
-        token: &Address,
-        order_id: u64,
-        status: OrderStatus,
-        expires_at: u64
-    ) -> Order {
-        Order {
-            id: order_id,
-            seller: seller.clone(),
-            buyer: None,
-            token: token.clone(),
-            amount: 1000,
-            fiat_currency: Symbol::new(env, "USD"),
-            fiat_amount: 100,
-            rate: 10,
-            status,
-            created_at: env.ledger().timestamp(),
-            expires_at,
-            payment_method: String::from_str(env, "Bank Transfer"),
-        }
-    }
-
-    #[test]
-    fn test_initialize() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            )
-        });
-        assert!(result.is_ok());
-
-        let stored_admin = env.as_contract(&contract_id, || {
-            EscrowContract::get_admin(env.clone()).unwrap()
-        });
-        assert_eq!(stored_admin, admin);
-
-        let is_paused = env.as_contract(&contract_id, || EscrowContract::is_paused(env.clone()));
-        assert!(!is_paused);
-    }
-
-    #[test]
-    fn test_prevent_double_initialization() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            )
-        });
-        assert_eq!(result, Err(Error::AlreadyInitialized));
-    }
-
-    #[test]
-    fn test_set_fee_rate() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        env.mock_all_auths();
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::set_fee_rate(env.clone(), 100)
-        });
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_non_admin_cannot_set_fee_rate() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::set_fee_rate(env.clone(), 100).unwrap();
-        });
-    }
-
-    #[test]
-    fn test_invalid_fee_rate() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        env.mock_all_auths();
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::set_fee_rate(env.clone(), 1500)
-        });
-        assert_eq!(result, Err(Error::InvalidFeeRate));
-    }
-
-    #[test]
-    fn test_set_admin() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, new_admin) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        env.mock_all_auths();
-        env.as_contract(&contract_id, || {
-            EscrowContract::set_admin(env.clone(), new_admin.clone()).unwrap();
-        });
-
-        let stored_admin = env.as_contract(&contract_id, || {
-            EscrowContract::get_admin(env.clone()).unwrap()
-        });
-        assert_eq!(stored_admin, new_admin);
-    }
-
-    #[test]
-    fn test_pause_unpause() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        env.mock_all_auths();
-        env.as_contract(&contract_id, || {
-            EscrowContract::pause(env.clone()).unwrap();
-        });
-        let paused = env.as_contract(&contract_id, || EscrowContract::is_paused(env.clone()));
-        assert!(paused);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::unpause(env.clone()).unwrap();
-        });
-        let paused = env.as_contract(&contract_id, || EscrowContract::is_paused(env.clone()));
-        assert!(!paused);
-    }
-
-    #[test]
-    fn test_is_paused() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        let paused = env.as_contract(&contract_id, || EscrowContract::is_paused(env.clone()));
-        assert!(!paused);
-    }
-
-    #[test]
-    fn test_get_admin() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        let result = env.as_contract(&contract_id, || EscrowContract::get_admin(env.clone()));
-        assert_eq!(result, Ok(admin));
-    }
-
-    #[test]
-    fn test_accept_order_not_found() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-        let buyer = Address::generate(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        env.mock_all_auths();
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::accept_order(env.clone(), 999, buyer.clone())
-        });
-
-        assert_eq!(result, Err(Error::OrderNotFound));
-    }
-
-    #[test]
-    fn test_accept_order_when_paused() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-        let buyer = Address::generate(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        env.mock_all_auths();
-        env.as_contract(&contract_id, || {
-            EscrowContract::pause(env.clone()).unwrap();
-        });
-
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::accept_order(env.clone(), 1, buyer.clone())
-        });
-
-        assert_eq!(result, Err(Error::ContractPaused));
-    }
-    #[test]
-    fn test_accept_order_invalid_status_locked() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        let seller = Address::generate(&env);
-        let buyer = Address::generate(&env);
-        let token = Address::generate(&env);
-        let order_id = 1u64;
-
-        // Create an order with Locked status
-        let order = create_mock_order(
-            &env,
-            &seller,
-            &token,
-            order_id,
-            OrderStatus::Locked,
-            env.ledger().timestamp() + 3600
-        );
-
-        env.as_contract(&contract_id, || {
-            env.storage().persistent().set(&DataKey::Order(order_id), &order);
-        });
-
-        env.mock_all_auths();
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::accept_order(env.clone(), order_id, buyer.clone())
-        });
-
-        assert_eq!(result, Err(Error::InvalidOrderStatus));
-    }
-
-    #[test]
-    fn test_accept_order_invalid_status_completed() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        let seller = Address::generate(&env);
-        let buyer = Address::generate(&env);
-        let token = Address::generate(&env);
-        let order_id = 1u64;
-
-        // Create an order with Completed status
-        let order = create_mock_order(
-            &env,
-            &seller,
-            &token,
-            order_id,
-            OrderStatus::Completed,
-            env.ledger().timestamp() + 3600
-        );
-
-        env.as_contract(&contract_id, || {
-            env.storage().persistent().set(&DataKey::Order(order_id), &order);
-        });
-
-        env.mock_all_auths();
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::accept_order(env.clone(), order_id, buyer.clone())
-        });
-
-        assert_eq!(result, Err(Error::InvalidOrderStatus));
-    }
-
-    #[test]
-    fn test_accept_order_expired() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        let seller = Address::generate(&env);
-        let buyer = Address::generate(&env);
-        let token_admin = Address::generate(&env);
-        let token = create_token(&env, &token_admin, &seller, 1000);
-        let order_id = 1u64;
-
-        // Set timestamp to avoid overflow
-        env.ledger().set_timestamp(1000);
-
-        // Create an order that expires in the past
-        let expired_time = env.ledger().timestamp() - 1;
-        let order = create_mock_order(
-            &env,
-            &seller,
-            &token,
-            order_id,
-            OrderStatus::Open,
-            expired_time
-        );
-
-        env.as_contract(&contract_id, || {
-            env.storage().persistent().set(&DataKey::Order(order_id), &order);
-        });
-
-        env.mock_all_auths();
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::accept_order(env.clone(), order_id, buyer.clone())
-        });
-
-        assert_eq!(result, Err(Error::OrderExpired));
-    }
-
-    #[test]
-    fn test_accept_order_cannot_accept_own() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        let seller = Address::generate(&env);
-        let token = Address::generate(&env);
-        let order_id = 1u64;
-
-        // Create an open order
-        let order = create_mock_order(
-            &env,
-            &seller,
-            &token,
-            order_id,
-            OrderStatus::Open,
-            env.ledger().timestamp() + 3600
-        );
-
-        env.as_contract(&contract_id, || {
-            env.storage().persistent().set(&DataKey::Order(order_id), &order);
-        });
-
-        env.mock_all_auths();
-        // Seller tries to accept their own order
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::accept_order(env.clone(), order_id, seller.clone())
-        });
-
-        assert_eq!(result, Err(Error::CannotAcceptOwnOrder));
-    }
-
-    #[test]
-    fn test_accept_order_with_disputed_status() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        let seller = Address::generate(&env);
-        let buyer = Address::generate(&env);
-        let token = Address::generate(&env);
-        let order_id = 1u64;
-
-        // Create an order with Disputed status
-        let order = create_mock_order(
-            &env,
-            &seller,
-            &token,
-            order_id,
-            OrderStatus::Disputed,
-            env.ledger().timestamp() + 3600
-        );
-
-        env.as_contract(&contract_id, || {
-            env.storage().persistent().set(&DataKey::Order(order_id), &order);
-        });
-
-        env.mock_all_auths();
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::accept_order(env.clone(), order_id, buyer.clone())
-        });
-
-        assert_eq!(result, Err(Error::InvalidOrderStatus));
-    }
-
-    #[test]
-    fn test_accept_order_with_cancelled_status() {
-        let env = create_env();
-        let contract_id = env.register_contract(None, EscrowContract);
-        let (admin, treasury, resolver, _) = create_addresses(&env);
-
-        env.as_contract(&contract_id, || {
-            EscrowContract::initialize(
-                env.clone(),
-                admin.clone(),
-                50,
-                treasury.clone(),
-                resolver.clone()
-            ).unwrap();
-        });
-
-        let seller = Address::generate(&env);
-        let buyer = Address::generate(&env);
-        let token = Address::generate(&env);
-        let order_id = 1u64;
-
-        // Create an order with Cancelled status
-        let order = create_mock_order(
-            &env,
-            &seller,
-            &token,
-            order_id,
-            OrderStatus::Cancelled,
-            env.ledger().timestamp() + 3600
-        );
-
-        env.as_contract(&contract_id, || {
-            env.storage().persistent().set(&DataKey::Order(order_id), &order);
-        });
-
-        env.mock_all_auths();
-        let result = env.as_contract(&contract_id, || {
-            EscrowContract::accept_order(env.clone(), order_id, buyer.clone())
-        });
-
-        assert_eq!(result, Err(Error::InvalidOrderStatus));
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)
     }
 }

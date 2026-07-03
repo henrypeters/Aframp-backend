@@ -100,10 +100,7 @@ pub struct ErrorDetail {
 }
 
 /// Supported currency pairs
-const SUPPORTED_PAIRS: &[(&str, &str)] = &[
-    ("USD", "NGN"),
-    ("NGN", "USD"),
-];
+const SUPPORTED_PAIRS: &[(&str, &str)] = &[("USD", "NGN"), ("NGN", "USD")];
 
 /// Get supported currencies from pairs
 fn get_supported_currencies() -> Vec<String> {
@@ -133,9 +130,7 @@ fn is_currency_supported(currency: &str) -> bool {
 
 /// Check if pair is supported
 fn is_pair_supported(from: &str, to: &str) -> bool {
-    SUPPORTED_PAIRS
-        .iter()
-        .any(|(f, t)| f == &from && t == &to)
+    SUPPORTED_PAIRS.iter().any(|(f, t)| f == &from && t == &to)
 }
 
 fn fixed_peg_rate(from: &str, to: &str) -> Option<BigDecimal> {
@@ -162,7 +157,7 @@ fn generate_cache_key(params: &RatesQuery) -> String {
 fn generate_etag(data: &str, timestamp: &DateTime<Utc>) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let mut hasher = DefaultHasher::new();
     data.hash(&mut hasher);
     timestamp.timestamp().hash(&mut hasher);
@@ -179,7 +174,7 @@ pub async fn get_rates(
 
     // Generate cache key
     let cache_key = generate_cache_key(&params);
-    
+
     // Check cache first
     if let Some(ref cache) = state.cache {
         // Try single rate response
@@ -188,7 +183,7 @@ pub async fn get_rates(
             debug!("Cache hit for {}", cache_key);
             return build_cached_response(cached, &headers);
         }
-        
+
         // Try all rates response
         let cached_result: Result<Option<AllRatesResponse>, _> = cache.get(&cache_key).await;
         if let Ok(Some(cached)) = cached_result {
@@ -199,20 +194,14 @@ pub async fn get_rates(
 
     // Cache miss - fetch from service
     debug!("Cache miss for {}", cache_key);
-    
+
     match (&params.from, &params.to, &params.pairs) {
         // Single pair query: ?from=NGN&to=cNGN
-        (Some(from), Some(to), _) => {
-            handle_single_pair(&state, &cache_key, from, to).await
-        }
+        (Some(from), Some(to), _) => handle_single_pair(&state, &cache_key, from, to).await,
         // Multiple pairs query: ?pairs=NGN/cNGN,USD/NGN
-        (_, _, Some(pairs_str)) => {
-            handle_multiple_pairs(&state, pairs_str).await
-        }
+        (_, _, Some(pairs_str)) => handle_multiple_pairs(&state, pairs_str).await,
         // All pairs query: no parameters
-        (None, None, None) => {
-            handle_all_pairs(&state, &cache_key).await
-        }
+        (None, None, None) => handle_all_pairs(&state, &cache_key).await,
         // Invalid: only from or only to
         _ => {
             warn!("Invalid query parameters: {:?}", params);
@@ -246,7 +235,7 @@ async fn handle_single_pair(
             None,
         ));
     }
-    
+
     if !is_currency_supported(to) {
         return Err(build_error_response(
             StatusCode::BAD_REQUEST,
@@ -257,7 +246,7 @@ async fn handle_single_pair(
             None,
         ));
     }
-    
+
     // Validate pair
     if !is_pair_supported(from, to) {
         return Err(build_error_response(
@@ -330,7 +319,12 @@ async fn handle_single_pair(
     headers.insert(header::ETAG, etag.parse().unwrap());
     headers.insert(
         header::LAST_MODIFIED,
-        response.last_updated.format("%a, %d %b %Y %H:%M:%S GMT").to_string().parse().unwrap(),
+        response
+            .last_updated
+            .format("%a, %d %b %Y %H:%M:%S GMT")
+            .to_string()
+            .parse()
+            .unwrap(),
     );
     add_cors_headers(&mut headers);
 
@@ -338,10 +332,7 @@ async fn handle_single_pair(
 }
 
 /// Handle multiple pairs query
-async fn handle_multiple_pairs(
-    state: &RatesState,
-    pairs_str: &str,
-) -> Result<Response, Response> {
+async fn handle_multiple_pairs(state: &RatesState, pairs_str: &str) -> Result<Response, Response> {
     let pairs: Vec<&str> = pairs_str.split(',').map(|s| s.trim()).collect();
     let mut rates = Vec::new();
 
@@ -351,7 +342,10 @@ async fn handle_multiple_pairs(
             return Err(build_error_response(
                 StatusCode::BAD_REQUEST,
                 "INVALID_PAIR_FORMAT",
-                &format!("Invalid pair format: {}. Expected format: FROM/TO", pair_str),
+                &format!(
+                    "Invalid pair format: {}. Expected format: FROM/TO",
+                    pair_str
+                ),
                 None,
                 None,
                 None,
@@ -420,10 +414,7 @@ async fn handle_multiple_pairs(
 }
 
 /// Handle all pairs query
-async fn handle_all_pairs(
-    state: &RatesState,
-    cache_key: &str,
-) -> Result<Response, Response> {
+async fn handle_all_pairs(state: &RatesState, cache_key: &str) -> Result<Response, Response> {
     let mut rates_map = HashMap::new();
 
     for (from, to) in SUPPORTED_PAIRS {
@@ -504,7 +495,7 @@ fn build_cached_response(
     request_headers: &HeaderMap,
 ) -> Result<Response, Response> {
     let etag = generate_etag(&cached.rate, &cached.timestamp);
-    
+
     // Check If-None-Match header
     if let Some(if_none_match) = request_headers.get(header::IF_NONE_MATCH) {
         if let Ok(client_etag) = if_none_match.to_str() {
@@ -525,7 +516,12 @@ fn build_cached_response(
     headers.insert(header::ETAG, etag.parse().unwrap());
     headers.insert(
         header::LAST_MODIFIED,
-        cached.last_updated.format("%a, %d %b %Y %H:%M:%S GMT").to_string().parse().unwrap(),
+        cached
+            .last_updated
+            .format("%a, %d %b %Y %H:%M:%S GMT")
+            .to_string()
+            .parse()
+            .unwrap(),
     );
     add_cors_headers(&mut headers);
 
@@ -538,7 +534,7 @@ fn build_all_rates_cached_response(
     request_headers: &HeaderMap,
 ) -> Result<Response, Response> {
     let etag = generate_etag(&format!("{:?}", cached.rates), &cached.timestamp);
-    
+
     // Check If-None-Match header
     if let Some(if_none_match) = request_headers.get(header::IF_NONE_MATCH) {
         if let Ok(client_etag) = if_none_match.to_str() {
@@ -590,10 +586,7 @@ fn build_error_response(
 
 /// Add CORS headers for public API
 fn add_cors_headers(headers: &mut HeaderMap) {
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_ORIGIN,
-        "*".parse().unwrap(),
-    );
+    headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_METHODS,
         "GET, OPTIONS".parse().unwrap(),
@@ -602,10 +595,7 @@ fn add_cors_headers(headers: &mut HeaderMap) {
         header::ACCESS_CONTROL_ALLOW_HEADERS,
         "Content-Type".parse().unwrap(),
     );
-    headers.insert(
-        header::ACCESS_CONTROL_MAX_AGE,
-        "86400".parse().unwrap(),
-    );
+    headers.insert(header::ACCESS_CONTROL_MAX_AGE, "86400".parse().unwrap());
 }
 
 /// Handle OPTIONS preflight requests

@@ -26,5 +26,5 @@ CREATE INDEX IF NOT EXISTS idx_ha_replica_health_shard_time
 
 -- Seed initial shard 0 (single-node bootstrap; override via env / Patroni)
 INSERT INTO ha_shards (shard_id, primary_url, replica_urls)
-VALUES (0, current_setting('app.primary_url', true), '{}')
+VALUES (0, COALESCE(current_setting('app.primary_url', true), 'postgresql:///aframp_dev'), '{}')
 ON CONFLICT (shard_id) DO NOTHING;

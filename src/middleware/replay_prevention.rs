@@ -32,8 +32,8 @@ use serde::Serialize;
 use std::sync::Arc;
 use tracing::{error, info, warn};
 
-use crate::cache::RedisPool;
 use crate::cache::keys::replay::NonceKey;
+use crate::cache::RedisPool;
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -152,9 +152,7 @@ fn security_401(code: &str, message: &str) -> Response {
 // ---------------------------------------------------------------------------
 
 fn extract_header<'a>(req: &'a Request<Body>, name: &str) -> Option<&'a str> {
-    req.headers()
-        .get(name)
-        .and_then(|v| v.to_str().ok())
+    req.headers().get(name).and_then(|v| v.to_str().ok())
 }
 
 // ---------------------------------------------------------------------------
@@ -255,10 +253,7 @@ pub async fn replay_prevention_middleware(
         Some(v) => v.to_string(),
         None => {
             warn!(endpoint = %endpoint, "Missing X-Aframp-Timestamp header");
-            return security_401(
-                "MISSING_TIMESTAMP",
-                "X-Aframp-Timestamp header is required",
-            );
+            return security_401("MISSING_TIMESTAMP", "X-Aframp-Timestamp header is required");
         }
     };
 
@@ -348,7 +343,8 @@ pub async fn replay_prevention_middleware(
             // Nonce already seen — replay detected
             let attempt_count = crate::metrics::security::replay_attempts_total()
                 .with_label_values(&[&consumer_id, &endpoint])
-                .get() as u64 + 1;
+                .get() as u64
+                + 1;
 
             warn!(
                 consumer_id = %consumer_id,

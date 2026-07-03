@@ -64,16 +64,16 @@ use Bitmesh_backend::audit::models::{AuditActorType, AuditEventCategory, AuditOu
 use Bitmesh_backend::audit::repository::AuditLogRepository;
 use std::sync::Arc;
 
-async fn setup_test_db() -> PgPool {
+async fn setup_test_db() -> anyhow::Result<PgPool> {
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@localhost/aframp_test".to_string());
     
     PgPool::connect(&database_url)
         .await
-        .expect("Failed to connect to test database")
+        .map_err(|e| anyhow::anyhow!("Failed to connect to test database: {}", e))
 }
 
-async fn seed_audit_logs(pool: &PgPool, consumer_id: &str, count: i32, success_rate: f64) {
+async fn seed_audit_logs(pool: &PgPool, consumer_id: &str, count: i32, success_rate: f64) -> anyhow::Result<()> {
     let audit_repo = AuditLogRepository::new(pool.clone());
     
     for i in 0..count {
@@ -111,17 +111,18 @@ async fn seed_audit_logs(pool: &PgPool, consumer_id: &str, count: i32, success_r
             created_at: Utc::now() - Duration::hours(i as i64),
         };
 
-        audit_repo.insert(&entry).await.expect("Failed to insert audit log");
+        audit_repo.insert(&entry).await.map_err(|e| anyhow::anyhow!("Failed to insert audit log: {}", e))?;
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_snapshot_generation() {
-    let pool = setup_test_db().await;
+async fn test_snapshot_generation() -> anyhow::Result<()> {
+    let pool = setup_test_db().await?;
     let consumer_id = "test_consumer_1";
     
     // Seed audit logs
-    seed_audit_logs(&pool, consumer_id, 100, 0.95).await;
+    seed_audit_logs(&pool, consumer_id, 100, 0.95).await?;
     
     let repo = Arc::new(AnalyticsRepository::new(pool.clone()));
     let generator = SnapshotGenerator::new(Arc::new(pool.clone()), repo.clone());
@@ -132,7 +133,7 @@ async fn test_snapshot_generation() {
     let result = generator
         .generate_snapshots(SnapshotPeriod::Daily, period_start, period_end)
         .await
-        .expect("Snapshot generation failed");
+        .map_err(|e| anyhow::anyhow!("Snapshot generation failed: {}", e))?;
     
     assert!(result.snapshots_created > 0);
     assert_eq!(result.status, "success");
@@ -141,20 +142,21 @@ async fn test_snapshot_generation() {
     let snapshots = repo
         .get_consumer_snapshots(consumer_id, SnapshotPeriod::Daily, 1)
         .await
-        .expect("Failed to fetch snapshots");
+        .map_err(|e| anyhow::anyhow!("Failed to fetch snapshots: {}", e))?;
     
     assert_eq!(snapshots.len(), 1);
     assert_eq!(snapshots[0].consumer_id, consumer_id);
     assert!(snapshots[0].total_requests > 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_health_score_calculation() {
-    let pool = setup_test_db().await;
+async fn test_health_score_calculation() -> anyhow::Result<()> {
+    let pool = setup_test_db().await?;
     let consumer_id = "test_consumer_2";
     
     // Seed audit logs with high error rate
-    seed_audit_logs(&pool, consumer_id, 100, 0.70).await;
+    seed_audit_logs(&pool, consumer_id, 100, 0.70).await?;
     
     let repo = Arc::new(AnalyticsRepository::new(pool.clone()));
     let calculator = HealthScoreCalculator::new(Arc::new(pool.clone()), repo.clone());
@@ -162,21 +164,22 @@ async fn test_health_score_calculation() {
     let score = calculator
         .calculate_health_score(consumer_id)
         .await
-        .expect("Health score calculation failed");
+        .map_err(|e| anyhow::anyhow!("Health score calculation failed: {}", e))?;
     
     assert!(score.health_score < 100);
     assert!(score.error_rate_score < 100);
     assert_eq!(score.consumer_id, consumer_id);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_anomaly_detection_volume_drop() {
-    let pool = setup_test_db().await;
+async fn test_anomaly_detection_volume_drop() -> anyhow::Result<()> {
+    let pool = setup_test_db().await?;
     let consumer_id = "test_consumer_3";
     
     // Seed historical high volume
     for i in 0..7 {
-        seed_audit_logs(&pool, consumer_id, 100, 0.95).await;
+        seed_audit_logs(&pool, consumer_id, 100, 0.95).await?;
     }
     
     // Current period: very low volume (simulated by not seeding recent data)
@@ -191,7 +194,7 @@ async fn test_anomaly_detection_volume_drop() {
     let anomalies = detector
         .detect_anomalies()
         .await
-        .expect("Anomaly detection failed");
+        .map_err(|e| anyhow::anyhow!("Anomaly detection failed: {}", e))?;
     
     // Should detect volume drop
     let volume_drops: Vec<_> = anomalies
@@ -200,14 +203,15 @@ async fn test_anomaly_detection_volume_drop() {
         .collect();
     
     assert!(!volume_drops.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_incremental_snapshot_computation() {
-    let pool = setup_test_db().await;
+async fn test_incremental_snapshot_computation() -> anyhow::Result<()> {
+    let pool = setup_test_db().await?;
     let consumer_id = "test_consumer_4";
     
-    seed_audit_logs(&pool, consumer_id, 50, 0.95).await;
+    seed_audit_logs(&pool, consumer_id, 50, 0.95).await?;
     
     let repo = Arc::new(AnalyticsRepository::new(pool.clone()));
     let generator = SnapshotGenerator::new(Arc::new(pool.clone()), repo.clone());
@@ -219,16 +223,16 @@ async fn test_incremental_snapshot_computation() {
     let result1 = generator
         .generate_snapshots(SnapshotPeriod::Hourly, period_start, period_end)
         .await
-        .expect("First snapshot generation failed");
+        .map_err(|e| anyhow::anyhow!("First snapshot generation failed: {}", e))?;
     
     // Add more audit logs
-    seed_audit_logs(&pool, consumer_id, 25, 0.90).await;
+    seed_audit_logs(&pool, consumer_id, 25, 0.90).await?;
     
     // Second generation (should update existing snapshot)
     let result2 = generator
         .generate_snapshots(SnapshotPeriod::Hourly, period_start, period_end)
         .await
-        .expect("Second snapshot generation failed");
+        .map_err(|e| anyhow::anyhow!("Second snapshot generation failed: {}", e))?;
     
     assert_eq!(result1.status, "success");
     assert_eq!(result2.status, "success");
@@ -237,7 +241,7 @@ async fn test_incremental_snapshot_computation() {
     let snapshots = repo
         .get_consumer_snapshots(consumer_id, SnapshotPeriod::Hourly, 10)
         .await
-        .expect("Failed to fetch snapshots");
+        .map_err(|e| anyhow::anyhow!("Failed to fetch snapshots: {}", e))?;
     
     // Should have only one snapshot for this period due to UPSERT
     let matching_snapshots: Vec<_> = snapshots
@@ -246,11 +250,12 @@ async fn test_incremental_snapshot_computation() {
         .collect();
     
     assert_eq!(matching_snapshots.len(), 1);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_health_score_trend_detection() {
-    let pool = setup_test_db().await;
+async fn test_health_score_trend_detection() -> anyhow::Result<()> {
+    let pool = setup_test_db().await?;
     let consumer_id = "test_consumer_5";
     
     let repo = Arc::new(AnalyticsRepository::new(pool.clone()));
@@ -258,21 +263,21 @@ async fn test_health_score_trend_detection() {
     
     // Generate multiple health scores over time
     for day in (0..7).rev() {
-        seed_audit_logs(&pool, consumer_id, 50, 0.95 - (day as f64 * 0.02)).await;
+        seed_audit_logs(&pool, consumer_id, 50, 0.95 - (day as f64 * 0.02)).await?;
         
         let _score = calculator
             .calculate_health_score(consumer_id)
             .await
-            .expect("Health score calculation failed");
+            .map_err(|e| anyhow::anyhow!("Health score calculation failed: {}", e))?;
     }
     
     // Latest score should show declining trend
     let latest_score = repo
         .get_latest_health_score(consumer_id)
         .await
-        .expect("Failed to fetch health score")
-        .expect("No health score found");
+        .map_err(|e| anyhow::anyhow!("Failed to fetch health score: {}", e))?
+        .ok_or_else(|| anyhow::anyhow!("No health score found"))?;
     
     assert_eq!(latest_score.health_trend, HealthTrend::Declining);
-
+    Ok(())
 }

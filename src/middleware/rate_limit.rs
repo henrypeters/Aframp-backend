@@ -1,3 +1,4 @@
+use crate::cache::RedisCache;
 use axum::{
     extract::{ConnectInfo, State},
     http::{HeaderValue, Request, StatusCode},
@@ -5,14 +6,13 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs::File, net::SocketAddr, sync::Arc};
-use uuid::Uuid;
 use chrono::Utc;
-use tracing::{error, warn, info};
-use crate::cache::RedisCache;
-use serde_json::json;
 use jsonwebtoken::{decode, DecodingKey, Validation};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::{collections::HashMap, fs::File, net::SocketAddr, sync::Arc};
+use tracing::{error, info, warn};
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct LimitConfig {
@@ -68,11 +68,13 @@ pub async fn rate_limit_middleware(
     if path.starts_with("/health") {
         return Ok(next.run(req).await);
     }
-    
+
     // Check admin bypass via header
     if let Some(auth_header) = req.headers().get("authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str == "Bearer admin-bypass-token" || req.headers().get("x-admin-token").is_some() {
+            if auth_str == "Bearer admin-bypass-token"
+                || req.headers().get("x-admin-token").is_some()
+            {
                 info!("Admin bypass triggered for rate limit on path: {}", path);
                 return Ok(next.run(req).await);
             }
@@ -83,7 +85,8 @@ pub async fn rate_limit_middleware(
     let mut wallet_address = None;
 
     // 2. Extract Wallet from JWT if available
-    let secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-development-secret-key-change-in-prod!".to_string());
+    let secret = std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "default-development-secret-key-change-in-prod!".to_string());
     if let Some(auth_header) = req.headers().get("authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
             if auth_str.starts_with("Bearer ") {
@@ -92,16 +95,22 @@ pub async fn rate_limit_middleware(
                 let mut validation = Validation::default();
                 validation.validate_exp = true;
                 validation.insecure_disable_signature_validation(); // Just decode safely for limits or properly validate if preferred, but verification is better. The actual auth middleware does strict verification. We'll just softly decode for identity.
-                
+
                 // Decode token securely
-                if let Ok(token_data) = decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &Validation::default()) {
+                if let Ok(token_data) = decode::<Claims>(
+                    token,
+                    &DecodingKey::from_secret(secret.as_bytes()),
+                    &Validation::default(),
+                ) {
                     wallet_address = Some(token_data.claims.sub);
                 }
             }
         }
     }
 
-    let ip = req.headers().get("x-forwarded-for")
+    let ip = req
+        .headers()
+        .get("x-forwarded-for")
         .and_then(|h| h.to_str().ok())
         .map(|s| s.split(',').next().unwrap_or("").trim().to_string())
         .unwrap_or_else(|| addr.ip().to_string());
@@ -113,7 +122,7 @@ pub async fn rate_limit_middleware(
             // Fallback to IP if no wallet limit exists
             (format!("rate_limit:ip:{}:{}", ip, path), il)
         } else {
-            return Ok(next.run(req).await); 
+            return Ok(next.run(req).await);
         }
     } else {
         if let Some(il) = limits.per_ip {
@@ -142,9 +151,14 @@ pub async fn rate_limit_middleware(
     // ZCOUNT key -inf +inf
     let (removed, count): (i64, i64) = match redis::pipe()
         .atomic()
-        .cmd("ZREMRANGEBYSCORE").arg(&redis_key).arg("-inf").arg(window_start_ms)
-        .cmd("ZCARD").arg(&redis_key)
-        .query_async(&mut *conn).await 
+        .cmd("ZREMRANGEBYSCORE")
+        .arg(&redis_key)
+        .arg("-inf")
+        .arg(window_start_ms)
+        .cmd("ZCARD")
+        .arg(&redis_key)
+        .query_async(&mut *conn)
+        .await
     {
         Ok(res) => res,
         Err(e) => {
@@ -182,11 +196,24 @@ pub async fn rate_limit_middleware(
         });
 
         let mut res = (StatusCode::TOO_MANY_REQUESTS, Json(response_body)).into_response();
-        res.headers_mut().insert("X-RateLimit-Limit", HeaderValue::from_str(&limit_conf.limit.to_string()).unwrap());
-        res.headers_mut().insert("X-RateLimit-Remaining", HeaderValue::from_static("0"));
-        res.headers_mut().insert("X-RateLimit-Reset", HeaderValue::from_str(&reset_at.to_string()).unwrap());
-        res.headers_mut().insert("X-RateLimit-Used", HeaderValue::from_str(&count.to_string()).unwrap());
-        res.headers_mut().insert("Retry-After", HeaderValue::from_str(&retry_after.to_string()).unwrap());
+        res.headers_mut().insert(
+            "X-RateLimit-Limit",
+            HeaderValue::from_str(&limit_conf.limit.to_string()).unwrap(),
+        );
+        res.headers_mut()
+            .insert("X-RateLimit-Remaining", HeaderValue::from_static("0"));
+        res.headers_mut().insert(
+            "X-RateLimit-Reset",
+            HeaderValue::from_str(&reset_at.to_string()).unwrap(),
+        );
+        res.headers_mut().insert(
+            "X-RateLimit-Used",
+            HeaderValue::from_str(&count.to_string()).unwrap(),
+        );
+        res.headers_mut().insert(
+            "Retry-After",
+            HeaderValue::from_str(&retry_after.to_string()).unwrap(),
+        );
 
         return Err(res);
     }
@@ -194,22 +221,43 @@ pub async fn rate_limit_middleware(
     // Allow path: Add current request
     let _: () = match redis::pipe()
         .atomic()
-        .cmd("ZADD").arg(&redis_key).arg(now_ms).arg(&req_id)
-        .cmd("EXPIRE").arg(&redis_key).arg(limit_conf.window)
-        .query_async::<()>(&mut *conn).await
+        .cmd("ZADD")
+        .arg(&redis_key)
+        .arg(now_ms)
+        .arg(&req_id)
+        .cmd("EXPIRE")
+        .arg(&redis_key)
+        .arg(limit_conf.window)
+        .query_async::<()>(&mut *conn)
+        .await
     {
         Ok(_) => (),
-        Err(e) => error!("Failed to add to sorted set for rate_limit_middleware: {}", e),
+        Err(e) => error!(
+            "Failed to add to sorted set for rate_limit_middleware: {}",
+            e
+        ),
     };
 
     // Forward the request to the next logical layer
     let mut res = next.run(req).await.into_response();
 
     // Inject successful Rate Limit headers
-    res.headers_mut().insert("X-RateLimit-Limit", HeaderValue::from_str(&limit_conf.limit.to_string()).unwrap());
-    res.headers_mut().insert("X-RateLimit-Remaining", HeaderValue::from_str(&(remaining - 1).max(0).to_string()).unwrap());
-    res.headers_mut().insert("X-RateLimit-Reset", HeaderValue::from_str(&reset_at.to_string()).unwrap());
-    res.headers_mut().insert("X-RateLimit-Used", HeaderValue::from_str(&(count + 1).to_string()).unwrap());
+    res.headers_mut().insert(
+        "X-RateLimit-Limit",
+        HeaderValue::from_str(&limit_conf.limit.to_string()).unwrap(),
+    );
+    res.headers_mut().insert(
+        "X-RateLimit-Remaining",
+        HeaderValue::from_str(&(remaining - 1).max(0).to_string()).unwrap(),
+    );
+    res.headers_mut().insert(
+        "X-RateLimit-Reset",
+        HeaderValue::from_str(&reset_at.to_string()).unwrap(),
+    );
+    res.headers_mut().insert(
+        "X-RateLimit-Used",
+        HeaderValue::from_str(&(count + 1).to_string()).unwrap(),
+    );
 
     Ok(res)
 }

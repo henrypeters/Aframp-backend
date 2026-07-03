@@ -3,7 +3,9 @@
 //! Implements suspicious IP detection signals and automated blocking logic.
 
 use crate::cache::RedisCache;
-use crate::database::ip_reputation_repository::{IpEvidenceEntity, IpReputationEntity, IpReputationRepository};
+use crate::database::ip_reputation_repository::{
+    IpEvidenceEntity, IpReputationEntity, IpReputationRepository,
+};
 use crate::database::Repository;
 use crate::error::AppError;
 use chrono::{DateTime, Duration, Utc};
@@ -63,20 +65,44 @@ impl Default for IpDetectionConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DetectionSignal {
-    AuthFailureRate { count: u32, threshold: u32 },
-    SignatureVerificationFailure { count: u32, threshold: u32 },
-    RateLimitBreach { count: u32, threshold: u32 },
-    ImpossibleTravel { previous_location: String, current_location: String, hours_diff: i64 },
-    NewIpHighValueTransaction { amount: rust_decimal::Decimal, threshold: rust_decimal::Decimal },
-    ScanningPattern { endpoints: u32, threshold: u32 },
-    ExternalThreatFeed { score: rust_decimal::Decimal, feed_name: String },
+    AuthFailureRate {
+        count: u32,
+        threshold: u32,
+    },
+    SignatureVerificationFailure {
+        count: u32,
+        threshold: u32,
+    },
+    RateLimitBreach {
+        count: u32,
+        threshold: u32,
+    },
+    ImpossibleTravel {
+        previous_location: String,
+        current_location: String,
+        hours_diff: i64,
+    },
+    NewIpHighValueTransaction {
+        amount: rust_decimal::Decimal,
+        threshold: rust_decimal::Decimal,
+    },
+    ScanningPattern {
+        endpoints: u32,
+        threshold: u32,
+    },
+    ExternalThreatFeed {
+        score: rust_decimal::Decimal,
+        feed_name: String,
+    },
 }
 
 impl DetectionSignal {
     pub fn risk_score(&self) -> rust_decimal::Decimal {
         match self {
             DetectionSignal::AuthFailureRate { .. } => rust_decimal::Decimal::new(-50, 2),
-            DetectionSignal::SignatureVerificationFailure { .. } => rust_decimal::Decimal::new(-75, 2),
+            DetectionSignal::SignatureVerificationFailure { .. } => {
+                rust_decimal::Decimal::new(-75, 2)
+            }
             DetectionSignal::RateLimitBreach { .. } => rust_decimal::Decimal::new(-30, 2),
             DetectionSignal::ImpossibleTravel { .. } => rust_decimal::Decimal::new(-100, 2),
             DetectionSignal::NewIpHighValueTransaction { .. } => rust_decimal::Decimal::new(-40, 2),
@@ -88,7 +114,9 @@ impl DetectionSignal {
     pub fn evidence_type(&self) -> &'static str {
         match self {
             DetectionSignal::AuthFailureRate { .. } => "auth_failure_rate",
-            DetectionSignal::SignatureVerificationFailure { .. } => "signature_verification_failure",
+            DetectionSignal::SignatureVerificationFailure { .. } => {
+                "signature_verification_failure"
+            }
             DetectionSignal::RateLimitBreach { .. } => "rate_limit_breach",
             DetectionSignal::ImpossibleTravel { .. } => "impossible_travel",
             DetectionSignal::NewIpHighValueTransaction { .. } => "new_ip_high_value_transaction",
@@ -108,7 +136,11 @@ impl DetectionSignal {
             DetectionSignal::RateLimitBreach { count, threshold } => {
                 json!({ "count": count, "threshold": threshold })
             }
-            DetectionSignal::ImpossibleTravel { previous_location, current_location, hours_diff } => {
+            DetectionSignal::ImpossibleTravel {
+                previous_location,
+                current_location,
+                hours_diff,
+            } => {
                 json!({
                     "previous_location": previous_location,
                     "current_location": current_location,
@@ -118,7 +150,10 @@ impl DetectionSignal {
             DetectionSignal::NewIpHighValueTransaction { amount, threshold } => {
                 json!({ "amount": amount.to_string(), "threshold": threshold.to_string() })
             }
-            DetectionSignal::ScanningPattern { endpoints, threshold } => {
+            DetectionSignal::ScanningPattern {
+                endpoints,
+                threshold,
+            } => {
                 json!({ "endpoints": endpoints, "threshold": threshold })
             }
             DetectionSignal::ExternalThreatFeed { score, feed_name } => {
@@ -152,7 +187,11 @@ impl IpDetectionService {
     }
 
     /// Check IP against all detection signals
-    pub async fn check_ip(&self, ip: &str, consumer_id: Option<&str>) -> Result<Vec<DetectionSignal>, AppError> {
+    pub async fn check_ip(
+        &self,
+        ip: &str,
+        consumer_id: Option<&str>,
+    ) -> Result<Vec<DetectionSignal>, AppError> {
         let mut signals = Vec::new();
 
         // Check authentication failure rate
@@ -227,12 +266,14 @@ impl IpDetectionService {
         let reputation = self.repo.get_or_create_reputation(ip, "internal").await?;
 
         // Add evidence record
-        self.repo.add_evidence(
-            ip,
-            signal.evidence_type(),
-            signal.to_evidence_detail(),
-            consumer_id,
-        ).await?;
+        self.repo
+            .add_evidence(
+                ip,
+                signal.evidence_type(),
+                signal.to_evidence_detail(),
+                consumer_id,
+            )
+            .await?;
 
         // Update reputation score
         let new_score = reputation.reputation_score + signal.risk_score();
@@ -240,7 +281,8 @@ impl IpDetectionService {
 
         // Check if auto-blocking threshold is reached
         if new_score <= self.config.composite_risk_threshold && !reputation.is_whitelisted {
-            self.apply_automated_block(ip, &reputation, new_score).await?;
+            self.apply_automated_block(ip, &reputation, new_score)
+                .await?;
         }
 
         Ok(())
@@ -255,10 +297,16 @@ impl IpDetectionService {
     ) -> Result<(), AppError> {
         let (block_type, expiry) = if score <= rust_decimal::Decimal::new(-800, 2) {
             // Severe violations - longer block
-            ("temporary", Some(Utc::now() + Duration::hours(self.config.severe_block_duration_hours)))
+            (
+                "temporary",
+                Some(Utc::now() + Duration::hours(self.config.severe_block_duration_hours)),
+            )
         } else {
             // Standard violations - shorter block
-            ("temporary", Some(Utc::now() + Duration::minutes(self.config.temporary_block_duration_mins)))
+            (
+                "temporary",
+                Some(Utc::now() + Duration::minutes(self.config.temporary_block_duration_mins)),
+            )
         };
 
         self.repo.apply_block(ip, block_type, expiry).await?;
@@ -285,19 +333,29 @@ impl IpDetectionService {
     }
 
     /// Check signature verification failure rate
-    async fn check_signature_failure_rate(&self, ip: &str) -> Result<Option<DetectionSignal>, AppError> {
+    async fn check_signature_failure_rate(
+        &self,
+        ip: &str,
+    ) -> Result<Option<DetectionSignal>, AppError> {
         // This would query Redis for signature verification failures
         Ok(None)
     }
 
     /// Check rate limit breach frequency
-    async fn check_rate_limit_breaches(&self, ip: &str) -> Result<Option<DetectionSignal>, AppError> {
+    async fn check_rate_limit_breaches(
+        &self,
+        ip: &str,
+    ) -> Result<Option<DetectionSignal>, AppError> {
         // This would query Redis for rate limit breach counters
         Ok(None)
     }
 
     /// Check for impossible travel patterns
-    async fn check_impossible_travel(&self, _ip: &str, _consumer_id: &str) -> Result<Option<DetectionSignal>, AppError> {
+    async fn check_impossible_travel(
+        &self,
+        _ip: &str,
+        _consumer_id: &str,
+    ) -> Result<Option<DetectionSignal>, AppError> {
         // This would require geolocation data and consumer location history
         // Implementation depends on existing user location tracking
         Ok(None)
@@ -343,7 +401,9 @@ impl IpDetectionService {
 
         // Add all blocked IPs
         for ip_record in blocked_ips {
-            self.cache.set_add(key, &ip_record.ip_address_or_cidr).await?;
+            self.cache
+                .set_add(key, &ip_record.ip_address_or_cidr)
+                .await?;
         }
 
         info!(count = blocked_ips.len(), "Bootstrapped blocked IPs cache");
@@ -358,7 +418,10 @@ impl IpDetectionService {
     }
 
     /// Get IP reputation with caching
-    pub async fn get_ip_reputation(&self, ip: &str) -> Result<Option<IpReputationEntity>, AppError> {
+    pub async fn get_ip_reputation(
+        &self,
+        ip: &str,
+    ) -> Result<Option<IpReputationEntity>, AppError> {
         self.repo.get_reputation(ip).await.map_err(Into::into)
     }
 

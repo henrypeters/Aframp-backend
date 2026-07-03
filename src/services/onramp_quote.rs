@@ -6,9 +6,9 @@
 use crate::cache::cache::Cache;
 use crate::cache::keys::onramp::QuoteKey;
 use crate::cache::RedisCache;
-use crate::chains::stellar::client::StellarClient;
-use crate::chains::stellar::trustline::CngnTrustlineManager;
-use crate::chains::stellar::types::{extract_cngn_balance, is_valid_stellar_address};
+// REMOVED: use crate::chains::stellar::client::StellarClient;
+// REMOVED: use crate::chains::stellar::trustline::CngnTrustlineManager;
+// REMOVED: use crate::chains::stellar::types::{extract_cngn_balance, is_valid_stellar_address};
 use crate::error::{AppError, AppErrorKind, DomainError, ValidationError};
 use crate::services::exchange_rate::{ConversionDirection, ConversionRequest, ExchangeRateService};
 use crate::services::fee_structure::{FeeCalculationInput, FeeStructureService};
@@ -16,7 +16,7 @@ use bigdecimal::{BigDecimal, Zero};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 use tracing::{debug, info};
 use uuid::Uuid;
@@ -125,8 +125,12 @@ fn derive_quote_amounts(
     Ok((amount_ngn_after_fees, amount_cngn))
 }
 
+/// Platform takes 20 % of the fallback onramp fee; provider receives the remaining 80 %.
+static PLATFORM_FEE_RATIO: LazyLock<BigDecimal> =
+    LazyLock::new(|| BigDecimal::from_str("0.2").expect("0.2 is a valid decimal literal"));
+
 fn split_fallback_onramp_fee(total_fee: &BigDecimal) -> (BigDecimal, BigDecimal) {
-    let platform_fee = total_fee * BigDecimal::from_str("0.2").unwrap();
+    let platform_fee = total_fee * &*PLATFORM_FEE_RATIO;
     let provider_fee = total_fee - &platform_fee;
     (platform_fee, provider_fee)
 }

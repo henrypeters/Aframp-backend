@@ -49,7 +49,10 @@ mod tests {
 
         assert!(headers.get("x-consumer-id").is_none());
         assert!(headers.get("x-service-name").is_none());
-        assert!(headers.get("authorization").is_some(), "auth header must be preserved");
+        assert!(
+            headers.get("authorization").is_some(),
+            "auth header must be preserved"
+        );
     }
 
     #[test]

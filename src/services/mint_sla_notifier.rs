@@ -51,13 +51,10 @@ impl MintSlaNotifier {
              Please log in and approve or reject this request before the 24-hour deadline."
         );
 
-        self.dispatch_slack(slack_msg, "SLACK_MINT_OPS_WEBHOOK_URL").await;
-        self.dispatch_email(
-            &email_subject,
-            &email_body,
-            "MINT_TIER1_APPROVER_EMAIL",
-        )
-        .await;
+        self.dispatch_slack(slack_msg, "SLACK_MINT_OPS_WEBHOOK_URL")
+            .await;
+        self.dispatch_email(&email_subject, &email_body, "MINT_TIER1_APPROVER_EMAIL")
+            .await;
 
         info!(mint_request_id = %id, elapsed_hours, "SLA warning notifications dispatched");
     }
@@ -100,14 +97,17 @@ impl MintSlaNotifier {
              Auto-expiration will occur at 24 hours if no action is taken."
         );
 
-        self.dispatch_slack(slack_msg, "SLACK_MINT_OPS_WEBHOOK_URL").await;
+        self.dispatch_slack(slack_msg, "SLACK_MINT_OPS_WEBHOOK_URL")
+            .await;
         self.dispatch_slack(
             serde_json::json!({ "text": format!("🚨 Escalation: Mint {id} needs Tier-2 review") }),
             "SLACK_TREASURY_WEBHOOK_URL",
         )
         .await;
-        self.dispatch_email(&email_subject, &email_body, "MINT_TIER2_MANAGER_EMAIL").await;
-        self.dispatch_email(&email_subject, &email_body, "MINT_DEPT_LEAD_EMAIL").await;
+        self.dispatch_email(&email_subject, &email_body, "MINT_TIER2_MANAGER_EMAIL")
+            .await;
+        self.dispatch_email(&email_subject, &email_body, "MINT_DEPT_LEAD_EMAIL")
+            .await;
 
         warn!(mint_request_id = %id, elapsed_hours, escalated_to = manager, "SLA escalation notifications dispatched");
     }
@@ -139,11 +139,16 @@ impl MintSlaNotifier {
              A fresh submission is required."
         );
 
-        self.dispatch_slack(slack_msg.clone(), "SLACK_MINT_OPS_WEBHOOK_URL").await;
-        self.dispatch_slack(slack_msg, "SLACK_TREASURY_WEBHOOK_URL").await;
-        self.dispatch_email(&email_subject, &email_body, "MINT_TIER1_APPROVER_EMAIL").await;
-        self.dispatch_email(&email_subject, &email_body, "MINT_TIER2_MANAGER_EMAIL").await;
-        self.dispatch_email(&email_subject, &email_body, "MINT_DEPT_LEAD_EMAIL").await;
+        self.dispatch_slack(slack_msg.clone(), "SLACK_MINT_OPS_WEBHOOK_URL")
+            .await;
+        self.dispatch_slack(slack_msg, "SLACK_TREASURY_WEBHOOK_URL")
+            .await;
+        self.dispatch_email(&email_subject, &email_body, "MINT_TIER1_APPROVER_EMAIL")
+            .await;
+        self.dispatch_email(&email_subject, &email_body, "MINT_TIER2_MANAGER_EMAIL")
+            .await;
+        self.dispatch_email(&email_subject, &email_body, "MINT_DEPT_LEAD_EMAIL")
+            .await;
     }
 
     // ── Internal dispatch helpers ─────────────────────────────────────────────
@@ -168,7 +173,10 @@ impl MintSlaNotifier {
         let recipient = match std::env::var(recipient_env_key) {
             Ok(r) => r,
             Err(_) => {
-                warn!(recipient_env_key, "Email recipient not configured — skipping");
+                warn!(
+                    recipient_env_key,
+                    "Email recipient not configured — skipping"
+                );
                 return;
             }
         };
@@ -177,7 +185,8 @@ impl MintSlaNotifier {
         let smtp_host = std::env::var("SMTP_HOST").unwrap_or_default();
         let smtp_user = std::env::var("SMTP_USER").unwrap_or_default();
         let smtp_pass = std::env::var("SMTP_PASS").unwrap_or_default();
-        let from_addr = std::env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@cngn.io".to_string());
+        let from_addr =
+            std::env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@cngn.io".to_string());
 
         tokio::spawn(async move {
             use lettre::{

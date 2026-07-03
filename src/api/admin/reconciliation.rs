@@ -156,9 +156,7 @@ async fn resolve_discrepancy(
 }
 
 /// GET /admin/reconciliation/reports
-async fn list_reports(
-    State(state): State<Arc<ReconciliationState>>,
-) -> impl IntoResponse {
+async fn list_reports(State(state): State<Arc<ReconciliationState>>) -> impl IntoResponse {
     let rows = sqlx::query!(
         r#"
         SELECT id, report_date, total_transactions, matched_count, discrepancy_count,
