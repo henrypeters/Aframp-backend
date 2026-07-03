@@ -157,7 +157,7 @@ async fn test_upsert_and_get_snapshot() {
     let snaps = repo
         .get_snapshots(TEST_WALLET, "daily", now - chrono::Duration::days(2), now)
         .await
-        .unwrap();
+        .expect("get_snapshots query failed");
     assert!(!snaps.is_empty(), "Expected at least one snapshot");
     assert_eq!(snaps[0].total_tx_count, 3);
 }
@@ -172,7 +172,6 @@ async fn test_incremental_snapshot_skips_existing() {
     let now = Utc::now();
     let period_start = now - chrono::Duration::hours(24);
 
-    // First upsert
     let snap = UpsertSnapshot {
         wallet_address: TEST_WALLET.to_string(),
         period: "daily".to_string(),
@@ -189,13 +188,14 @@ async fn test_incremental_snapshot_skips_existing() {
         most_used_provider: None,
         active_days: 1,
     };
-    repo.upsert_snapshot(snap).await.unwrap();
+    repo.upsert_snapshot(snap)
+        .await
+        .expect("upsert_snapshot failed");
 
-    // Check last snapshot_at is set
     let last = repo
         .get_latest_snapshot_at(TEST_WALLET, "daily")
         .await
-        .unwrap();
+        .expect("get_latest_snapshot_at query failed");
     assert!(last.is_some(), "Expected a snapshot_at timestamp");
 }
 
@@ -216,11 +216,16 @@ async fn test_upsert_and_get_profile() {
         risk_score: BigDecimal::from(15),
     };
 
-    repo.upsert_profile(profile).await.unwrap();
+    repo.upsert_profile(profile)
+        .await
+        .expect("upsert_profile failed");
 
-    let p = repo.get_profile(TEST_WALLET).await.unwrap();
-    assert!(p.is_some());
-    let p = p.unwrap();
+    let p = repo
+        .get_profile(TEST_WALLET)
+        .await
+        .expect("get_profile query failed");
+    assert!(p.is_some(), "Expected profile to exist after upsert");
+    let p = p.expect("profile is Some — checked above");
     assert_eq!(p.preferred_hour_utc, Some(14));
     assert_eq!(p.preferred_provider.as_deref(), Some("mpesa"));
 }
@@ -234,11 +239,17 @@ async fn test_anomaly_insert_and_list() {
 
     repo.insert_anomaly(TEST_WALLET, "volume_spike", BigDecimal::from(5))
         .await
-        .unwrap();
+        .expect("insert_anomaly failed");
 
-    let anomalies = repo.list_open_anomalies(10, 0).await.unwrap();
+    let anomalies = repo
+        .list_open_anomalies(10, 0)
+        .await
+        .expect("list_open_anomalies query failed");
     assert!(!anomalies.is_empty());
-    let count = repo.count_open_anomalies().await.unwrap();
+    let count = repo
+        .count_open_anomalies()
+        .await
+        .expect("count_open_anomalies query failed");
     assert!(count > 0);
 }
 
@@ -257,7 +268,10 @@ async fn test_service_compute_profile_from_history() {
     svc.compute_profile(TEST_WALLET).await;
 
     let repo = AnalyticsRepository::new(pool);
-    let profile = repo.get_profile(TEST_WALLET).await.unwrap();
+    let profile = repo
+        .get_profile(TEST_WALLET)
+        .await
+        .expect("get_profile query failed");
     assert!(profile.is_some(), "Profile should have been computed");
 }
 
@@ -284,7 +298,10 @@ async fn test_service_generate_insights() {
     svc.generate_insights(TEST_WALLET, "weekly").await;
 
     let repo = AnalyticsRepository::new(pool);
-    let insights = repo.get_latest_insights(TEST_WALLET, 5).await.unwrap();
+    let insights = repo
+        .get_latest_insights(TEST_WALLET, 5)
+        .await
+        .expect("get_latest_insights query failed");
     assert!(!insights.is_empty(), "Insights should have been generated");
 }
 
@@ -302,9 +319,12 @@ async fn test_consumer_summary_endpoint_returns_404_for_unknown_wallet() {
     let req = Request::builder()
         .uri("/api/wallet/GUNKNOWN_WALLET_XYZ/analytics/summary")
         .body(Body::empty())
-        .unwrap();
+        .expect("valid request builder");
 
-    let resp = app.oneshot(req).await.unwrap();
+    let resp = app
+        .oneshot(req)
+        .await
+        .expect("oneshot request failed");
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
@@ -319,9 +339,12 @@ async fn test_consumer_spending_endpoint_returns_200() {
     let req = Request::builder()
         .uri(format!("/api/wallet/{}/analytics/spending", TEST_WALLET))
         .body(Body::empty())
-        .unwrap();
+        .expect("valid request builder");
 
-    let resp = app.oneshot(req).await.unwrap();
+    let resp = app
+        .oneshot(req)
+        .await
+        .expect("oneshot request failed");
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
@@ -339,9 +362,12 @@ async fn test_consumer_trends_endpoint_returns_200() {
             TEST_WALLET
         ))
         .body(Body::empty())
-        .unwrap();
+        .expect("valid request builder");
 
-    let resp = app.oneshot(req).await.unwrap();
+    let resp = app
+        .oneshot(req)
+        .await
+        .expect("oneshot request failed");
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
@@ -353,7 +379,6 @@ async fn test_consumer_insight_preferences_roundtrip() {
     let repo = Arc::new(AnalyticsRepository::new(pool));
     let app = consumer_router(repo);
 
-    // PUT preferences
     let body = serde_json::json!({"weekly_insights": false, "monthly_insights": true});
     let req = Request::builder()
         .method("PUT")
@@ -363,25 +388,32 @@ async fn test_consumer_insight_preferences_roundtrip() {
         ))
         .header("content-type", "application/json")
         .body(Body::from(body.to_string()))
-        .unwrap();
+        .expect("valid PUT request builder");
 
-    let resp = app.clone().oneshot(req).await.unwrap();
+    let resp = app
+        .clone()
+        .oneshot(req)
+        .await
+        .expect("oneshot PUT request failed");
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // GET preferences
     let req = Request::builder()
         .uri(format!(
             "/api/wallet/{}/analytics/insights/preferences",
             TEST_WALLET
         ))
         .body(Body::empty())
-        .unwrap();
-    let resp = app.oneshot(req).await.unwrap();
+        .expect("valid GET request builder");
+    let resp = app
+        .oneshot(req)
+        .await
+        .expect("oneshot GET request failed");
     assert_eq!(resp.status(), StatusCode::OK);
     let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
         .await
-        .unwrap();
-    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        .expect("failed to read response body");
+    let json: serde_json::Value =
+        serde_json::from_slice(&bytes).expect("response body is not valid JSON");
     assert_eq!(json["weekly_insights"], false);
     assert_eq!(json["monthly_insights"], true);
 }
@@ -396,9 +428,12 @@ async fn test_admin_overview_endpoint_returns_200() {
     let req = Request::builder()
         .uri("/api/admin/analytics/wallets/overview")
         .body(Body::empty())
-        .unwrap();
+        .expect("valid request builder");
 
-    let resp = app.oneshot(req).await.unwrap();
+    let resp = app
+        .oneshot(req)
+        .await
+        .expect("oneshot request failed");
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
@@ -412,9 +447,12 @@ async fn test_admin_anomalies_endpoint_returns_200() {
     let req = Request::builder()
         .uri("/api/admin/analytics/wallets/anomalies")
         .body(Body::empty())
-        .unwrap();
+        .expect("valid request builder");
 
-    let resp = app.oneshot(req).await.unwrap();
+    let resp = app
+        .oneshot(req)
+        .await
+        .expect("oneshot request failed");
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
@@ -428,9 +466,12 @@ async fn test_admin_risk_distribution_returns_200() {
     let req = Request::builder()
         .uri("/api/admin/analytics/wallets/risk-distribution")
         .body(Body::empty())
-        .unwrap();
+        .expect("valid request builder");
 
-    let resp = app.oneshot(req).await.unwrap();
+    let resp = app
+        .oneshot(req)
+        .await
+        .expect("oneshot request failed");
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
@@ -444,9 +485,12 @@ async fn test_admin_behaviour_profile_404_for_unknown() {
     let req = Request::builder()
         .uri("/api/admin/wallets/GUNKNOWN_WALLET_XYZ/behaviour-profile")
         .body(Body::empty())
-        .unwrap();
+        .expect("valid request builder");
 
-    let resp = app.oneshot(req).await.unwrap();
+    let resp = app
+        .oneshot(req)
+        .await
+        .expect("oneshot request failed");
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
@@ -461,11 +505,9 @@ async fn test_full_snapshot_lifecycle() {
     let now = Utc::now();
     let period_start = now - chrono::Duration::days(30);
 
-    // Compute snapshot
     svc.compute_snapshot(TEST_WALLET, "monthly", period_start, now)
         .await;
 
-    // Verify it was persisted
     let repo = AnalyticsRepository::new(pool);
     let snaps = repo
         .get_snapshots(
@@ -475,7 +517,7 @@ async fn test_full_snapshot_lifecycle() {
             now,
         )
         .await
-        .unwrap();
+        .expect("get_snapshots query failed");
     assert!(
         !snaps.is_empty(),
         "Monthly snapshot should have been persisted"
