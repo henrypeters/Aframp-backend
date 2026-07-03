@@ -122,7 +122,10 @@ impl Default for ExchangeRateServiceConfig {
             cache_ttl_seconds: 60,
             rate_expiry_seconds: 300,
             enable_validation: true,
-            max_rate_deviation: BigDecimal::from_str("0.0001").unwrap(),
+            max_rate_deviation: BigDecimal::from_str("0.0001")
+                // Hardcoded literal is always a valid decimal — panicking here
+                // would indicate a compile-time regression, not a runtime error.
+                .expect("hardcoded constant '0.0001' is always a valid decimal"),
         }
     }
 }
@@ -519,7 +522,8 @@ mod tests {
     async fn test_rate_validation() {
         let config = ExchangeRateServiceConfig::default();
         let repo = ExchangeRateRepository::new(
-            sqlx::PgPool::connect_lazy("postgresql://localhost/test").unwrap(),
+            sqlx::PgPool::connect_lazy("postgresql://localhost/test")
+                .expect("static test DSN should parse"),
         );
         let service = ExchangeRateService::new(repo, config);
 
@@ -528,7 +532,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Invalid cNGN rate (too far from 1.0)
-        let result = service.validate_rate("NGN", "cNGN", &BigDecimal::from_str("1.5").unwrap());
+        let result = service.validate_rate("NGN", "cNGN", &BigDecimal::from_str("1.5").expect("'1.5' is a valid decimal"));
         assert!(result.is_err());
 
         // Negative rate
@@ -539,88 +543,100 @@ mod tests {
     #[test]
     fn test_compute_gross_amount_for_standard_fiat_to_cngn_conversion() {
         let gross_amount = compute_gross_amount(
-            &BigDecimal::from_str("50000").unwrap(),
-            &BigDecimal::from_str("1").unwrap(),
+            &BigDecimal::from_str("50000").expect("'50000' is a valid decimal"),
+            &BigDecimal::from_str("1").expect("'1' is a valid decimal"),
         );
 
-        assert_eq!(gross_amount, BigDecimal::from_str("50000").unwrap());
+        assert_eq!(gross_amount, BigDecimal::from_str("50000").expect("'50000' is a valid decimal"));
     }
 
     #[test]
     fn test_compute_gross_amount_for_cngn_to_fiat_conversion() {
         let gross_amount = compute_gross_amount(
-            &BigDecimal::from_str("1250.50").unwrap(),
-            &BigDecimal::from_str("1").unwrap(),
+            &BigDecimal::from_str("1250.50").expect("'1250.50' is a valid decimal"),
+            &BigDecimal::from_str("1").expect("'1' is a valid decimal"),
         );
 
-        assert_eq!(gross_amount, BigDecimal::from_str("1250.50").unwrap());
+        assert_eq!(gross_amount, BigDecimal::from_str("1250.50").expect("'1250.50' is a valid decimal"));
     }
 
     #[test]
     fn test_fractional_conversion_preserves_bigdecimal_precision() {
         let gross_amount = compute_gross_amount(
-            &BigDecimal::from_str("1000.125").unwrap(),
-            &BigDecimal::from_str("1.0001").unwrap(),
+            &BigDecimal::from_str("1000.125").expect("'1000.125' is a valid decimal"),
+            &BigDecimal::from_str("1.0001").expect("'1.0001' is a valid decimal"),
         );
 
-        assert_eq!(gross_amount, BigDecimal::from_str("1000.2250125").unwrap());
+        assert_eq!(gross_amount, BigDecimal::from_str("1000.2250125").expect("'1000.2250125' is a valid decimal"));
     }
 
     #[test]
     fn test_compute_net_amount_after_fees() {
         let net_amount = compute_net_amount(
-            &BigDecimal::from_str("50000").unwrap(),
-            &BigDecimal::from_str("750").unwrap(),
+            &BigDecimal::from_str("50000").expect("'50000' is a valid decimal"),
+            &BigDecimal::from_str("750").expect("'750' is a valid decimal"),
         );
 
-        assert_eq!(net_amount, BigDecimal::from_str("49250").unwrap());
+        assert_eq!(net_amount, BigDecimal::from_str("49250").expect("'49250' is a valid decimal"));
     }
 
     #[test]
     fn test_compute_required_gross_amount_for_target_net_cngn() {
         let gross_amount = compute_required_gross_amount(
-            &BigDecimal::from_str("49250").unwrap(),
-            &BigDecimal::from_str("750").unwrap(),
+            &BigDecimal::from_str("49250").expect("'49250' is a valid decimal"),
+            &BigDecimal::from_str("750").expect("'750' is a valid decimal"),
         );
 
-        assert_eq!(gross_amount, BigDecimal::from_str("50000").unwrap());
+        assert_eq!(gross_amount, BigDecimal::from_str("50000").expect("'50000' is a valid decimal"));
     }
 
     #[test]
     fn test_build_quote_expiry_from_fixed_time() {
-        let now = Utc.with_ymd_and_hms(2026, 3, 25, 10, 0, 0).unwrap();
+        let now = Utc
+            .with_ymd_and_hms(2026, 3, 25, 10, 0, 0)
+            .single()
+            .expect("2026-03-25T10:00:00Z is an unambiguous UTC datetime");
         let expires_at = build_quote_expiry(now, 180);
 
         assert_eq!(
             expires_at,
-            Utc.with_ymd_and_hms(2026, 3, 25, 10, 3, 0).unwrap()
+            Utc.with_ymd_and_hms(2026, 3, 25, 10, 3, 0)
+                .single()
+                .expect("2026-03-25T10:03:00Z is an unambiguous UTC datetime")
         );
     }
 
     #[test]
     fn test_quote_expiry_validation() {
-        let expires_at = Utc.with_ymd_and_hms(2026, 3, 25, 10, 3, 0).unwrap();
+        let expires_at = Utc
+            .with_ymd_and_hms(2026, 3, 25, 10, 3, 0)
+            .single()
+            .expect("2026-03-25T10:03:00Z is an unambiguous UTC datetime");
 
         assert!(!is_quote_expired(
             expires_at,
-            Utc.with_ymd_and_hms(2026, 3, 25, 10, 2, 59).unwrap()
+            Utc.with_ymd_and_hms(2026, 3, 25, 10, 2, 59)
+                .single()
+                .expect("2026-03-25T10:02:59Z is an unambiguous UTC datetime")
         ));
         assert!(is_quote_expired(
             expires_at,
-            Utc.with_ymd_and_hms(2026, 3, 25, 10, 3, 0).unwrap()
+            Utc.with_ymd_and_hms(2026, 3, 25, 10, 3, 0)
+                .single()
+                .expect("2026-03-25T10:03:00Z is an unambiguous UTC datetime")
         ));
     }
 
     #[test]
     fn test_extremely_large_transaction_amount_conversion() {
         let gross_amount = compute_gross_amount(
-            &BigDecimal::from_str("999999999999.99").unwrap(),
-            &BigDecimal::from_str("1").unwrap(),
+            &BigDecimal::from_str("999999999999.99").expect("'999999999999.99' is a valid decimal"),
+            &BigDecimal::from_str("1").expect("'1' is a valid decimal"),
         );
 
         assert_eq!(
             gross_amount,
-            BigDecimal::from_str("999999999999.99").unwrap()
+            BigDecimal::from_str("999999999999.99").expect("'999999999999.99' is a valid decimal")
         );
     }
 
