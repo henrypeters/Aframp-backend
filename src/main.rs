@@ -4343,8 +4343,7 @@ async fn build_cngn_payment(
         .await
         .map_err(|e| app_error_response(e.into(), request_id.clone()))?;
 
-    let mut transaction_id = None;
-    if let Some(pool) = state.db_pool.as_ref() {
+    let transaction_id = if let Some(pool) = state.db_pool.as_ref() {
         let repo =
             crate::database::transaction_repository::TransactionRepository::new(pool.clone());
 
@@ -4390,8 +4389,10 @@ async fn build_cngn_payment(
                     request_id.clone(),
                 )
             })?;
-        transaction_id = Some(tx.transaction_id.to_string());
-    }
+        Some(tx.transaction_id.to_string())
+    } else {
+        None
+    };
 
     Ok(Json(CngnPaymentBuildResponse {
         draft,
