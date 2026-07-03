@@ -15,6 +15,9 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 integration = []
+# Memory allocator features
+jemalloc = ["dep:tikv-jemallocator"]
+mimalloc = ["dep:mimalloc"]
 database = [
     "dep:tokio", "dep:async-trait", "dep:uuid", "dep:chrono",
     "dep:serde", "dep:serde_json",
@@ -155,6 +158,10 @@ maxminddb = { version = "0.24", optional = true }
 hostname      = "0.4"
 once_cell     = "1.21.4"
 crossbeam-channel = "0.5"
+
+# --- Alternative Memory Allocators ---
+tikv-jemallocator = { version = "0.6", optional = true }
+mimalloc = { version = "0.1", optional = true, default-features = false }
 
 # --- Tracing ---
 tracing            = { version = "0.1", optional = true }

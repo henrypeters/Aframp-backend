@@ -13,6 +13,7 @@ pub mod offramp_processor;
 pub mod onramp_processor;
 pub mod payment_poller;
 pub mod por_worker;
+pub mod reconciliation;
 pub mod reconciliation_worker;
 pub mod recurring_payment_worker;
 pub mod stellar_confirmation_worker;
