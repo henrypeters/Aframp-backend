@@ -19,9 +19,10 @@ mod travel_rule_integration {
     use std::sync::Arc;
     use uuid::Uuid;
 
-    async fn test_pool() -> Option<PgPool> {
-        let url = std::env::var("DATABASE_URL").ok()?;
-        sqlx::PgPool::connect(&url).await.ok()
+    async fn test_pool() -> Result<PgPool, Box<dyn std::error::Error>> {
+        let url = std::env::var("DATABASE_URL")
+            .map_err(|_| "DATABASE_URL required".into())?;
+        Ok(sqlx::PgPool::connect(&url).await?)
     }
 
     // -------------------------------------------------------------------------
@@ -30,8 +31,8 @@ mod travel_rule_integration {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL"]
-    async fn test_vasp_registry_create_and_retrieve() {
-        let pool = test_pool().await.expect("DATABASE_URL required");
+    async fn test_vasp_registry_create_and_retrieve() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_pool().await?;
         let repo = TravelRuleRepository::new(pool);
 
         let vasp_id = format!("test-vasp-{}", Uuid::new_v4().simple());
@@ -48,13 +49,14 @@ mod travel_rule_integration {
             public_key_pem: None,
         };
 
-        let created = repo.create_vasp(&req).await.unwrap();
+        let created = repo.create_vasp(&req).await?;
         assert_eq!(created.vasp_id, vasp_id);
         assert_eq!(created.trust_status, VaspTrustStatus::Verified);
 
-        let retrieved = repo.get_vasp(&vasp_id).await.unwrap().unwrap();
+        let retrieved = repo.get_vasp(&vasp_id).await?.ok_or("VASP not found")?;
         assert_eq!(retrieved.vasp_name, "Test VASP Ltd");
         assert!(retrieved.supported_protocols.contains(&"trisa".to_string()));
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -63,26 +65,27 @@ mod travel_rule_integration {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL"]
-    async fn test_threshold_upsert_and_retrieve() {
-        let pool = test_pool().await.expect("DATABASE_URL required");
+    async fn test_threshold_upsert_and_retrieve() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_pool().await?;
         let repo = TravelRuleRepository::new(pool);
 
         let item = ThresholdUpdateItem {
             currency: "cNGN".into(),
             transaction_type: "offramp".into(),
             jurisdiction: "NG".into(),
-            threshold_amount: Decimal::from_str("500000").unwrap(),
+            threshold_amount: Decimal::from_str("500000")?,
             is_active: true,
         };
 
         let officer_id = Uuid::new_v4();
-        let upserted = repo.upsert_threshold(&item, officer_id).await.unwrap();
+        let upserted = repo.upsert_threshold(&item, officer_id).await?;
         assert_eq!(upserted.currency, "cNGN");
-        assert_eq!(upserted.threshold_amount, Decimal::from_str("500000").unwrap());
+        assert_eq!(upserted.threshold_amount, Decimal::from_str("500000")?);
         assert_eq!(upserted.approved_by, Some(officer_id));
 
-        let list = repo.list_thresholds().await.unwrap();
+        let list = repo.list_thresholds().await?;
         assert!(list.iter().any(|t| t.currency == "cNGN" && t.transaction_type == "offramp"));
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -91,23 +94,24 @@ mod travel_rule_integration {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL"]
-    async fn test_unhosted_wallet_policy_update() {
-        let pool = test_pool().await.expect("DATABASE_URL required");
+    async fn test_unhosted_wallet_policy_update() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_pool().await?;
         let repo = TravelRuleRepository::new(pool);
 
         let update_req = UpdateUnhostedWalletPolicyRequest {
             policy_type: "require_attestation".into(),
-            threshold_amount: Some(Decimal::from_str("100000").unwrap()),
+            threshold_amount: Some(Decimal::from_str("100000")?),
             threshold_currency: Some("cNGN".into()),
             compliance_officer_id: Uuid::new_v4(),
             senior_management_id: Uuid::new_v4(),
         };
 
-        let policy = repo.update_policy(&update_req).await.unwrap();
+        let policy = repo.update_policy(&update_req).await?;
         assert_eq!(policy.policy_type, "require_attestation");
 
-        let active = repo.get_active_policy().await.unwrap().unwrap();
+        let active = repo.get_active_policy().await?.ok_or("Policy not found")?;
         assert_eq!(active.policy_type, "require_attestation");
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -116,8 +120,8 @@ mod travel_rule_integration {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL"]
-    async fn test_self_attestation_create_and_retrieve() {
-        let pool = test_pool().await.expect("DATABASE_URL required");
+    async fn test_self_attestation_create_and_retrieve() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_pool().await?;
         let repo = TravelRuleRepository::new(pool);
 
         let tx_id = format!("tx-{}", Uuid::new_v4().simple());
@@ -129,15 +133,15 @@ mod travel_rule_integration {
             user_agent: Some("Mozilla/5.0".into()),
         };
 
-        let att = repo.create_attestation(&req).await.unwrap();
+        let att = repo.create_attestation(&req).await?;
         assert_eq!(att.transaction_id, tx_id);
 
         let retrieved = repo
             .get_attestation_by_transaction(&tx_id)
-            .await
-            .unwrap()
-            .unwrap();
+            .await?
+            .ok_or("Attestation not found")?;
         assert_eq!(retrieved.wallet_address, "GAJHF7SVXMVDSKJF");
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -146,8 +150,8 @@ mod travel_rule_integration {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL"]
-    async fn test_exchange_create_and_acknowledge() {
-        let pool = test_pool().await.expect("DATABASE_URL required");
+    async fn test_exchange_create_and_acknowledge() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_pool().await?;
         let repo = TravelRuleRepository::new(pool);
 
         let tx_id = format!("tx-{}", Uuid::new_v4().simple());
@@ -164,22 +168,21 @@ mod travel_rule_integration {
                 "cNGN",
                 300,
             )
-            .await
-            .unwrap();
+            .await?;
 
         assert_eq!(exchange.status, TravelRuleStatus::Pending);
         assert!(exchange.pending_travel_rule);
 
-        repo.mark_acknowledged(exchange.exchange_id).await.unwrap();
+        repo.mark_acknowledged(exchange.exchange_id).await?;
 
         let updated = repo
             .get_exchange(exchange.exchange_id)
-            .await
-            .unwrap()
-            .unwrap();
+            .await?
+            .ok_or("Exchange not found")?;
         assert_eq!(updated.status, TravelRuleStatus::Acknowledged);
         assert!(!updated.pending_travel_rule);
         assert!(updated.acknowledged_at.is_some());
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -188,8 +191,8 @@ mod travel_rule_integration {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL"]
-    async fn test_sla_breach_detection() {
-        let pool = test_pool().await.expect("DATABASE_URL required");
+    async fn test_sla_breach_detection() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_pool().await?;
         let repo = TravelRuleRepository::new(pool);
 
         // Create an exchange with a 0-second SLA (immediately expired)
@@ -207,8 +210,7 @@ mod travel_rule_integration {
                 "cNGN",
                 -1, // intentionally expired
             )
-            .await
-            .unwrap();
+            .await?;
 
         // Manually set timeout_at to past
         sqlx::query(
@@ -216,25 +218,24 @@ mod travel_rule_integration {
         )
         .bind(exchange.exchange_id)
         .execute(&pool)
-        .await
-        .unwrap();
+        .await?;
 
-        let breached = repo.get_unacknowledged_past_sla().await.unwrap();
+        let breached = repo.get_unacknowledged_past_sla().await?;
         assert!(
             breached
                 .iter()
                 .any(|e| e.exchange_id == exchange.exchange_id)
         );
 
-        repo.mark_sla_breached(exchange.exchange_id).await.unwrap();
+        repo.mark_sla_breached(exchange.exchange_id).await?;
 
         let updated = repo
             .get_exchange(exchange.exchange_id)
-            .await
-            .unwrap()
-            .unwrap();
+            .await?
+            .ok_or("Exchange not found")?;
         assert_eq!(updated.status, TravelRuleStatus::TimedOut);
         assert!(updated.sla_breached);
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -243,8 +244,8 @@ mod travel_rule_integration {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL"]
-    async fn test_sunrise_rule_applied() {
-        let pool = test_pool().await.expect("DATABASE_URL required");
+    async fn test_sunrise_rule_applied() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_pool().await?;
         let repo = TravelRuleRepository::new(pool);
 
         let tx_id = format!("tx-sunrise-{}", Uuid::new_v4().simple());
@@ -261,19 +262,18 @@ mod travel_rule_integration {
                 "cNGN",
                 300,
             )
-            .await
-            .unwrap();
+            .await?;
 
-        repo.mark_sunrise_rule_applied(exchange.exchange_id).await.unwrap();
+        repo.mark_sunrise_rule_applied(exchange.exchange_id).await?;
 
         let updated = repo
             .get_exchange(exchange.exchange_id)
-            .await
-            .unwrap()
-            .unwrap();
+            .await?
+            .ok_or("Exchange not found")?;
         assert!(updated.sunrise_rule_applied);
         assert_eq!(updated.status, TravelRuleStatus::Completed);
         assert!(!updated.pending_travel_rule);
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -282,8 +282,8 @@ mod travel_rule_integration {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL"]
-    async fn test_inbound_screening_failure_hold() {
-        let pool = test_pool().await.expect("DATABASE_URL required");
+    async fn test_inbound_screening_failure_hold() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_pool().await?;
         let repo = TravelRuleRepository::new(pool);
 
         let tx_id = format!("tx-screening-{}", Uuid::new_v4().simple());
@@ -300,8 +300,7 @@ mod travel_rule_integration {
                 "cNGN",
                 300,
             )
-            .await
-            .unwrap();
+            .await?;
 
         let case_id = Uuid::new_v4();
         let screening_json = serde_json::json!({
@@ -312,17 +311,16 @@ mod travel_rule_integration {
         });
 
         repo.mark_screening_failed(exchange.exchange_id, screening_json, case_id)
-            .await
-            .unwrap();
+            .await?;
 
         let updated = repo
             .get_exchange(exchange.exchange_id)
-            .await
-            .unwrap()
-            .unwrap();
+            .await?
+            .ok_or("Exchange not found")?;
         assert_eq!(updated.status, TravelRuleStatus::ManualReview);
         assert_eq!(updated.compliance_case_id, Some(case_id));
         assert!(updated.pending_travel_rule);
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -331,8 +329,8 @@ mod travel_rule_integration {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL"]
-    async fn test_retry_increments_count() {
-        let pool = test_pool().await.expect("DATABASE_URL required");
+    async fn test_retry_increments_count() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_pool().await?;
         let repo = TravelRuleRepository::new(pool);
 
         let tx_id = format!("tx-retry-{}", Uuid::new_v4().simple());
@@ -349,21 +347,20 @@ mod travel_rule_integration {
                 "cNGN",
                 300,
             )
-            .await
-            .unwrap();
+            .await?;
 
         assert_eq!(exchange.retry_count, 0);
 
-        repo.increment_retry(exchange.exchange_id).await.unwrap();
-        repo.increment_retry(exchange.exchange_id).await.unwrap();
+        repo.increment_retry(exchange.exchange_id).await?;
+        repo.increment_retry(exchange.exchange_id).await?;
 
         let updated = repo
             .get_exchange(exchange.exchange_id)
-            .await
-            .unwrap()
-            .unwrap();
+            .await?
+            .ok_or("Exchange not found")?;
         assert_eq!(updated.retry_count, 2);
         assert!(updated.last_retry_at.is_some());
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -372,14 +369,14 @@ mod travel_rule_integration {
 
     #[tokio::test]
     #[ignore = "requires DATABASE_URL"]
-    async fn test_metrics_computation() {
-        let pool = test_pool().await.expect("DATABASE_URL required");
+    async fn test_metrics_computation() -> Result<(), Box<dyn std::error::Error>> {
+        let pool = test_pool().await?;
         let repo = TravelRuleRepository::new(pool);
 
         let from = chrono::Utc::now() - chrono::Duration::hours(1);
         let to = chrono::Utc::now() + chrono::Duration::hours(1);
 
-        let metrics = repo.compute_metrics(from, to).await.unwrap();
+        let metrics = repo.compute_metrics(from, to).await?;
 
         // Basic sanity: total must be >= acknowledged + failed
         assert!(
@@ -387,6 +384,7 @@ mod travel_rule_integration {
                 >= metrics.successful_exchanges + metrics.failed_exchanges
         );
         assert!(metrics.vasp_registry_size >= 0);
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -429,7 +427,7 @@ mod travel_rule_integration {
     // -------------------------------------------------------------------------
 
     #[tokio::test]
-    fn test_aes_gcm_encryption_round_trip() {
+    fn test_aes_gcm_encryption_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         use aes_gcm::aead::{Aead, KeyInit, OsRng};
         use aes_gcm::{Aes256Gcm, Key, Nonce};
         use rand::RngCore;
@@ -439,8 +437,7 @@ mod travel_rule_integration {
             "last_name": "Adeyemi",
             "national_id": "NIN-11223344556",
             "dob": "1992-07-14",
-        }))
-        .unwrap();
+        }))?;
 
         let mut key_bytes = [0u8; 32];
         OsRng.fill_bytes(&mut key_bytes);
@@ -451,9 +448,12 @@ mod travel_rule_integration {
         OsRng.fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
 
-        let ciphertext = cipher.encrypt(nonce, data.as_ref()).unwrap();
-        let decrypted = cipher.decrypt(nonce, ciphertext.as_ref()).unwrap();
+        let ciphertext = cipher.encrypt(nonce, data.as_ref())
+            .map_err(|e| format!("Encryption failed: {:?}", e))?;
+        let decrypted = cipher.decrypt(nonce, ciphertext.as_ref())
+            .map_err(|e| format!("Decryption failed: {:?}", e))?;
 
         assert_eq!(decrypted, data);
+        Ok(())
     }
 }
