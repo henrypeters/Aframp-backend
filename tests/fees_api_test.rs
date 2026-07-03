@@ -23,7 +23,7 @@ async fn seed_fee_structures(pool: &PgPool) -> Result<()> {
     sqlx::query("DELETE FROM fee_structures WHERE transaction_type LIKE 'test_%' OR transaction_type IN ('onramp', 'offramp', 'bill_payment')")
         .execute(pool)
         .await
-        .context("failed to delete existing fee structures")?;
+        .expect("Failed to delete test fee structures - database cleanup failed");
 
     sqlx::query(
         r#"
@@ -35,7 +35,7 @@ async fn seed_fee_structures(pool: &PgPool) -> Result<()> {
     )
     .execute(pool)
     .await
-    .context("failed to insert first fee structure")?;
+    .expect("Failed to insert onramp fee structure for flutterwave (1000-50000) - database insert failed");
 
     sqlx::query(
         r#"
@@ -47,7 +47,7 @@ async fn seed_fee_structures(pool: &PgPool) -> Result<()> {
     )
     .execute(pool)
     .await
-    .context("failed to insert second fee structure")?;
+    .expect("Failed to insert onramp fee structure for flutterwave (50001-500000) - database insert failed");
 
     sqlx::query(
         r#"
@@ -59,7 +59,7 @@ async fn seed_fee_structures(pool: &PgPool) -> Result<()> {
     )
     .execute(pool)
     .await
-    .context("failed to insert third fee structure")?;
+    .expect("Failed to insert onramp fee structure for paystack - database insert failed");
 
     sqlx::query(
         r#"
@@ -71,9 +71,7 @@ async fn seed_fee_structures(pool: &PgPool) -> Result<()> {
     )
     .execute(pool)
     .await
-    .context("failed to insert fourth fee structure")?;
-
-    Ok(())
+    .expect("Failed to insert offramp fee structure for flutterwave - database insert failed");
 }
 
 fn build_fees_app(pool: PgPool) -> Router {
@@ -111,17 +109,27 @@ async fn test_fees_no_params_returns_full_structure() -> Result<()> {
     let app = build_fees_app(pool);
 
     let response = app
-        .oneshot(get("/api/fees")?)
+        .oneshot(
+            Request::builder()
+                .uri("/api/fees")
+                .body(Body::empty())
+                .expect("Failed to build HTTP request for /api/fees - invalid request construction"),
+        )
         .await
-        .context("oneshot failed")?;
+        .expect("Failed to execute /api/fees request - service call failed");
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let json = json_body(response).await?;
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Failed to read response body - body streaming error");
+    let json: serde_json::Value = serde_json::from_slice(&body)
+        .expect("Failed to parse JSON response - invalid JSON in API response");
 
     assert!(json.get("fee_structure").is_some());
     assert!(json.get("timestamp").is_some());
-    let structure = json.get("fee_structure").unwrap();
+    let structure = json.get("fee_structure")
+        .expect("fee_structure field missing from JSON response");
     assert!(structure.get("onramp").is_some());
     assert!(structure.get("offramp").is_some());
     Ok(())
@@ -135,15 +143,22 @@ async fn test_fees_amount_type_provider_returns_calculated() -> Result<()> {
     let app = build_fees_app(pool);
 
     let response = app
-        .oneshot(get(
-            "/api/fees?amount=10000&type=onramp&provider=flutterwave",
-        )?)
+        .oneshot(
+            Request::builder()
+                .uri("/api/fees?amount=10000&type=onramp&provider=flutterwave")
+                .body(Body::empty())
+                .expect("Failed to build HTTP request - invalid request construction"),
+        )
         .await
-        .context("oneshot failed")?;
+        .expect("Failed to execute fees request - service call failed");
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let json = json_body(response).await?;
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Failed to read response body - body streaming error");
+    let json: serde_json::Value = serde_json::from_slice(&body)
+        .expect("Failed to parse JSON response - invalid JSON in API response");
 
     assert_eq!(json.get("amount").and_then(|v| v.as_f64()), Some(10000.0));
     assert_eq!(json.get("type").and_then(|v| v.as_str()), Some("onramp"));
@@ -151,7 +166,8 @@ async fn test_fees_amount_type_provider_returns_calculated() -> Result<()> {
         json.get("provider").and_then(|v| v.as_str()),
         Some("flutterwave")
     );
-    let breakdown = json.get("breakdown").unwrap();
+    let breakdown = json.get("breakdown")
+        .expect("breakdown field missing from JSON response");
     assert!(breakdown.get("platform_fee_ngn").is_some());
     assert!(breakdown.get("provider_fee_ngn").is_some());
     assert!(breakdown.get("total_fee_ngn").is_some());
@@ -160,7 +176,10 @@ async fn test_fees_amount_type_provider_returns_calculated() -> Result<()> {
     assert!(breakdown.get("provider_fee_pct").is_some());
 
     // Provider fee: 10,000 × 1.4% + 100 = 240, Platform: 50, Total: 290
-    let total = breakdown.get("total_fee_ngn").unwrap().as_f64().unwrap();
+    let total = breakdown.get("total_fee_ngn")
+        .expect("total_fee_ngn missing from breakdown")
+        .as_f64()
+        .expect("total_fee_ngn is not a valid number");
     assert!(
         (total - 290.0).abs() < 1.0,
         "expected total ~290, got {}",
@@ -177,13 +196,22 @@ async fn test_fees_amount_type_no_provider_returns_comparison() -> Result<()> {
     let app = build_fees_app(pool);
 
     let response = app
-        .oneshot(get("/api/fees?amount=10000&type=onramp")?)
+        .oneshot(
+            Request::builder()
+                .uri("/api/fees?amount=10000&type=onramp")
+                .body(Body::empty())
+                .expect("Failed to build HTTP request - invalid request construction"),
+        )
         .await
-        .context("oneshot failed")?;
+        .expect("Failed to execute fees request - service call failed");
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let json = json_body(response).await?;
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Failed to read response body - body streaming error");
+    let json: serde_json::Value = serde_json::from_slice(&body)
+        .expect("Failed to parse JSON response - invalid JSON in API response");
 
     assert_eq!(json.get("amount").and_then(|v| v.as_f64()), Some(10000.0));
     assert_eq!(json.get("type").and_then(|v| v.as_str()), Some("onramp"));
@@ -200,14 +228,24 @@ async fn test_fees_amount_without_type_returns_400_missing_type() -> Result<()> 
     let app = build_fees_app(pool);
 
     let response = app
-        .oneshot(get("/api/fees?amount=10000")?)
+        .oneshot(
+            Request::builder()
+                .uri("/api/fees?amount=10000")
+                .body(Body::empty())
+                .expect("Failed to build HTTP request - invalid request construction"),
+        )
         .await
-        .context("oneshot failed")?;
+        .expect("Failed to execute fees request - service call failed");
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
-    let json = json_body(response).await?;
-    let error = json.get("error").unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Failed to read response body - body streaming error");
+    let json: serde_json::Value = serde_json::from_slice(&body)
+        .expect("Failed to parse JSON response - invalid JSON in API response");
+    let error = json.get("error")
+        .expect("error field missing from JSON response");
     assert_eq!(
         error.get("code").and_then(|v| v.as_str()),
         Some("MISSING_TYPE")
@@ -223,14 +261,24 @@ async fn test_fees_invalid_type_returns_400() -> Result<()> {
     let app = build_fees_app(pool);
 
     let response = app
-        .oneshot(get("/api/fees?amount=10000&type=xyz&provider=flutterwave")?)
+        .oneshot(
+            Request::builder()
+                .uri("/api/fees?amount=10000&type=xyz&provider=flutterwave")
+                .body(Body::empty())
+                .expect("Failed to build HTTP request - invalid request construction"),
+        )
         .await
-        .context("oneshot failed")?;
+        .expect("Failed to execute fees request - service call failed");
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
-    let json = json_body(response).await?;
-    let error = json.get("error").unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Failed to read response body - body streaming error");
+    let json: serde_json::Value = serde_json::from_slice(&body)
+        .expect("Failed to parse JSON response - invalid JSON in API response");
+    let error = json.get("error")
+        .expect("error field missing from JSON response");
     assert_eq!(
         error.get("code").and_then(|v| v.as_str()),
         Some("INVALID_TYPE")
@@ -246,14 +294,24 @@ async fn test_fees_invalid_provider_returns_400() -> Result<()> {
     let app = build_fees_app(pool);
 
     let response = app
-        .oneshot(get("/api/fees?amount=10000&type=onramp&provider=xyz")?)
+        .oneshot(
+            Request::builder()
+                .uri("/api/fees?amount=10000&type=onramp&provider=xyz")
+                .body(Body::empty())
+                .expect("Failed to build HTTP request - invalid request construction"),
+        )
         .await
-        .context("oneshot failed")?;
+        .expect("Failed to execute fees request - service call failed");
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
-    let json = json_body(response).await?;
-    let error = json.get("error").unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Failed to read response body - body streaming error");
+    let json: serde_json::Value = serde_json::from_slice(&body)
+        .expect("Failed to parse JSON response - invalid JSON in API response");
+    let error = json.get("error")
+        .expect("error field missing from JSON response");
     assert_eq!(
         error.get("code").and_then(|v| v.as_str()),
         Some("INVALID_PROVIDER")
@@ -269,14 +327,24 @@ async fn test_fees_zero_amount_returns_400() -> Result<()> {
     let app = build_fees_app(pool);
 
     let response = app
-        .oneshot(get("/api/fees?amount=0&type=onramp&provider=flutterwave")?)
+        .oneshot(
+            Request::builder()
+                .uri("/api/fees?amount=0&type=onramp&provider=flutterwave")
+                .body(Body::empty())
+                .expect("Failed to build HTTP request - invalid request construction"),
+        )
         .await
-        .context("oneshot failed")?;
+        .expect("Failed to execute fees request - service call failed");
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
-    let json = json_body(response).await?;
-    let error = json.get("error").unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Failed to read response body - body streaming error");
+    let json: serde_json::Value = serde_json::from_slice(&body)
+        .expect("Failed to parse JSON response - invalid JSON in API response");
+    let error = json.get("error")
+        .expect("error field missing from JSON response");
     assert_eq!(
         error.get("code").and_then(|v| v.as_str()),
         Some("INVALID_AMOUNT")
@@ -291,7 +359,8 @@ async fn test_fees_fee_values_match_fee_calculation_service() -> Result<()> {
     seed_fee_structures(&pool).await?;
 
     let service = FeeCalculationService::new(pool.clone());
-    let amount = sqlx::types::BigDecimal::from_str("10000").context("failed to parse amount")?;
+    let amount = sqlx::types::BigDecimal::from_str("10000")
+        .expect("Failed to parse BigDecimal from string '10000' - invalid decimal format");
     let breakdown = service
         .calculate_fees("onramp", amount, Some("flutterwave"), Some("card"))
         .await
@@ -299,28 +368,36 @@ async fn test_fees_fee_values_match_fee_calculation_service() -> Result<()> {
 
     let app = build_fees_app(pool);
     let response = app
-        .oneshot(get(
-            "/api/fees?amount=10000&type=onramp&provider=flutterwave",
-        )?)
+        .oneshot(
+            Request::builder()
+                .uri("/api/fees?amount=10000&type=onramp&provider=flutterwave")
+                .body(Body::empty())
+                .expect("Failed to build HTTP request - invalid request construction"),
+        )
         .await
-        .context("oneshot failed")?;
+        .expect("Failed to execute fees request - service call failed");
 
     assert_eq!(response.status(), StatusCode::OK);
-    let json = json_body(response).await?;
-    let b = json.get("breakdown").unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Failed to read response body - body streaming error");
+    let json: serde_json::Value = serde_json::from_slice(&body)
+        .expect("Failed to parse JSON response - invalid JSON in API response");
+    let b = json.get("breakdown")
+        .expect("breakdown field missing from JSON response");
 
-    let api_total: f64 = b.get("total_fee_ngn").unwrap().as_f64().unwrap();
-    let api_net: f64 = b.get("amount_after_fees_ngn").unwrap().as_f64().unwrap();
-    let svc_total: f64 = breakdown
-        .total
-        .to_string()
-        .parse()
-        .context("failed to parse svc_total")?;
-    let svc_net: f64 = breakdown
-        .net_amount
-        .to_string()
-        .parse()
-        .context("failed to parse svc_net")?;
+    let api_total: f64 = b.get("total_fee_ngn")
+        .expect("total_fee_ngn missing from breakdown")
+        .as_f64()
+        .expect("total_fee_ngn is not a valid number");
+    let api_net: f64 = b.get("amount_after_fees_ngn")
+        .expect("amount_after_fees_ngn missing from breakdown")
+        .as_f64()
+        .expect("amount_after_fees_ngn is not a valid number");
+    let svc_total: f64 = breakdown.total.to_string().parse()
+        .expect("Failed to parse service total fee to f64");
+    let svc_net: f64 = breakdown.net_amount.to_string().parse()
+        .expect("Failed to parse service net amount to f64");
 
     assert!(
         (api_total - svc_total).abs() < 0.01,

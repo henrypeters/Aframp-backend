@@ -31,7 +31,7 @@ mod alerting_metrics_tests {
             &["method", "route", "status_code"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_http_requests_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_cngn_transactions_total(r: &Registry) -> prometheus::CounterVec {
@@ -41,7 +41,7 @@ mod alerting_metrics_tests {
             &["tx_type", "status"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_cngn_transactions_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_stellar_submissions_total(r: &Registry) -> prometheus::CounterVec {
@@ -51,7 +51,7 @@ mod alerting_metrics_tests {
             &["status"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_stellar_tx_submissions_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_worker_errors_total(r: &Registry) -> prometheus::CounterVec {
@@ -61,7 +61,7 @@ mod alerting_metrics_tests {
             &["worker", "error_type"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_worker_errors_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_worker_cycles_total(r: &Registry) -> prometheus::CounterVec {
@@ -71,7 +71,7 @@ mod alerting_metrics_tests {
             &["worker"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_worker_cycles_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_db_errors_total(r: &Registry) -> prometheus::CounterVec {
@@ -81,7 +81,7 @@ mod alerting_metrics_tests {
             &["error_type"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_db_errors_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_payment_provider_failures_total(r: &Registry) -> prometheus::CounterVec {
@@ -91,7 +91,7 @@ mod alerting_metrics_tests {
             &["provider", "failure_reason"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_payment_provider_failures_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_exchange_rate_last_updated(r: &Registry) -> prometheus::GaugeVec {
@@ -101,7 +101,7 @@ mod alerting_metrics_tests {
             &["currency_pair"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_exchange_rate_last_updated_timestamp_seconds metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_worker_last_cycle_timestamp(r: &Registry) -> prometheus::GaugeVec {
@@ -111,7 +111,7 @@ mod alerting_metrics_tests {
             &["worker"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_worker_last_cycle_timestamp_seconds metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_pending_transactions_stale(r: &Registry) -> prometheus::GaugeVec {
@@ -121,7 +121,7 @@ mod alerting_metrics_tests {
             &["tx_type"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_pending_transactions_stale_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_rate_limit_breaches_total(r: &Registry) -> prometheus::CounterVec {
@@ -131,7 +131,7 @@ mod alerting_metrics_tests {
             &["endpoint"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_rate_limit_breaches_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_cache_hits_total(r: &Registry) -> prometheus::CounterVec {
@@ -141,7 +141,7 @@ mod alerting_metrics_tests {
             &["key_prefix"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_cache_hits_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn make_cache_misses_total(r: &Registry) -> prometheus::CounterVec {
@@ -151,14 +151,17 @@ mod alerting_metrics_tests {
             &["key_prefix"],
             r
         )
-        .unwrap()
+        .expect("Failed to register aframp_cache_misses_total metric - this is a test setup error indicating registry conflict")
     }
 
     fn render(r: &Registry) -> String {
         let encoder = TextEncoder::new();
         let mut buf = Vec::new();
-        encoder.encode(&r.gather(), &mut buf).unwrap();
-        String::from_utf8(buf).unwrap()
+        encoder
+            .encode(&r.gather(), &mut buf)
+            .expect("Failed to encode Prometheus metrics - this indicates a serialization error in the test");
+        String::from_utf8(buf)
+            .expect("Failed to convert Prometheus metrics to UTF-8 - this indicates corrupt metric data in the test")
     }
 
     // -----------------------------------------------------------------------
