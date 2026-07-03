@@ -5,7 +5,7 @@ mod tests {
     use rust_decimal::prelude::*;
 
     fn d(s: &str) -> Decimal {
-        Decimal::from_str(s).unwrap()
+        Decimal::from_str(s).expect("Failed to parse decimal string in test — check format")
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -61,7 +61,8 @@ mod tests {
     #[test]
     fn test_stellar_precision_too_many_decimals() {
         use aframp_backend::stellar_ecosystem::transaction_builder::validate_stellar_amount;
-        let too_precise = Decimal::from_str("0.00000001").unwrap(); // 8 dp
+        let too_precise = Decimal::from_str("0.00000001")
+            .expect("Failed to create test decimal — format error"); // 8 dp
         assert!(validate_stellar_amount(too_precise, "amount").is_err());
     }
 
@@ -103,9 +104,9 @@ mod tests {
             d("0.6250000"),
             vec!["cNGN:GISSUER".into(), "USDC:GCIRCLE".into()],
         )
-        .unwrap()
+        .expect("Failed to add path payment operation")
         .build()
-        .unwrap();
+        .expect("Failed to build transaction");
 
         assert!(!tx.xdr_base64.is_empty());
         assert_eq!(tx.operations.len(), 1);
@@ -127,8 +128,10 @@ mod tests {
     #[test]
     fn test_parse_stellar_amount() {
         use aframp_backend::stellar_ecosystem::dex_pathfinding::parse_stellar_amount;
-        assert_eq!(parse_stellar_amount("100.0000000").unwrap(), d("100.0000000"));
-        assert_eq!(parse_stellar_amount("0.0000001").unwrap(), d("0.0000001"));
+        assert_eq!(parse_stellar_amount("100.0000000")
+            .expect("Failed to parse valid amount"), d("100.0000000"));
+        assert_eq!(parse_stellar_amount("0.0000001")
+            .expect("Failed to parse valid amount"), d("0.0000001"));
         assert!(parse_stellar_amount("not_a_number").is_err());
     }
 
@@ -141,9 +144,10 @@ mod tests {
     async fn test_anchor_connection_lifecycle() {
         use aframp_backend::stellar_ecosystem::{models::CreateAnchorConnectionRequest, repository};
 
-        let pool = sqlx::PgPool::connect(&std::env::var("DATABASE_URL").unwrap())
+        let pool = sqlx::PgPool::connect(&std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set for integration test"))
             .await
-            .unwrap();
+            .expect("Failed to connect to database");
 
         let req = CreateAnchorConnectionRequest {
             domain: "test-anchor.example.com".into(),
@@ -155,20 +159,21 @@ mod tests {
             horizon_url: None,
         };
 
-        let anchor = repository::insert_anchor_connection(&pool, &req).await.unwrap();
+        let anchor = repository::insert_anchor_connection(&pool, &req).await
+            .expect("Failed to insert anchor connection");
         assert_eq!(anchor.domain, "test-anchor.example.com");
         assert_eq!(anchor.status, "pending_verification");
 
         let fetched = repository::get_anchor_by_domain(&pool, "test-anchor.example.com")
             .await
-            .unwrap()
-            .unwrap();
+            .expect("Failed to fetch anchor by domain")
+            .expect("Anchor should exist in database");
         assert_eq!(fetched.id, anchor.id);
 
         sqlx::query!("DELETE FROM stellar_anchor_connections WHERE id = $1", anchor.id)
             .execute(&pool)
             .await
-            .unwrap();
+            .expect("Failed to clean up test data");
     }
 
     #[cfg(feature = "integration")]
@@ -176,9 +181,10 @@ mod tests {
     async fn test_order_book_snapshot_cache() {
         use aframp_backend::stellar_ecosystem::repository;
 
-        let pool = sqlx::PgPool::connect(&std::env::var("DATABASE_URL").unwrap())
+        let pool = sqlx::PgPool::connect(&std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set for integration test"))
             .await
-            .unwrap();
+            .expect("Failed to connect to database");
 
         let snap = repository::upsert_order_book_snapshot(
             &pool,
@@ -194,19 +200,19 @@ mod tests {
             d("31.25"),
         )
         .await
-        .unwrap();
+        .expect("Failed to upsert order book snapshot");
 
         assert!(snap.best_bid.is_some());
 
         let fetched = repository::get_latest_snapshot(&pool, "cNGN:GISSUER", "USDC:GCIRCLE")
             .await
-            .unwrap();
+            .expect("Failed to fetch latest snapshot");
         assert!(fetched.is_some());
 
         sqlx::query!("DELETE FROM dex_order_book_snapshots WHERE id = $1", snap.id)
             .execute(&pool)
             .await
-            .unwrap();
+            .expect("Failed to clean up test data");
     }
 
     #[cfg(feature = "integration")]
@@ -214,12 +220,15 @@ mod tests {
     async fn test_cross_anchor_transfer_status_lifecycle() {
         use aframp_backend::stellar_ecosystem::{models::InitiateTransferRequest, repository};
 
-        let pool = sqlx::PgPool::connect(&std::env::var("DATABASE_URL").unwrap())
+        let pool = sqlx::PgPool::connect(&std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set for integration test"))
             .await
-            .unwrap();
+            .expect("Failed to connect to database");
 
         // Requires an existing anchor in the DB
-        let anchors = repository::list_anchor_connections(&pool).await.unwrap();
+        let anchors = repository::list_anchor_connections(&pool)
+            .await
+            .expect("Failed to list anchor connections");
         if anchors.is_empty() {
             return; // skip if no anchors seeded
         }
@@ -237,23 +246,23 @@ mod tests {
 
         let transfer = repository::insert_cross_anchor_transfer(&pool, &req, anchor.id)
             .await
-            .unwrap();
+            .expect("Failed to insert cross-anchor transfer");
         assert_eq!(transfer.status, "initiated");
 
         repository::update_transfer_status(&pool, transfer.id, "completed", None, None)
             .await
-            .unwrap();
+            .expect("Failed to update transfer status");
 
         let updated = repository::get_transfer_by_id(&pool, transfer.id)
             .await
-            .unwrap()
-            .unwrap();
+            .expect("Failed to fetch transfer")
+            .expect("Transfer should exist in database");
         assert_eq!(updated.status, "completed");
         assert!(updated.completed_at.is_some());
 
         sqlx::query!("DELETE FROM cross_anchor_transfers WHERE id = $1", transfer.id)
             .execute(&pool)
             .await
-            .unwrap();
+            .expect("Failed to clean up test data");
     }
 }

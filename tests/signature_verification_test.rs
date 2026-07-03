@@ -187,19 +187,23 @@ fn valid_sha256_signature_verifies() {
     let body = br#"{"from_currency":"KES","to_asset":"CNGN","amount":"5000"}"#;
 
     let sig_header = sign_request($$$).unwrap();
-    let parsed = parse_signature_header_pub(&sig_header).unwrap();
+    let parsed = parse_signature_header_pub(&sig_header)
+        .expect("Failed to parse signature header");
 
     let signing_key = derive_signing_key(secret);
     let mut hmap = axum::http::HeaderMap::new();
     for (k, v) in headers_slice {
         hmap.insert(
-            axum::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
-            axum::http::HeaderValue::from_str(v).unwrap(),
+            axum::http::HeaderName::from_bytes(k.as_bytes())
+                .expect("Failed to parse header name"),
+            axum::http::HeaderValue::from_str(v)
+                .expect("Failed to parse header value"),
         );
     }
     let body_hash = sha256_hex(body);
     let canonical =
-        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash).unwrap();
+        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash)
+            .expect("Failed to build canonical request");
     let expected = compute_signature(HmacAlgorithm::Sha256, &signing_key, &canonical);
 
     assert!(constant_time_eq(&expected, &parsed.signature));
@@ -221,19 +225,23 @@ fn valid_sha512_signature_verifies() {
     let body = br#"{"wallet_address":"GXXX","amount":"100"}"#;
 
     let sig_header = sign_request($$$).unwrap();
-    let parsed = parse_signature_header_pub(&sig_header).unwrap();
+    let parsed = parse_signature_header_pub(&sig_header)
+        .expect("Failed to parse signature header");
 
     let signing_key = derive_signing_key(secret);
     let mut hmap = axum::http::HeaderMap::new();
     for (k, v) in headers_slice {
         hmap.insert(
-            axum::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
-            axum::http::HeaderValue::from_str(v).unwrap(),
+            axum::http::HeaderName::from_bytes(k.as_bytes())
+                .expect("Failed to parse header name"),
+            axum::http::HeaderValue::from_str(v)
+                .expect("Failed to parse header value"),
         );
     }
     let body_hash = sha256_hex(body);
     let canonical =
-        build_canonical_request("POST", "/api/onramp/initiate", "", &hmap, &body_hash).unwrap();
+        build_canonical_request("POST", "/api/onramp/initiate", "", &hmap, &body_hash)
+            .expect("Failed to build canonical request");
     let expected = compute_signature(HmacAlgorithm::Sha512, &signing_key, &canonical);
 
     assert!(constant_time_eq(&expected, &parsed.signature));
@@ -256,19 +264,23 @@ fn tampered_body_signature_mismatch() {
     let tampered = br#"{"amount":"99999"}"#;
 
     let sig_header = sign_request($$$).unwrap();
-    let parsed = parse_signature_header_pub(&sig_header).unwrap();
+    let parsed = parse_signature_header_pub(&sig_header)
+        .expect("Failed to parse signature header");
 
     let signing_key = derive_signing_key(secret);
     let mut hmap = axum::http::HeaderMap::new();
     for (k, v) in headers_slice {
         hmap.insert(
-            axum::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
-            axum::http::HeaderValue::from_str(v).unwrap(),
+            axum::http::HeaderName::from_bytes(k.as_bytes())
+                .expect("Failed to parse header name"),
+            axum::http::HeaderValue::from_str(v)
+                .expect("Failed to parse header value"),
         );
     }
     let body_hash = sha256_hex(tampered);
     let canonical =
-        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash).unwrap();
+        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash)
+            .expect("Failed to build canonical request");
     let recomputed = compute_signature(HmacAlgorithm::Sha256, &signing_key, &canonical);
 
     assert!(!constant_time_eq(&recomputed, &parsed.signature));
@@ -295,19 +307,23 @@ fn tampered_key_id_header_signature_mismatch() {
     let body = br#"{"amount":"100"}"#;
 
     let sig_header = sign_request($$$).unwrap();
-    let parsed = parse_signature_header_pub(&sig_header).unwrap();
+    let parsed = parse_signature_header_pub(&sig_header)
+        .expect("Failed to parse signature header");
 
     let signing_key = derive_signing_key(secret);
     let mut hmap = axum::http::HeaderMap::new();
     for (k, v) in tampered_headers {
         hmap.insert(
-            axum::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
-            axum::http::HeaderValue::from_str(v).unwrap(),
+            axum::http::HeaderName::from_bytes(k.as_bytes())
+                .expect("Failed to parse header name"),
+            axum::http::HeaderValue::from_str(v)
+                .expect("Failed to parse header value"),
         );
     }
     let body_hash = sha256_hex(body);
     let canonical =
-        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash).unwrap();
+        build_canonical_request("POST", "/api/onramp/quote", "", &hmap, &body_hash)
+            .expect("Failed to build canonical request");
     let recomputed = compute_signature(HmacAlgorithm::Sha256, &signing_key, &canonical);
 
     assert!(!constant_time_eq(&recomputed, &parsed.signature));
