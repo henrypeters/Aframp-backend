@@ -3,56 +3,82 @@
 use regex::Regex;
 use std::sync::OnceLock;
 
+/// Error type for pattern initialization failures.
+#[derive(Debug, thiserror::Error)]
+pub enum PatternError {
+    #[error("Failed to compile regex pattern '{pattern}': {source}")]
+    RegexCompilation {
+        pattern: &'static str,
+        source: regex::Error,
+    },
+}
+
+/// Compile a regex pattern at initialization time.
+/// 
+/// # Panics
+/// 
+/// This function intentionally panics if the hardcoded regex pattern is invalid.
+/// All patterns in this module are constant strings verified by tests. If a pattern
+/// fails to compile, it indicates a programming error that must be fixed at development time.
+#[inline]
+fn compile_pattern(pattern: &'static str) -> Regex {
+    Regex::new(pattern).unwrap_or_else(|e| {
+        panic!(
+            "FATAL: Failed to compile hardcoded regex pattern '{}': {}. \
+             This is a programming error that must be fixed.",
+            pattern, e
+        )
+    })
+}
+
 fn re_jwt() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}").unwrap()
+        compile_pattern(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")
     })
 }
 
 fn re_pem_private_key() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(
+        compile_pattern(
             r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
         )
-        .unwrap()
     })
 }
 
 fn re_stellar_secret() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r"\bS[A-Z2-7]{55}\b").unwrap())
+    R.get_or_init(|| compile_pattern(r"\bS[A-Z2-7]{55}\b"))
 }
 
 fn re_credit_card() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(
+        compile_pattern(
             r"\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b",
         )
-        .unwrap()
     })
 }
 
 fn re_api_key() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r"(?i)(?:api[_-]?key|apikey)[=:\s]+[A-Za-z0-9_\-]{16,}").unwrap())
+    R.get_or_init(|| compile_pattern(r"(?i)(?:api[_-]?key|apikey)[=:\s]+[A-Za-z0-9_\-]{16,}"))
 }
 
 fn re_bvn() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r"\bBVN[:\s]*[0-9]{11}\b").unwrap())
+    R.get_or_init(|| compile_pattern(r"\bBVN[:\s]*[0-9]{11}\b"))
 }
 
 fn re_email() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b").unwrap())
+    R.get_or_init(|| compile_pattern(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"))
 }
 
 fn re_nin() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
-    R.get_or_init(|| Regex::new(r"\b[0-9]{11}\b").unwrap())
+    R.get_or_init(|| compile_pattern(r"\b[0-9]{11}\b"))
 }
 
 struct Pattern {
@@ -207,5 +233,29 @@ mod tests {
         let (out, detected) = scan_and_redact(msg);
         assert!(detected.contains(&"bvn"));
         assert!(!out.contains("12345678901"));
+    }
+
+    /// Verify that all hardcoded regex patterns compile successfully.
+    /// This test ensures that pattern initialization won't panic at runtime.
+    #[test]
+    fn test_all_patterns_compile() {
+        // Trigger compilation of all patterns
+        let _ = re_jwt();
+        let _ = re_pem_private_key();
+        let _ = re_stellar_secret();
+        let _ = re_credit_card();
+        let _ = re_api_key();
+        let _ = re_bvn();
+        let _ = re_email();
+        let _ = re_nin();
+    }
+
+    /// Verify compile_pattern provides clear error messages for invalid patterns.
+    /// Note: This test demonstrates the panic behavior but cannot assert on it
+    /// without additional test infrastructure. The panic is intentional and documented.
+    #[test]
+    #[should_panic(expected = "FATAL: Failed to compile hardcoded regex pattern")]
+    fn test_compile_pattern_invalid_regex() {
+        let _ = compile_pattern(r"[invalid(regex");
     }
 }
